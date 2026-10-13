@@ -1,4 +1,4 @@
-import { clean, insertEvents, projectIdForKey, type IncomingEvent } from "@/lib/collect";
+import { clean, insertEvents, normalizeEmail, projectIdForKey, rememberIdentity, type IncomingEvent } from "@/lib/collect";
 
 // Publiczny endpoint skryptu śledzącego. Treść wysyłana jako text/plain (bez preflight CORS).
 const CORS = {
@@ -24,7 +24,12 @@ export async function POST(req: Request) {
       .slice(0, 50)
       .map(clean)
       .filter((e) => e !== null)
-      .map((e) => ({ ...e, country }));
+      .map((e) => {
+        if (e.type !== "identify") return { ...e, country };
+        const email = normalizeEmail(e.name);
+        return { ...e, name: "", email, country };
+      });
+    for (const e of events) if (e.type === "identify" && e.email) await rememberIdentity(projectId, e.email, e.visitor_id);
     await insertEvents(projectId, events);
     return new Response(null, { status: 204, headers: CORS });
   } catch (e) {

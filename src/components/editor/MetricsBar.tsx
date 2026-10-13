@@ -3,6 +3,8 @@ import { useState } from "react";
 import { formatValue, TOTAL_LABELS, type Totals } from "@/lib/analysis";
 import type { FullAnalysis } from "@/lib/funnel-analysis";
 import { api } from "../forms";
+import { Delta } from "./parts";
+import { delta } from "@/lib/forecast";
 
 // Kolejność kafelków: najważniejsze metryki na początku.
 const ORDER: (keyof Totals)[] = [
@@ -12,12 +14,16 @@ const ORDER: (keyof Totals)[] = [
 export function MetricsBar({
   funnelId,
   analysis,
+  compare,
   loading,
   error,
   onChanged,
+  readOnly = false,
 }: {
   funnelId: string;
   analysis: FullAnalysis | null;
+  compare?: FullAnalysis | null;
+  readOnly?: boolean;
   loading: boolean;
   error: string;
   onChanged: () => void;
@@ -37,13 +43,18 @@ export function MetricsBar({
           <div className="tile" key={k}>
             <div className="t-label">{TOTAL_LABELS[k].label}</div>
             <div className="t-value">{analysis ? formatValue(analysis.totals[k], TOTAL_LABELS[k].format) : loading ? "…" : "—"}</div>
+            {compare && analysis && (
+              <div className="t-prev">
+                <Delta value={delta(analysis.totals[k], compare.totals[k])} /> <span>poprz. {formatValue(compare.totals[k], TOTAL_LABELS[k].format)}</span>
+              </div>
+            )}
           </div>
         ))}
         {analysis?.custom.map((m) => (
           <div className="tile" key={m.id} title={m.formula}>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <div className="t-label">{m.name}</div>
-              <button
+              {!readOnly && <button
                 className="btn small"
                 style={{ padding: "0 6px" }}
                 title="Usuń metrykę"
@@ -54,16 +65,16 @@ export function MetricsBar({
                 }}
               >
                 ×
-              </button>
+              </button>}
             </div>
             <div className="t-value">{formatValue(m.value, m.format)}</div>
             {m.error ? <div className="t-err">{m.error}</div> : <div className="t-formula">{m.formula}</div>}
           </div>
         ))}
-        <button className="tile btn" onClick={() => setAdding(!adding)} style={{ textAlign: "left" }}>
+        {!readOnly && <button className="tile btn" onClick={() => setAdding(!adding)} style={{ textAlign: "left" }}>
           <div className="t-label">Własna metryka</div>
           <div className="t-value">+</div>
-        </button>
+        </button>}
       </div>
 
       {adding && (

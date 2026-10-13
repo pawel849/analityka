@@ -1,5 +1,6 @@
-import { analyze, type AnalysisResult, type DataMode, type GraphEdge, type GraphNode, type ManualRow, type TrackedEvent } from "./analysis";
+import { analyze, matchesFilters, type AnalysisResult, type DataMode, type GraphEdge, type GraphNode, type ManualRow, type TrackedEvent } from "./analysis";
 import { evaluate } from "./formula";
+import type { NodeFilter } from "./catalog";
 import { one, q } from "./db";
 
 export interface CustomMetric {
@@ -46,7 +47,22 @@ export async function loadFunnel(funnelId: string) {
   return { projectId: funnel.project_id, nodes: (graph.nodes ?? []) as GraphNode[], edges: (graph.edges ?? []) as GraphEdge[] };
 }
 
-export async function runFunnelAnalysis(funnelId: string, from: string, to: string, mode: DataMode = "traffic"): Promise<FullAnalysis | null> {
+/** Zostawia tylko osoby, które mają choć jedno zdarzenie spełniające wszystkie warunki. */
+export function filterVisitors(events: TrackedEvent[], filters: NodeFilter[]): TrackedEvent[] {
+  const active = filters.filter((f) => f.key);
+  if (!active.length) return events;
+  const keep = new Set<string>();
+  for (const e of events) if (matchesFilters(active, e)) keep.add(e.visitor_id);
+  return events.filter((e) => keep.has(e.visitor_id));
+}
+
+export async function runFunnelAnalysis(
+  funnelId: string,
+  from: string,
+  to: string,
+  mode: DataMode = "traffic",
+  filters: NodeFilter[] = [],
+): Promise<FullAnalysis | null> {
   const funnel = await one<{ project_id: string; graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>(
     "SELECT project_id, graph FROM funnels WHERE id = $1",
     [funnelId],
@@ -59,7 +75,9 @@ export async function runFunnelAnalysis(funnelId: string, from: string, to: stri
     .map((n: GraphNode) => ({ id: n.id, data: n.data }));
   const edges: GraphEdge[] = (graph.edges ?? []).map((e: GraphEdge) => ({ id: e.id, source: e.source, target: e.target, data: e.data }));
 
-  const { events, truncated } = await loadEvents(funnel.project_id, from, to);
+  const loaded = await loadEvents(funnel.project_id, from, to);
+  const truncated = loaded.truncated;
+  const events = filterVisitors(loaded.events, filters);
 
   const manual = (
     await q<{ node_id: string; metric: string; value: number }>(
@@ -141,7 +159,7 @@ export async function loadEvents(projectId: string, from: string, to: string): P
   return { events, truncated };
 }
 
-function dailySeries(events: TrackedEvent[], from: string, to: string): DailyPoint[] {
+export function dailySeries(events: TrackedEvent[], from: string, to: string): DailyPoint[] {
   const days = new Map<string, { v: Set<string>; leads: Set<string>; sales: number; revenue: number }>();
   for (let t = Date.parse(`${from}T00:00:00Z`); t <= Date.parse(`${to}T00:00:00Z`); t += 86400_000) {
     days.set(new Date(t).toISOString().slice(0, 10), { v: new Set(), leads: new Set(), sales: 0, revenue: 0 });
@@ -159,7 +177,7 @@ function dailySeries(events: TrackedEvent[], from: string, to: string): DailyPoi
   return [...days.entries()].map(([day, d]) => ({ day, visitors: d.v.size, leads: d.leads.size, sales: d.sales, revenue: d.revenue }));
 }
 
-function topCountries(events: TrackedEvent[]): { country: string; people: number }[] {
+export function topCountries(events: TrackedEvent[]): { country: string; people: number }[] {
   const m = new Map<string, Set<string>>();
   for (const e of events) {
     if (e.type !== "pageview") continue;

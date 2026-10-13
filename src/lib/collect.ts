@@ -25,6 +25,7 @@ export const ALLOWED_TYPES = new Set([
   "video_play",
   "booking",
   "custom",
+  "identify",
 ]);
 
 export interface IncomingEvent {
@@ -63,6 +64,8 @@ export interface CleanEvent {
   value: number | null;
   scroll: number | null;
   country?: string;
+  email?: string;
+  origin?: string;
   ts?: Date;
 }
 
@@ -100,7 +103,7 @@ export function clean(ev: IncomingEvent): CleanEvent | null {
 
 export async function insertEvents(projectId: string, events: CleanEvent[], isTest = false) {
   if (!events.length) return;
-  const cols = 18;
+  const cols = 20;
   const chunk = 500;
   for (let i = 0; i < events.length; i += chunk) {
     const part = events.slice(i, i + chunk);
@@ -125,15 +128,34 @@ export async function insertEvents(projectId: string, events: CleanEvent[], isTe
         e.value,
         e.scroll,
         (e.country ?? "").slice(0, 2).toUpperCase(),
+        (e.email ?? "").slice(0, 200).toLowerCase(),
+        e.origin ?? "script",
       );
       const b = j * (cols + 0);
       return `(${Array.from({ length: cols }, (_, k) => `$${b + k + 1}`).join(",")}, ${isTest ? "true" : "false"})`;
     });
     await q(
       `INSERT INTO events (project_id, ts, type, name, visitor_id, session_id, url, path, referrer,
-        utm_source, utm_medium, utm_campaign, utm_content, utm_term, element, value, scroll, country, is_test)
+        utm_source, utm_medium, utm_campaign, utm_content, utm_term, element, value, scroll, country, email, origin, is_test)
        VALUES ${rows.join(",")}`,
       values,
     );
   }
+}
+
+export { normalizeEmail } from "./email";
+
+/** Zapamiętuje powiązanie e-mail → osoba (do łączenia zakupów i leadów z webhooków). */
+export async function rememberIdentity(projectId: string, email: string, visitorId: string) {
+  if (!email || !visitorId) return;
+  await q(
+    `INSERT INTO identities (project_id, email, visitor_id) VALUES ($1, $2, $3)
+     ON CONFLICT (project_id, email) DO UPDATE SET visitor_id = EXCLUDED.visitor_id, updated_at = now()`,
+    [projectId, email, visitorId],
+  );
+}
+
+export async function visitorForEmail(projectId: string, email: string): Promise<string | null> {
+  const row = await one<{ visitor_id: string }>("SELECT visitor_id FROM identities WHERE project_id = $1 AND email = $2", [projectId, email]);
+  return row?.visitor_id ?? null;
 }

@@ -16,6 +16,20 @@ Struktura: **Klient → Projekt (jeden skrypt śledzący) → Lejki (mapy)**.
 - Własne metryki ze wzorów, np. `revenue - spend`, `edge("Zapis", "Oferta") / node("Zapis", "people")`.
 - Dane testowe (symulacja ruchu po mapie) do podglądu trybu analizy – oznaczone i usuwalne.
 
+### Dodatkowe funkcje
+
+- **Mapa:** szablony lejków (strategia + analiza z danych), tekst, kształty, obrazy, widgety (trendy, cele, osoby, prognoza, kraje),
+  notatki i checklisty (węzła i całego lejka), prognozy, cele z wartością, kopiuj/wklej/duplikuj, warstwy (liczby, przepływ, miniatury, plan).
+- **Strzałki:** krok bezpośredni / pośredni (z pominięciem kroków) / bez danych, linia krzywa lub prosta.
+- **Analiza:** tryb danych „ruch” lub „lejek”, filtry osób (UTM, kraj, ścieżka, parametry adresu), porównanie z poprzednim okresem,
+  osoby i atrybuty na węźle, eksploracja danych z dodawaniem na mapę.
+- **Eksport i udostępnianie:** PNG, druk/PDF, JSON (eksport i import), publiczny link tylko do odczytu (`/share/...`).
+- **Projekt:** Monitor (liczby, wykres dzienny, strony, źródła, kraje) i Integracje.
+- **Webhook projektu** `POST /api/hooks/{sekret}?type=lead|purchase&value=…` – leady i zakupy z Zapiera, Make, Pabbly, Stripe,
+  MailerLite itd. Osoba rozpoznawana po e-mailu: `anl("identify", email)` lub `data-identify="forms"` w skrypcie.
+  Podpis Stripe nie jest weryfikowany – zabezpieczeniem jest tajny adres.
+- **Kraj** zapisywany z nagłówka `x-vercel-ip-country` (działa na Vercel; lokalnie „Nieznany”).
+
 ### Definicje metryk
 
 | Metryka | Wzór |

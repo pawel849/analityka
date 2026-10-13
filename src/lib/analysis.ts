@@ -165,6 +165,8 @@ export function attrValue(ev: TrackedEvent, key: string): string {
       return ev.utm_term ?? "";
     case "source":
       return eventSource(ev);
+    case "country":
+      return ev.country ?? "";
     case "path":
       return ev.path;
     case "element":

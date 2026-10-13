@@ -93,6 +93,11 @@ const SCRIPT = String.raw`(function () {
   document.addEventListener("submit", function (e) {
     var f = e.target;
     send("form_submit", { n: (f.getAttribute("data-anl") || f.id || f.getAttribute("name") || f.getAttribute("action") || "").slice(0, 120) });
+    // Opcjonalnie (data-identify="forms"): zapamiętaj e-mail z formularza, żeby połączyć osobę z zakupami z webhooków.
+    if (s.getAttribute("data-identify") === "forms" && f.querySelector) {
+      var em = f.querySelector("input[type=email], input[name*=email i]");
+      if (em && em.value && em.value.indexOf("@") > 0) send("identify", { n: em.value.trim().toLowerCase() });
+    }
     flush(true);
   }, true);
 
@@ -114,7 +119,9 @@ const SCRIPT = String.raw`(function () {
   //   anl("purchase", 297)             – zakup z kwotą
   //   anl("event", "nazwa", wartość)   – zdarzenie własne
   //   anl("track", "booking")          – dowolny wspierany typ
+  //   anl("identify", "jan@firma.pl")  – połącz osobę z e-mailem (zakupy/leady z webhooków)
   function api(cmd, a, b) {
+    if (cmd === "identify") { send("identify", { n: String(a || "") }); flush(true); return; }
     if (cmd === "event") send("custom", { n: String(a || ""), val: typeof b === "number" ? b : undefined });
     else if (cmd === "track") send(String(a), { val: typeof b === "number" ? b : undefined });
     else send(String(cmd), { val: typeof a === "number" ? a : undefined, n: typeof a === "string" ? a : "" });

@@ -169,3 +169,25 @@ test("wildcard source and all pages", () => {
   assert.equal(r.nodes.s.people, 2);
   assert.equal(r.nodes.p.people, 2);
 });
+
+test("webhook parsing", async () => {
+  const { parseHook } = await import("../src/lib/webhook.ts");
+  const stripe = parseHook(
+    { type: "checkout.session.completed", data: { object: { amount_total: 29700, customer_details: { email: "Jan@Firma.pl" } } } },
+    new URLSearchParams(),
+  );
+  assert.deepEqual([stripe?.type, stripe?.value, stripe?.email], ["purchase", 297, "jan@firma.pl"]);
+  assert.equal(parseHook({ type: "customer.created" }, new URLSearchParams()), null);
+  const ml = parseHook({ events: [{ data: { subscriber: { email: "a@b.pl" } } }] }, new URLSearchParams("type=lead"));
+  assert.deepEqual([ml?.type, ml?.email], ["lead", "a@b.pl"]);
+  const zap = parseHook({ email: "x@y.com", amount: "97,50" }, new URLSearchParams("type=purchase"));
+  assert.deepEqual([zap?.type, zap?.value], ["purchase", 97.5]);
+});
+
+test("previous range and delta", async () => {
+  const { previousRange, delta } = await import("../src/lib/forecast.ts");
+  assert.deepEqual(previousRange("2026-10-08", "2026-10-14"), ["2026-10-01", "2026-10-07"]);
+  assert.deepEqual(previousRange("2026-03-01", "2026-03-01"), ["2026-02-28", "2026-02-28"]);
+  assert.equal(delta(120, 100), 0.2);
+  assert.equal(delta(5, 0), null);
+});

@@ -56,6 +56,7 @@ export const FILTER_KEYS: { value: string; label: string }[] = [
   { value: "utm_content", label: "utm_content" },
   { value: "utm_term", label: "utm_term" },
   { value: "source", label: "źródło (utm lub odsyłacz)" },
+  { value: "country", label: "kraj (kod, np. PL)" },
   { value: "path", label: "ścieżka strony" },
   { value: "element", label: "tekst klikniętego elementu" },
   { value: "name", label: "nazwa zdarzenia" },

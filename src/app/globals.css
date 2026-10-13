@@ -94,3 +94,24 @@ table.tbl th { color: var(--muted); font-weight: 500; }
 @media (max-width: 640px) {
   .shell-header { flex-wrap: wrap; }
 }
+
+/* Monitor */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.kpi {
+  display: grid; gap: 2px; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px;
+}
+.kpi b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.kpi.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+div.kpi { cursor: default; }
+.chart-tip {
+  position: absolute; top: 0; transform: translateX(-50%); background: var(--text); color: var(--surface);
+  font-size: 12px; padding: 4px 8px; border-radius: 6px; pointer-events: none; white-space: nowrap;
+}
+.toplist-row { position: relative; display: flex; justify-content: space-between; gap: 8px; padding: 4px 6px; font-size: 13px; }
+.toplist-bar { position: absolute; left: 0; top: 2px; bottom: 2px; background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 4px; }
+.toplist-label { position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toplist-val { position: relative; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.status-ready { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.status-manual { background: color-mix(in srgb, #c2601b 15%, transparent); color: #a14d12; }
+.status-planned { background: var(--surface-2); color: var(--muted); }

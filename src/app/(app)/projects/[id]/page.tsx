@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 import { one, q } from "@/lib/db";
 import { CreateForm, DeleteButton } from "@/components/forms";
 import { TrackingPanel } from "@/components/TrackingPanel";
+import { MonitorPanel } from "@/components/MonitorPanel";
+import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -45,7 +47,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="section">
+        <MonitorPanel projectId={id} />
+      </div>
+
+      <div className="section">
         <TrackingPanel projectId={id} origin={origin} trackingKey={project.tracking_key} funnels={funnels.map((f) => ({ id: f.id, name: f.name }))} />
+      </div>
+
+      <div className="section">
+        <IntegrationsPanel projectId={id} origin={origin} />
       </div>
     </main>
   );

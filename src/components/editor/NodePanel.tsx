@@ -254,7 +254,7 @@ function UrlList({ urls, onChange }: { urls: string[]; onChange: (u: string[]) =
   );
 }
 
-function FiltersEditor({ filters, onChange }: { filters: NodeFilter[]; onChange: (f: NodeFilter[]) => void }) {
+export function FiltersEditor({ filters, onChange }: { filters: NodeFilter[]; onChange: (f: NodeFilter[]) => void }) {
   const set = (i: number, patch: Partial<NodeFilter>) => onChange(filters.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   return (
     <div className="field">
@@ -368,7 +368,7 @@ function PeopleView({ funnelId, nodeId, range }: { funnelId: string; nodeId: str
   );
 }
 
-function StatsView({ d, s }: { d: NodeData; s: NodeStats }) {
+export function StatsView({ d, s }: { d: NodeData; s: NodeStats }) {
   const rows: [string, string][] = [["Osoby", formatValue(s.people, "number")]];
   if (d.category === "source") {
     rows.push(

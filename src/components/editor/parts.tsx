@@ -15,7 +15,7 @@ import { CATALOG_BY_KIND, type NodeData } from "@/lib/catalog";
 import { formatValue, type NodeStats } from "@/lib/analysis";
 import type { FullAnalysis } from "@/lib/funnel-analysis";
 import { PageThumb } from "./PageThumb";
-import { forecastForRange } from "@/lib/forecast";
+import { delta, forecastForRange } from "@/lib/forecast";
 
 export type Mode = "plan" | "analyze";
 export interface Layers {
@@ -25,11 +25,23 @@ export interface Layers {
   plan: boolean;
 }
 export const DEFAULT_LAYERS: Layers = { numbers: true, flow: false, thumbs: true, plan: true };
-export const EditorCtx = createContext<{ mode: Mode; analysis: FullAnalysis | null; layers: Layers }>({
+export const EditorCtx = createContext<{ mode: Mode; analysis: FullAnalysis | null; compare?: FullAnalysis | null; layers: Layers }>({
   mode: "plan",
   analysis: null,
+  compare: null,
   layers: DEFAULT_LAYERS,
 });
+
+/** Strzałka zmiany względem poprzedniego okresu. */
+export function Delta({ value }: { value: number | null }) {
+  if (value == null) return null;
+  const up = value >= 0;
+  return (
+    <span className={`delta ${up ? "up" : "down"}`} title="Zmiana względem poprzedniego okresu">
+      {up ? "▲" : "▼"} {formatValue(Math.abs(value), "percent")}
+    </span>
+  );
+}
 
 export type EdgeData = { connection?: "direct" | "indirect" | "none"; line?: "curved" | "straight" };
 
@@ -55,7 +67,7 @@ function planFooterBase(d: NodeData): { text: string; warn: boolean } {
   return { text: "dane ręczne", warn: false };
 }
 
-function Stats({ d, s, range }: { d: NodeData; s: NodeStats; range: { from: string; to: string } }) {
+function Stats({ d, s, range, prev }: { d: NodeData; s: NodeStats; range: { from: string; to: string }; prev?: NodeStats }) {
   const expected = forecastForRange(d.forecast, range.from, range.to);
   const unit = d.category === "action" ? (d.eventType === "purchase" ? "zakupów" : "osób") : "osób";
   return (
@@ -63,6 +75,14 @@ function Stats({ d, s, range }: { d: NodeData; s: NodeStats; range: { from: stri
       <div className="fnode-big">
         {n(d.category === "action" && d.eventType === "purchase" ? s.conversions : s.people)}
         <small>{unit}</small>
+        {prev && (
+          <Delta
+            value={delta(
+              d.category === "action" && d.eventType === "purchase" ? s.conversions : s.people,
+              d.category === "action" && d.eventType === "purchase" ? prev.conversions : prev.people,
+            )}
+          />
+        )}
       </div>
       {d.category === "source" && (
         <>
@@ -119,7 +139,7 @@ function PlanBadges({ d }: { d: NodeData }) {
 }
 
 export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
-  const { mode, analysis: rawAnalysis, layers } = useContext(EditorCtx);
+  const { mode, analysis: rawAnalysis, compare, layers } = useContext(EditorCtx);
   const analysis = layers.numbers ? rawAnalysis : null;
   const item = CATALOG_BY_KIND[data.kind];
   const stats = analysis?.nodes[id];
@@ -158,7 +178,7 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
           <div className={`fnode-foot ${foot.warn ? "warn" : ""}`}>{foot.text}</div>
         </>
       ) : stats ? (
-        <Stats d={data} s={stats} range={{ from: analysis!.from, to: analysis!.to }} />
+        <Stats d={data} s={stats} range={{ from: analysis!.from, to: analysis!.to }} prev={compare?.nodes[id]} />
       ) : !layers.numbers ? (
         <div className="fnode-foot">liczby ukryte</div>
       ) : (
