@@ -17,8 +17,46 @@ export interface NodeData {
   /** Akcja: ogranicz do strony o adresie zawierającym ten fragment. */
   pageUrl?: string;
   notes?: string;
+  /** Strona: dodatkowe adresy URL (wystarczy dopasowanie jednego). */
+  urls?: string[];
+  /** Warunki klucz / wartość (UTM, parametry adresu itd.). Wszystkie muszą być spełnione. */
+  filters?: NodeFilter[];
+  /** Cel konwersji. */
+  goal?: boolean;
+  goalName?: string;
+  /** Wartość jednej konwersji celu (ujemna = koszt). */
+  goalValue?: number;
+  /** Własny kolor akcentu węzła. */
+  color?: string;
   [key: string]: unknown;
 }
+
+export interface NodeFilter {
+  key: string;
+  op: "eq" | "neq" | "contains" | "not_contains" | "empty" | "not_empty";
+  value: string;
+}
+
+export const FILTER_KEYS: { value: string; label: string }[] = [
+  { value: "utm_source", label: "utm_source" },
+  { value: "utm_medium", label: "utm_medium" },
+  { value: "utm_campaign", label: "utm_campaign" },
+  { value: "utm_content", label: "utm_content" },
+  { value: "utm_term", label: "utm_term" },
+  { value: "source", label: "źródło (utm lub odsyłacz)" },
+  { value: "path", label: "ścieżka strony" },
+  { value: "element", label: "tekst klikniętego elementu" },
+  { value: "name", label: "nazwa zdarzenia" },
+];
+
+export const FILTER_OPS: { value: NodeFilter["op"]; label: string }[] = [
+  { value: "eq", label: "równa się" },
+  { value: "neq", label: "różne od" },
+  { value: "contains", label: "zawiera" },
+  { value: "not_contains", label: "nie zawiera" },
+  { value: "not_empty", label: "jest ustawione" },
+  { value: "empty", label: "jest puste" },
+];
 
 export interface CatalogItem {
   kind: string;
@@ -53,6 +91,8 @@ export const CATALOG: CatalogItem[] = [
   // Strony
   { kind: "landing", category: "page", label: "Landing page", abbr: "LP" },
   { kind: "optin", category: "page", label: "Strona zapisu (opt-in)", abbr: "OP" },
+  { kind: "download", category: "page", label: "Strona pobrania", abbr: "DL" },
+  { kind: "popup", category: "page", label: "Popup", abbr: "PU" },
   { kind: "sales", category: "page", label: "Strona sprzedażowa", abbr: "SP" },
   { kind: "vsl", category: "page", label: "VSL (strona z wideo)", abbr: "VS" },
   { kind: "webinar_reg", category: "page", label: "Rejestracja na webinar", abbr: "WR" },

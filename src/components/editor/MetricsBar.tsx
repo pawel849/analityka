@@ -6,7 +6,7 @@ import { api } from "../forms";
 
 // Kolejność kafelków: najważniejsze metryki na początku.
 const ORDER: (keyof Totals)[] = [
-  "roas", "revenue", "sales", "spend", "cpl", "leads", "hook_rate", "ctr_ads", "ctr_page", "cpa", "aov", "conv_rate", "visitors",
+  "roas", "revenue", "sales", "spend", "cpl", "leads", "hook_rate", "ctr_ads", "ctr_page", "cpa", "aov", "conv_rate", "visitors", "goals", "goal_value",
 ];
 
 export function MetricsBar({

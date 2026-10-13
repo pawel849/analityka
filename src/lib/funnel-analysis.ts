@@ -25,6 +25,16 @@ export function defaultRange(): { from: string; to: string } {
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
+export async function loadFunnel(funnelId: string) {
+  const funnel = await one<{ project_id: string; graph: { nodes: GraphNode[]; edges: GraphEdge[] } | string }>(
+    "SELECT project_id, graph FROM funnels WHERE id = $1",
+    [funnelId],
+  );
+  if (!funnel) return null;
+  const graph = typeof funnel.graph === "string" ? JSON.parse(funnel.graph) : funnel.graph;
+  return { projectId: funnel.project_id, nodes: (graph.nodes ?? []) as GraphNode[], edges: (graph.edges ?? []) as GraphEdge[] };
+}
+
 export async function runFunnelAnalysis(funnelId: string, from: string, to: string): Promise<FullAnalysis | null> {
   const funnel = await one<{ project_id: string; graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>(
     "SELECT project_id, graph FROM funnels WHERE id = $1",
@@ -35,33 +45,7 @@ export async function runFunnelAnalysis(funnelId: string, from: string, to: stri
   const nodes: GraphNode[] = (graph.nodes ?? []).map((n: GraphNode) => ({ id: n.id, data: n.data }));
   const edges: GraphEdge[] = (graph.edges ?? []).map((e: GraphEdge) => ({ id: e.id, source: e.source, target: e.target }));
 
-  const fromTs = `${from}T00:00:00Z`;
-  const toTs = `${to}T23:59:59.999Z`;
-  const rawEvents = await q<{
-    id: string;
-    ts: Date | string;
-    type: string;
-    name: string;
-    visitor_id: string;
-    url: string;
-    path: string;
-    referrer: string;
-    utm_source: string;
-    element: string;
-    value: number | null;
-    scroll: number | null;
-  }>(
-    `SELECT id, ts, type, name, visitor_id, url, path, referrer, utm_source, element, value, scroll
-     FROM events WHERE project_id = $1 AND ts >= $2 AND ts <= $3 ORDER BY ts LIMIT ${MAX_EVENTS + 1}`,
-    [funnel.project_id, fromTs, toTs],
-  );
-  const truncated = rawEvents.length > MAX_EVENTS;
-  const events: TrackedEvent[] = rawEvents.slice(0, MAX_EVENTS).map((e) => ({
-    ...e,
-    ts: new Date(e.ts).getTime(),
-    value: e.value == null ? null : Number(e.value),
-    scroll: e.scroll == null ? null : Number(e.scroll),
-  }));
+  const { events, truncated } = await loadEvents(funnel.project_id, from, to);
 
   const manual = (
     await q<{ node_id: string; metric: string; value: number }>(
@@ -104,4 +88,40 @@ export async function runFunnelAnalysis(funnelId: string, from: string, to: stri
   });
 
   return { ...result, from, to, eventCount: events.length, truncated, custom };
+}
+
+export async function loadEvents(projectId: string, from: string, to: string): Promise<{ events: TrackedEvent[]; truncated: boolean }> {
+  const fromTs = `${from}T00:00:00Z`;
+  const toTs = `${to}T23:59:59.999Z`;
+  const rawEvents = await q<{
+    id: string;
+    ts: Date | string;
+    type: string;
+    name: string;
+    visitor_id: string;
+    url: string;
+    path: string;
+    referrer: string;
+    utm_source: string;
+    utm_medium: string;
+    utm_campaign: string;
+    utm_content: string;
+    utm_term: string;
+    element: string;
+    value: number | null;
+    scroll: number | null;
+  }>(
+    `SELECT id, ts, type, name, visitor_id, url, path, referrer, utm_source, utm_medium, utm_campaign, utm_content, utm_term, element, value, scroll
+     FROM events WHERE project_id = $1 AND ts >= $2 AND ts <= $3 ORDER BY ts LIMIT ${MAX_EVENTS + 1}`,
+    [projectId, fromTs, toTs],
+  );
+  const truncated = rawEvents.length > MAX_EVENTS;
+  const events: TrackedEvent[] = rawEvents.slice(0, MAX_EVENTS).map((e) => ({
+    ...e,
+    ts: new Date(e.ts).getTime(),
+    value: e.value == null ? null : Number(e.value),
+    scroll: e.scroll == null ? null : Number(e.scroll),
+  }));
+
+  return { events, truncated };
 }

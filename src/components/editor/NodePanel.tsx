@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { CATALOG, CATALOG_BY_KIND, EVENT_TYPES, MANUAL_METRICS, type NodeData } from "@/lib/catalog";
+import { CATALOG, CATALOG_BY_KIND, EVENT_TYPES, FILTER_KEYS, FILTER_OPS, MANUAL_METRICS, type NodeData, type NodeFilter } from "@/lib/catalog";
 import { formatValue, type NodeStats } from "@/lib/analysis";
 import { api } from "../forms";
 import type { FunnelNode, Mode } from "./parts";
@@ -87,6 +87,136 @@ function ManualData({ funnelId, nodeId, category, onChanged }: { funnelId: strin
   );
 }
 
+const CATEGORY_COLORS: Record<NodeData["category"], string> = { source: "#2f5bea", page: "#0e8a7e", action: "#c2601b", offline: "#7a4fc9" };
+
+function UrlList({ urls, onChange }: { urls: string[]; onChange: (u: string[]) => void }) {
+  return (
+    <div className="field">
+      {urls.map((u, i) => (
+        <div className="row" key={i} style={{ flexWrap: "nowrap" }}>
+          <input value={u} placeholder="/inna-wersja" onChange={(e) => onChange(urls.map((x, j) => (j === i ? e.target.value : x)))} />
+          <button className="btn small" type="button" title="Usuń adres" onClick={() => onChange(urls.filter((_, j) => j !== i))}>×</button>
+        </div>
+      ))}
+      <button className="btn small" type="button" onClick={() => onChange([...urls, ""])}>+ Dodaj adres URL</button>
+    </div>
+  );
+}
+
+function FiltersEditor({ filters, onChange }: { filters: NodeFilter[]; onChange: (f: NodeFilter[]) => void }) {
+  const set = (i: number, patch: Partial<NodeFilter>) => onChange(filters.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  return (
+    <div className="field">
+      <span>Warunki (wszystkie muszą być spełnione)</span>
+      {filters.map((f, i) => (
+        <div key={i} style={{ display: "grid", gap: 4, padding: 6, border: "1px dashed var(--fe-panel-border)", borderRadius: 6 }}>
+          <input
+            list="anl-filter-keys"
+            value={f.key}
+            placeholder="klucz, np. utm_campaign lub param:ref"
+            onChange={(e) => set(i, { key: e.target.value })}
+          />
+          <div className="row" style={{ flexWrap: "nowrap" }}>
+            <select value={f.op} onChange={(e) => set(i, { op: e.target.value as NodeFilter["op"] })}>
+              {FILTER_OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {f.op !== "empty" && f.op !== "not_empty" && (
+              <input value={f.value} placeholder="wartość" onChange={(e) => set(i, { value: e.target.value })} />
+            )}
+            <button className="btn small" type="button" title="Usuń warunek" onClick={() => onChange(filters.filter((_, j) => j !== i))}>×</button>
+          </div>
+        </div>
+      ))}
+      <datalist id="anl-filter-keys">
+        {FILTER_KEYS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+      </datalist>
+      <button className="btn small" type="button" onClick={() => onChange([...filters, { key: "utm_campaign", op: "eq", value: "" }])}>
+        + Dodaj warunek
+      </button>
+      <span className="hint">Klucz „param:nazwa” sprawdza parametr w adresie strony (np. param:ref).</span>
+    </div>
+  );
+}
+
+interface PeopleData {
+  total: number;
+  people: { visitor_id: string; first: number; last: number; events: number; source: string; campaign: string; value: number }[];
+  attributes: Record<string, { value: string; people: number }[]>;
+}
+
+const ATTR_LABELS: Record<string, string> = {
+  source: "Źródło",
+  utm_medium: "utm_medium",
+  utm_campaign: "Kampania",
+  utm_content: "utm_content (kreacja)",
+  utm_term: "utm_term",
+  path: "Ścieżka",
+};
+
+function PeopleView({ funnelId, nodeId, range }: { funnelId: string; nodeId: string; range: { from: string; to: string } }) {
+  const [data, setData] = useState<PeopleData | null>(null);
+  const [tab, setTab] = useState<"attrs" | "people">("attrs");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function load() {
+    setBusy(true);
+    setErr("");
+    try {
+      setData(await api<PeopleData>(`/api/funnels/${funnelId}/people?node_id=${encodeURIComponent(nodeId)}&from=${range.from}&to=${range.to}`));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h3 style={{ margin: 0 }}>Osoby i atrybuty</h3>
+        <button className="btn small" onClick={load} disabled={busy}>{busy ? "…" : data ? "Odśwież" : "Pokaż"}</button>
+      </div>
+      {err && <div className="error">{err}</div>}
+      {data && (
+        <>
+          <div className="row" style={{ margin: "8px 0" }}>
+            <button className={`btn small ${tab === "attrs" ? "primary" : ""}`} onClick={() => setTab("attrs")}>Atrybuty</button>
+            <button className={`btn small ${tab === "people" ? "primary" : ""}`} onClick={() => setTab("people")}>Osoby ({data.total})</button>
+          </div>
+          {tab === "attrs" ? (
+            Object.entries(data.attributes).map(([k, rows]) => (
+              <div key={k} style={{ marginBottom: 8 }}>
+                <div className="hint">{ATTR_LABELS[k] ?? k}</div>
+                {rows.map((r) => (
+                  <div className="kv" key={r.value}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 190 }} title={r.value}>{r.value}</span>
+                    <span>{r.people}</span>
+                  </div>
+                ))}
+              </div>
+            ))
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr><th>Osoba</th><th>Ostatnio</th><th>Źródło</th></tr>
+              </thead>
+              <tbody>
+                {data.people.map((p) => (
+                  <tr key={p.visitor_id} title={`Pierwszy raz: ${new Date(p.first).toLocaleString("pl-PL")} · zdarzeń: ${p.events}${p.value ? ` · wartość: ${p.value} zł` : ""}`}>
+                    <td>{p.visitor_id.slice(0, 8)}</td>
+                    <td>{new Date(p.last).toLocaleDateString("pl-PL")}</td>
+                    <td>{p.campaign ? `${p.source} / ${p.campaign}` : p.source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {tab === "people" && data.total > data.people.length && <p className="hint">Pokazano 100 ostatnich z {data.total}.</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function StatsView({ d, s }: { d: NodeData; s: NodeStats }) {
   const rows: [string, string][] = [["Osoby", formatValue(s.people, "number")]];
   if (d.category === "source") {
@@ -114,6 +244,7 @@ function StatsView({ d, s }: { d: NodeData; s: NodeStats }) {
   if (d.category === "action" || d.category === "offline") {
     rows.push(["Konwersje", formatValue(s.conversions, "number")], ["Przychód", formatValue(s.revenue, "money")]);
   }
+  if (d.goal) rows.push(["Konwersje celu", formatValue(s.goalCount, "number")], ["Wartość celu", formatValue(s.goalValue, "money")]);
   return (
     <div>
       {rows.map(([k, v]) => (
@@ -129,6 +260,7 @@ export function NodePanel({
   node,
   mode,
   stats,
+  range,
   onChange,
   onDelete,
   onManualChange,
@@ -171,6 +303,7 @@ export function NodePanel({
           <span className="hint">„/ścieżka” = dokładnie ta ścieżka; „/kurs/*” = wszystko pod /kurs/; inny tekst = adres zawiera ten fragment.</span>
         </label>
       )}
+      {d.category === "page" && <UrlList urls={d.urls ?? []} onChange={(urls) => onChange({ urls })} />}
       {d.category === "source" && (
         <label className="field">
           Dopasowanie źródła
@@ -196,6 +329,40 @@ export function NodePanel({
           </label>
         </>
       )}
+      {d.category !== "offline" && <FiltersEditor filters={d.filters ?? []} onChange={(filters) => onChange({ filters })} />}
+
+      <hr className="side-sep" />
+      <label className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+        <b>Cel konwersji</b>
+        <input type="checkbox" checked={!!d.goal} onChange={(e) => onChange({ goal: e.target.checked })} />
+      </label>
+      {d.goal && (
+        <div className="manual-row">
+          <label className="field">
+            Nazwa celu
+            <input value={d.goalName ?? ""} placeholder="np. Zapis" onChange={(e) => onChange({ goalName: e.target.value })} />
+          </label>
+          <label className="field">
+            Wartość (zł)
+            <input
+              inputMode="decimal"
+              value={d.goalValue ?? ""}
+              placeholder="0"
+              onChange={(e) => {
+                const v = e.target.value.replace(",", ".");
+                onChange({ goalValue: v === "" || v === "-" ? undefined : Number(v) });
+              }}
+            />
+          </label>
+        </div>
+      )}
+      {d.goal && <p className="hint">Wartość jednej konwersji; ujemna = koszt.</p>}
+
+      <label className="field">
+        Kolor akcentu
+        <input type="color" value={d.color ?? CATEGORY_COLORS[d.category]} onChange={(e) => onChange({ color: e.target.value })} style={{ height: 32, padding: 2 }} />
+      </label>
+
       <label className="field">
         Notatki
         <textarea rows={3} value={d.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} />
@@ -208,6 +375,12 @@ export function NodePanel({
           {stats ? <StatsView d={d} s={stats} /> : <p className="hint">Brak danych – odśwież analizę.</p>}
           <hr className="side-sep" />
           <ManualData funnelId={funnelId} nodeId={node.id} category={d.category} onChanged={onManualChange} />
+          {d.category !== "offline" && (
+            <>
+              <hr className="side-sep" />
+              <PeopleView funnelId={funnelId} nodeId={node.id} range={range} />
+            </>
+          )}
         </>
       )}
     </div>

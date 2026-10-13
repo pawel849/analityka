@@ -1,6 +1,6 @@
 // Silnik analizy lejka: liczy przepływy na węzłach i strzałkach ze zdarzeń trackingu
 // oraz danych ręcznych. Czysty moduł (bez I/O), testowany w tests/analysis.test.ts.
-import type { Category, NodeData } from "./catalog";
+import type { Category, NodeData, NodeFilter } from "./catalog";
 
 export interface GraphNode {
   id: string;
@@ -21,6 +21,10 @@ export interface TrackedEvent {
   path: string;
   referrer: string;
   utm_source: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
   element: string;
   value: number | null;
   scroll: number | null;
@@ -49,6 +53,9 @@ export interface NodeStats {
   ctrAds?: number | null;
   hookRate?: number | null;
   cpc?: number | null;
+  /** Cel: liczba konwersji i ich łączna wartość (wartość celu × konwersje). */
+  goalCount?: number;
+  goalValue?: number;
 }
 
 export interface EdgeStats {
@@ -68,6 +75,8 @@ export interface Totals {
   impressions: number;
   clicks: number;
   video_3s: number;
+  goals: number;
+  goal_value: number;
   roas: number | null;
   cpl: number | null;
   cpa: number | null;
@@ -124,6 +133,92 @@ export function eventSource(ev: { utm_source: string; referrer: string }): strin
   return "(direct)";
 }
 
+function urlParam(url: string, key: string): string {
+  try {
+    return new URL(url).searchParams.get(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Wartość atrybutu zdarzenia do warunków „klucz / wartość”. Klucz „param:xyz” czyta parametr z adresu. */
+export function attrValue(ev: TrackedEvent, key: string): string {
+  if (key.startsWith("param:")) return urlParam(ev.url, key.slice(6));
+  switch (key) {
+    case "utm_source":
+      return ev.utm_source ?? "";
+    case "utm_medium":
+      return ev.utm_medium ?? "";
+    case "utm_campaign":
+      return ev.utm_campaign ?? "";
+    case "utm_content":
+      return ev.utm_content ?? "";
+    case "utm_term":
+      return ev.utm_term ?? "";
+    case "source":
+      return eventSource(ev);
+    case "path":
+      return ev.path;
+    case "element":
+      return ev.element;
+    case "name":
+      return ev.name;
+    default:
+      return urlParam(ev.url, key);
+  }
+}
+
+export function matchesFilters(filters: NodeFilter[] | undefined, ev: TrackedEvent): boolean {
+  if (!filters?.length) return true;
+  return filters.every((f) => {
+    if (!f.key) return true;
+    const v = attrValue(ev, f.key).toLowerCase();
+    const want = (f.value ?? "").toLowerCase();
+    switch (f.op) {
+      case "neq":
+        return v !== want;
+      case "contains":
+        return v.includes(want);
+      case "not_contains":
+        return !v.includes(want);
+      case "empty":
+        return v === "";
+      case "not_empty":
+        return v !== "";
+      default:
+        return v === want;
+    }
+  });
+}
+
+export function pageUrls(d: NodeData): string[] {
+  return [d.url, ...(d.urls ?? [])].map((u) => (u ?? "").trim()).filter(Boolean);
+}
+
+function matchesAnyPage(urls: string[], ev: TrackedEvent): boolean {
+  return urls.some((u) => matchesPage(u, ev));
+}
+
+/** Zdarzenia oznaczające „obecność” osoby na węźle (do list osób i przepływów). */
+export function presenceMatcher(d: NodeData): ((ev: TrackedEvent) => boolean) | null {
+  if (d.category === "source") {
+    const tokens = sourceTokens(d);
+    return tokens.length ? (ev) => matchesSource(tokens, ev) && matchesFilters(d.filters, ev) : null;
+  }
+  if (d.category === "page") {
+    const urls = pageUrls(d);
+    return urls.length ? (ev) => ev.type === "pageview" && matchesAnyPage(urls, ev) && matchesFilters(d.filters, ev) : null;
+  }
+  if (d.category === "action") {
+    return d.eventType ? (ev) => matchesAction(d, ev) && matchesFilters(d.filters, ev) : null;
+  }
+  return null;
+}
+
+function sourceTokens(d: NodeData): string[] {
+  return (d.sourceMatch ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+}
+
 function matchesSource(tokens: string[], ev: TrackedEvent): boolean {
   if (ev.type !== "pageview") return false;
   const src = eventSource(ev);
@@ -176,6 +271,7 @@ export function analyze(
   let manualSales = 0;
 
   const totals = { spend: 0, pageviews: 0, page_clicks: 0, impressions: 0, clicks: 0, video_3s: 0 };
+  const goals = { count: 0, value: 0 };
 
   for (const n of nodes) {
     const d = n.data;
@@ -191,10 +287,10 @@ export function analyze(
     const st: NodeStats = { category: d.category, people: 0, tracked: false };
 
     if (d.category === "source") {
-      const tokens = (d.sourceMatch ?? "").split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
-      if (tokens.length) {
+      const match = presenceMatcher(d);
+      if (match) {
         st.tracked = true;
-        for (const ev of events) if (matchesSource(tokens, ev)) touch(ev.visitor_id, ev.ts);
+        for (const ev of events) if (match(ev)) touch(ev.visitor_id, ev.ts);
       }
       st.spend = man(n.id, "spend") ?? 0;
       st.impressions = man(n.id, "impressions") ?? 0;
@@ -208,13 +304,14 @@ export function analyze(
       totals.clicks += st.adClicks;
       totals.video_3s += st.video3s;
     } else if (d.category === "page") {
-      if (d.url) {
+      const urls = pageUrls(d);
+      if (urls.length) {
         st.tracked = true;
         let pv = 0;
         let clicks = 0;
         const scrollMax = new Map<string, number>();
         for (const ev of events) {
-          if (!matchesPage(d.url, ev)) continue;
+          if (!matchesAnyPage(urls, ev) || !matchesFilters(d.filters, ev)) continue;
           if (ev.type === "pageview") {
             pv++;
             touch(ev.visitor_id, ev.ts);
@@ -244,7 +341,7 @@ export function analyze(
         let rev = 0;
         let count = 0;
         for (const ev of events) {
-          if (!matchesAction(d, ev)) continue;
+          if (!matchesAction(d, ev) || !matchesFilters(d.filters, ev)) continue;
           touch(ev.visitor_id, ev.ts);
           count++;
           if (d.eventType === "purchase") {
@@ -285,6 +382,12 @@ export function analyze(
     const override = man(n.id, "visitors") ?? (d.category === "action" || d.category === "offline" ? man(n.id, "conversions") : undefined);
     st.people = override !== undefined ? override : visitors.size;
     if (override !== undefined) st.tracked = false;
+    if (d.goal) {
+      st.goalCount = d.category === "action" && d.eventType === "purchase" ? (st.conversions ?? 0) : st.people;
+      st.goalValue = st.goalCount * (Number(d.goalValue) || 0);
+      goals.count += st.goalCount;
+      goals.value += st.goalValue;
+    }
     nodeStats[n.id] = st;
   }
 
@@ -331,6 +434,8 @@ export function analyze(
       sales,
       leads,
       visitors,
+      goals: goals.count,
+      goal_value: goals.value,
       roas: div(revenue, totals.spend),
       cpl: div(totals.spend, leads),
       cpa: div(totals.spend, sales),
@@ -354,6 +459,8 @@ export const TOTAL_LABELS: Record<keyof Totals, { label: string; format: "money"
   impressions: { label: "Wyświetlenia reklam", format: "number" },
   clicks: { label: "Kliknięcia reklam", format: "number" },
   video_3s: { label: "Odtworzenia 3 s", format: "number" },
+  goals: { label: "Konwersje celów", format: "number" },
+  goal_value: { label: "Wartość celów", format: "money" },
   roas: { label: "ROAS", format: "ratio" },
   cpl: { label: "Koszt leada (CPL)", format: "money" },
   cpa: { label: "Koszt sprzedaży (CPA)", format: "money" },

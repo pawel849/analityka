@@ -13,6 +13,7 @@ import {
 import { CATALOG_BY_KIND, type NodeData } from "@/lib/catalog";
 import { formatValue, type NodeStats } from "@/lib/analysis";
 import type { FullAnalysis } from "@/lib/funnel-analysis";
+import { PageThumb } from "./PageThumb";
 
 export type Mode = "plan" | "analyze";
 export const EditorCtx = createContext<{ mode: Mode; analysis: FullAnalysis | null }>({ mode: "plan", analysis: null });
@@ -23,7 +24,16 @@ const n = (v: number | undefined | null) => formatValue(v ?? 0, "number");
 const pct = (v: number | undefined | null) => formatValue(v, "percent");
 
 function planFooter(d: NodeData): { text: string; warn: boolean } {
-  if (d.category === "page") return d.url ? { text: d.url, warn: false } : { text: "brak adresu URL", warn: true };
+  const f = d.filters?.length ? ` · warunki: ${d.filters.length}` : "";
+  const r = planFooterBase(d);
+  return { ...r, text: r.text + f };
+}
+
+function planFooterBase(d: NodeData): { text: string; warn: boolean } {
+  if (d.category === "page") {
+    const urls = [d.url, ...(d.urls ?? [])].filter((u) => u?.trim());
+    return urls.length ? { text: urls[0] + (urls.length > 1 ? ` +${urls.length - 1}` : ""), warn: false } : { text: "brak adresu URL", warn: true };
+  }
   if (d.category === "source") return d.sourceMatch ? { text: `źródło: ${d.sourceMatch}`, warn: false } : { text: "brak dopasowania źródła", warn: true };
   if (d.category === "action")
     return { text: `${d.eventType ?? "?"}${d.eventName ? ` · ${d.eventName}` : ""}${d.pageUrl ? ` @ ${d.pageUrl}` : ""}`, warn: !d.eventType };
@@ -61,6 +71,9 @@ function Stats({ d, s }: { d: NodeData; s: NodeStats }) {
           )}
         </>
       )}
+      {s.goalCount != null && (
+        <div className="fnode-kv"><span>Cel</span><span>{n(s.goalCount)}{s.goalValue ? ` · ${formatValue(s.goalValue, "money")}` : ""}</span></div>
+      )}
       {(d.category === "action" || d.category === "offline") && !!s.revenue && (
         <div className="fnode-kv"><span>Przychód</span><span>{formatValue(s.revenue, "money")}</span></div>
       )}
@@ -75,7 +88,15 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
   const stats = analysis?.nodes[id];
   const foot = planFooter(data);
   return (
-    <div className={`fnode cat-${data.category} ${selected ? "selected" : ""}`}>
+    <div
+      className={`fnode cat-${data.category} ${selected ? "selected" : ""} ${data.goal ? "is-goal" : ""}`}
+      style={data.color ? ({ "--node-accent": data.color } as React.CSSProperties) : undefined}
+    >
+      {data.goal && (
+        <div className="goal-badge" title={`Cel${data.goalName ? `: ${data.goalName}` : ""}${data.goalValue ? ` · ${data.goalValue} zł` : ""}`}>
+          ★ {data.goalName || "Cel"}
+        </div>
+      )}
       {data.category !== "source" && <Handle type="target" position={Position.Left} />}
       <div className="fnode-head">
         <span className="abbr">{item?.abbr ?? "?"}</span>
@@ -85,7 +106,14 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
         </div>
       </div>
       {mode === "plan" ? (
-        <div className={`fnode-foot ${foot.warn ? "warn" : ""}`}>{foot.text}</div>
+        <>
+          {data.category === "page" && (
+            <div className="fnode-thumb">
+              <PageThumb kind={data.kind} />
+            </div>
+          )}
+          <div className={`fnode-foot ${foot.warn ? "warn" : ""}`}>{foot.text}</div>
+        </>
       ) : stats ? (
         <Stats d={data} s={stats} />
       ) : (

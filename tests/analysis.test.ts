@@ -87,3 +87,30 @@ test("formula", () => {
   assert.throws(() => evaluate("foo + 1", ctx), /Nieznana zmienna/);
   assert.throws(() => evaluate("1 +", ctx), /Niekompletny/);
 });
+
+test("multi-URL, filters, goals", () => {
+  const nodes = [
+    {
+      id: "p",
+      data: {
+        kind: "sales", category: "page" as const, label: "Oferta", url: "/a", urls: ["/b"],
+        filters: [{ key: "utm_campaign", op: "eq" as const, value: "jesien" }],
+        goal: true, goalValue: 10,
+      },
+    },
+    { id: "q", data: { kind: "landing", category: "page" as const, label: "LP", url: "/c", filters: [{ key: "param:ref", op: "eq" as const, value: "x" }] } },
+  ];
+  const events: TrackedEvent[] = [
+    ev({ visitor_id: "1", path: "/a", url: "https://x.pl/a", utm_campaign: "jesien" }),
+    ev({ visitor_id: "2", path: "/b", url: "https://x.pl/b", utm_campaign: "JESIEN" }),
+    ev({ visitor_id: "3", path: "/b", url: "https://x.pl/b", utm_campaign: "lato" }),
+    ev({ visitor_id: "4", path: "/c", url: "https://x.pl/c?ref=x" }),
+    ev({ visitor_id: "5", path: "/c", url: "https://x.pl/c?ref=y" }),
+  ];
+  const r = analyze(nodes, [], events, []);
+  assert.equal(r.nodes.p.people, 2);
+  assert.equal(r.nodes.p.goalValue, 20);
+  assert.equal(r.nodes.q.people, 1);
+  assert.equal(r.totals.goals, 2);
+  assert.equal(r.totals.goal_value, 20);
+});
