@@ -28,9 +28,21 @@ async function connect(): Promise<Driver> {
     driver = { query: (sql, params) => pg.query(sql, params) as never };
   }
   for (const stmt of SCHEMA_SQL.split(";").map((s) => s.trim()).filter(Boolean)) {
-    await driver.query(stmt);
+    try {
+      await driver.query(stmt);
+    } catch (e) {
+      // Równoległe zimne starty mogą tworzyć te same tabele naraz – „już istnieje” ignorujemy.
+      const code = (e as { code?: string }).code;
+      if (code !== "42P07" && code !== "23505" && code !== "42701") throw e;
+    }
   }
   return driver;
+}
+
+/** Nazwa zmiennej z adresem bazy, która zostanie użyta (do diagnostyki). */
+export function databaseEnvName(): string | null {
+  for (const k of ["DATABASE_URL", "POSTGRES_URL", "DATABASE_URL_UNPOOLED"]) if (process.env[k]) return k;
+  return null;
 }
 
 export function db(): Promise<Driver> {
