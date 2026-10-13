@@ -9,12 +9,14 @@ const g = globalThis as unknown as { __anlDb?: Promise<Driver> };
 
 async function connect(): Promise<Driver> {
   let driver: Driver;
-  if (process.env.DATABASE_URL) {
+  // Vercel/Neon mogą nazwać zmienną różnie – bierzemy pierwszą dostępną.
+  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL_UNPOOLED;
+  if (url) {
     const { Pool } = await import("pg");
     const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: url,
       max: 5,
-      ssl: process.env.DATABASE_URL.includes("localhost") ? undefined : { rejectUnauthorized: false },
+      ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false },
     });
     driver = { query: (sql, params) => pool.query(sql, params as unknown[]) as never };
   } else {
