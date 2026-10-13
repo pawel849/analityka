@@ -11,17 +11,19 @@ async function connect(): Promise<Driver> {
   let driver: Driver;
   // Vercel/Neon mogą nazwać zmienną różnie – bierzemy pierwszą dostępną.
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.DATABASE_URL_UNPOOLED;
-  if (url) {
+  if (url || process.env.PGHOST) {
     const { Pool } = await import("pg");
+    // Bez adresu URL sterownik pg sam czyta PGHOST, PGUSER, PGPASSWORD, PGDATABASE.
+    const local = (url ?? process.env.PGHOST ?? "").includes("localhost");
     const pool = new Pool({
-      connectionString: url,
+      ...(url ? { connectionString: url } : {}),
       max: 5,
-      ssl: url.includes("localhost") ? undefined : { rejectUnauthorized: false },
+      ssl: local ? undefined : { rejectUnauthorized: false },
     });
     driver = { query: (sql, params) => pool.query(sql, params as unknown[]) as never };
   } else {
     if (process.env.VERCEL) {
-      throw new Error("Brak DATABASE_URL – podłącz bazę Postgres (np. Neon) w ustawieniach projektu Vercel.");
+      throw new Error("Brak zmiennych bazy w tym wdrożeniu. Podłącz bazę (Storage → Neon) i zrób Redeploy – zmienne działają tylko we wdrożeniach utworzonych po ich dodaniu.");
     }
     const { PGlite } = await import("@electric-sql/pglite");
     const pg = new PGlite(process.env.PGLITE_DIR ?? "./.data/pglite");
@@ -42,7 +44,7 @@ async function connect(): Promise<Driver> {
 /** Nazwa zmiennej z adresem bazy, która zostanie użyta (do diagnostyki). */
 export function databaseEnvName(): string | null {
   for (const k of ["DATABASE_URL", "POSTGRES_URL", "DATABASE_URL_UNPOOLED"]) if (process.env[k]) return k;
-  return null;
+  return process.env.PGHOST ? "PGHOST/PGUSER/PGPASSWORD/PGDATABASE" : null;
 }
 
 export function db(): Promise<Driver> {
