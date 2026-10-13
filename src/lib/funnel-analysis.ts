@@ -1,6 +1,8 @@
 import { analyze, matchesFilters, type AnalysisResult, type DataMode, type GraphEdge, type GraphNode, type ManualRow, type TrackedEvent } from "./analysis";
 import { evaluate } from "./formula";
 import type { NodeFilter } from "./catalog";
+import { loadAds } from "./project-data";
+import { fold } from "./csv";
 import { one, q } from "./db";
 
 export interface CustomMetric {
@@ -86,6 +88,33 @@ export async function runFunnelAnalysis(
       [funnelId, from, to],
     )
   ).map((m): ManualRow => ({ ...m, value: Number(m.value) }));
+
+  // Wydatki i wyniki z importu reklam → węzły źródeł z ustawionym „adsMatch” (proporcjonalnie do dni zakresu).
+  const adNodes = nodes.filter((n) => n.data.category === "source" && n.data.adsMatch?.trim());
+  if (adNodes.length) {
+    const ads = await loadAds(funnel.project_id, from, to);
+    const f = Date.parse(`${from}T00:00:00Z`);
+    const t = Date.parse(`${to}T00:00:00Z`);
+    for (const n of adNodes) {
+      const tokens = n.data.adsMatch!.split(",").map((x) => fold(x)).filter(Boolean);
+      const sums = { spend: 0, impressions: 0, clicks: 0, video_3s: 0 };
+      for (const a of ads) {
+        const name = fold(`${a.campaign} | ${a.adset} | ${a.ad}`);
+        if (!tokens.some((tk) => name.includes(tk))) continue;
+        const s = Date.parse(`${a.start}T00:00:00Z`);
+        const e = Date.parse(`${a.end}T00:00:00Z`);
+        const days = Math.round((e - s) / 86400_000) + 1;
+        const overlap = Math.round((Math.min(e, t) - Math.max(s, f)) / 86400_000) + 1;
+        if (overlap <= 0 || days <= 0) continue;
+        const share = overlap / days;
+        sums.spend += a.spend * share;
+        sums.impressions += a.impressions * share;
+        sums.clicks += a.clicks * share;
+        sums.video_3s += a.video_3s * share;
+      }
+      for (const [metric, value] of Object.entries(sums)) if (value) manual.push({ node_id: n.id, metric, value });
+    }
+  }
 
   const result = analyze(nodes, edges, events, manual, { mode });
 

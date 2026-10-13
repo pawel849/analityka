@@ -30,6 +30,22 @@ Struktura: **Klient → Projekt (jeden skrypt śledzący) → Lejki (mapy)**.
   Podpis Stripe nie jest weryfikowany – zabezpieczeniem jest tajny adres.
 - **Kraj** zapisywany z nagłówka `x-vercel-ip-country` (działa na Vercel; lokalnie „Nieznany”).
 
+### Dane klienta i ekonomia (zakładki projektu)
+
+Wszystko konfigurowane osobno dla każdego klienta (projektu):
+
+- **Dane (import):** CSV z reklam (Meta Ads, Google Ads, inne) i zamówień (WooCommerce, Publigo, dowolny sklep).
+  Automatyczne dopasowanie kolumn z ręczną korektą i podglądem, kodowanie UTF-8/Windows-1250, łączenie wierszy-produktów
+  w zamówienia, filtr opłaconych statusów. E-mail → skrót SHA-256 liczony w przeglądarce (nie trafia na serwer).
+  Ponowny import nadpisuje dane bez duplikatów.
+- **Ustawienia klienta:** waluta, VAT, produkt główny, reguły kategorii produktów / typów kampanii / kątów reklam
+  (z podglądem na danych klienta), okresy analizy, koszty jako założenia.
+- **Ekonomia:** przychód (wg kategorii) vs wydatki miesięcznie, okresy: CAC, LTV 30/90/365 (tylko dojrzałe okna),
+  LTV/CAC, powroty, back-end, order bump, „na 10 000 zł reklam”, zysk szacunkowy; rozkład zmiany na CAC i LTV (Shapley).
+- **Oś czasu:** zdarzenia ręczne z oznaczeniem pewności + wykryte w danych (zmiany ceny, start/koniec kampanii),
+  wykres przychodu i wydatków ze zdarzeniami, eksport dziennika zmian (.md).
+- **Mapa:** węzeł źródła może pobierać koszty z importu reklam (pole „Koszty z importu reklam”).
+
 ### Definicje metryk
 
 | Metryka | Wzór |

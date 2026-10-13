@@ -26,6 +26,8 @@ export interface NodeData {
   goalName?: string;
   /** Wartość jednej konwersji celu (ujemna = koszt). */
   goalValue?: number;
+  /** Źródło: dane z importu reklam – nazwa kampanii/zestawu/reklamy zawiera (po przecinku). */
+  adsMatch?: string;
   /** Własna ikona (adres obrazka). */
   iconUrl?: string;
   /** Własny kolor akcentu węzła. */

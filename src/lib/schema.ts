@@ -73,5 +73,71 @@ CREATE TABLE IF NOT EXISTS custom_metrics (
   formula TEXT NOT NULL,
   format TEXT NOT NULL DEFAULT 'number',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS imports (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT '',
+  filename TEXT NOT NULL DEFAULT '',
+  rows INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ad_rows (
+  id BIGSERIAL PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  import_id TEXT NOT NULL REFERENCES imports(id) ON DELETE CASCADE,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  campaign TEXT NOT NULL DEFAULT '',
+  adset TEXT NOT NULL DEFAULT '',
+  ad TEXT NOT NULL DEFAULT '',
+  spend DOUBLE PRECISION NOT NULL DEFAULT 0,
+  impressions DOUBLE PRECISION NOT NULL DEFAULT 0,
+  reach DOUBLE PRECISION NOT NULL DEFAULT 0,
+  clicks DOUBLE PRECISION NOT NULL DEFAULT 0,
+  video_3s DOUBLE PRECISION NOT NULL DEFAULT 0,
+  thruplay DOUBLE PRECISION NOT NULL DEFAULT 0,
+  landing_views DOUBLE PRECISION NOT NULL DEFAULT 0,
+  registrations DOUBLE PRECISION NOT NULL DEFAULT 0,
+  add_to_cart DOUBLE PRECISION NOT NULL DEFAULT 0,
+  checkouts DOUBLE PRECISION NOT NULL DEFAULT 0,
+  purchases DOUBLE PRECISION NOT NULL DEFAULT 0,
+  purchase_value DOUBLE PRECISION NOT NULL DEFAULT 0,
+  title TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS ad_rows_project ON ad_rows(project_id, period_start);
+CREATE UNIQUE INDEX IF NOT EXISTS ad_rows_uniq ON ad_rows(project_id, period_start, period_end, campaign, adset, ad);
+CREATE TABLE IF NOT EXISTS orders (
+  id BIGSERIAL PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  import_id TEXT NOT NULL REFERENCES imports(id) ON DELETE CASCADE,
+  source TEXT NOT NULL DEFAULT '',
+  order_ref TEXT NOT NULL,
+  ts TIMESTAMPTZ NOT NULL,
+  customer TEXT NOT NULL DEFAULT '',
+  gross DOUBLE PRECISION NOT NULL DEFAULT 0,
+  products JSONB NOT NULL DEFAULT '[]',
+  coupon TEXT NOT NULL DEFAULT '',
+  UNIQUE (project_id, source, order_ref)
+);
+CREATE INDEX IF NOT EXISTS orders_project_ts ON orders(project_id, ts);
+CREATE TABLE IF NOT EXISTS project_settings (
+  project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+  settings JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS timeline_events (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  day DATE NOT NULL,
+  type TEXT NOT NULL DEFAULT 'decyzja',
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  link TEXT NOT NULL DEFAULT '',
+  confidence TEXT NOT NULL DEFAULT 'data',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )
 `;

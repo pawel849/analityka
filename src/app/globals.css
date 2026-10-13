@@ -115,3 +115,21 @@ div.kpi { cursor: default; }
 .status-ready { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
 .status-manual { background: color-mix(in srgb, #c2601b 15%, transparent); color: #a14d12; }
 .status-planned { background: var(--surface-2); color: var(--muted); }
+
+/* Zakładki strony projektu */
+.page-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); margin: 8px 0 20px; }
+.page-tabs a { padding: 8px 12px; color: var(--text-2); border-bottom: 2px solid transparent; font-weight: 500; }
+.page-tabs a:hover { text-decoration: none; color: var(--text); }
+.page-tabs a.on { color: var(--accent); border-bottom-color: var(--accent); }
+.tbl-wrap { overflow-x: auto; }
+table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+.tag-data { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.tag-assumption { background: color-mix(in srgb, #c2601b 14%, transparent); color: #a14d12; }
+.tag-gap { background: var(--surface-2); color: var(--muted); }
+.tag-interp { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.warn { color: #a14d12; font-size: 12px; }
+.rules-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; margin-bottom: 6px; }
+.map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 16px; }
+.tl-item { padding: 8px 6px; border-bottom: 1px solid var(--border); border-radius: 6px; }
+.tl-item.on { background: var(--surface-2); }

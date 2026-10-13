@@ -475,6 +475,13 @@ export function NodePanel({
               <span className="hint">Wartości utm_source lub domeny odsyłające, po przecinku. „(direct)” = wejścia bez źródła.</span>
             </label>
           )}
+          {d.category === "source" && (
+            <label className="field">
+              Koszty z importu reklam
+              <input value={d.adsMatch ?? ""} placeholder="np. webinar, [SPRZEDAŻ]" onChange={(e) => onChange({ adsMatch: e.target.value })} />
+              <span className="hint">Nazwa kampanii, zestawu lub reklamy zawiera (po przecinku). Wydatki, wyświetlenia, kliknięcia i odtworzenia 3 s doliczą się same.</span>
+            </label>
+          )}
           {d.category === "action" && (
             <>
               <label className="field">

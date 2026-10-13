@@ -6,9 +6,30 @@ import { CreateForm, DeleteButton } from "@/components/forms";
 import { TrackingPanel } from "@/components/TrackingPanel";
 import { MonitorPanel } from "@/components/MonitorPanel";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
+import { ImportPanel } from "@/components/data/ImportPanel";
+import { EconomicsPanel } from "@/components/data/EconomicsPanel";
+import { TimelinePanel } from "@/components/data/TimelinePanel";
+import { SettingsPanel } from "@/components/data/SettingsPanel";
 
-export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+const TABS = [
+  ["lejki", "Lejki i monitor"],
+  ["dane", "Dane (import)"],
+  ["ekonomia", "Ekonomia"],
+  ["os", "Oś czasu"],
+  ["ustawienia", "Ustawienia klienta"],
+  ["integracje", "Skrypt i integracje"],
+] as const;
+
+export default async function ProjectPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { id } = await params;
+  const { tab: rawTab } = await searchParams;
+  const tab = TABS.some(([k]) => k === rawTab) ? rawTab! : "lejki";
   const project = await one<{ id: string; name: string; domain: string; tracking_key: string; client_id: string; client_name: string }>(
     `SELECT p.*, c.name AS client_name FROM projects p JOIN clients c ON c.id = p.client_id WHERE p.id = $1`,
     [id],
@@ -33,30 +54,45 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </div>
       <p className="sub">{project.domain || "bez domeny"}</p>
 
-      <h2>Lejki</h2>
-      <div className="card" style={{ marginBottom: 16 }}>
-        <CreateForm url="/api/funnels" extra={{ project_id: id }} fields={[{ name: "name", label: "Nazwa lejka", required: true }]} submitLabel="Nowy lejek" goTo="/funnels/" />
-      </div>
-      <div className="grid">
-        {funnels.map((f) => (
-          <Link key={f.id} href={`/funnels/${f.id}`} className="card link">
-            <h3>{f.name}</h3>
-            <div className="meta">Elementów: {f.nodes} · Zmieniono: {new Date(f.updated_at).toLocaleString("pl-PL")}</div>
+      <nav className="page-tabs">
+        {TABS.map(([k, label]) => (
+          <Link key={k} href={`/projects/${id}?tab=${k}`} className={tab === k ? "on" : ""}>
+            {label}
           </Link>
         ))}
-      </div>
+      </nav>
 
-      <div className="section">
-        <MonitorPanel projectId={id} />
-      </div>
-
-      <div className="section">
-        <TrackingPanel projectId={id} origin={origin} trackingKey={project.tracking_key} funnels={funnels.map((f) => ({ id: f.id, name: f.name }))} />
-      </div>
-
-      <div className="section">
-        <IntegrationsPanel projectId={id} origin={origin} />
-      </div>
+      {tab === "lejki" && (
+        <>
+          <h2>Lejki</h2>
+          <div className="card" style={{ marginBottom: 16 }}>
+            <CreateForm url="/api/funnels" extra={{ project_id: id }} fields={[{ name: "name", label: "Nazwa lejka", required: true }]} submitLabel="Nowy lejek" goTo="/funnels/" />
+          </div>
+          <div className="grid">
+            {funnels.map((f) => (
+              <Link key={f.id} href={`/funnels/${f.id}`} className="card link">
+                <h3>{f.name}</h3>
+                <div className="meta">Elementów: {f.nodes} · Zmieniono: {new Date(f.updated_at).toLocaleString("pl-PL")}</div>
+              </Link>
+            ))}
+          </div>
+          <div className="section">
+            <MonitorPanel projectId={id} />
+          </div>
+        </>
+      )}
+      {tab === "dane" && <ImportPanel projectId={id} />}
+      {tab === "ekonomia" && <EconomicsPanel projectId={id} />}
+      {tab === "os" && <TimelinePanel projectId={id} />}
+      {tab === "ustawienia" && <SettingsPanel projectId={id} />}
+      {tab === "integracje" && (
+        <>
+          <TrackingPanel projectId={id} origin={origin} trackingKey={project.tracking_key} funnels={funnels.map((f) => ({ id: f.id, name: f.name }))} />
+          <div className="section">
+            <IntegrationsPanel projectId={id} origin={origin} />
+          </div>
+        </>
+      )}
     </main>
   );
 }
