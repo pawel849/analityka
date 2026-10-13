@@ -523,7 +523,7 @@ export function NodePanel({
           <label className="field">
             Typ / ikona
             <select value={d.kind} onChange={(e) => onChange({ kind: e.target.value })}>
-              {sameCategory.map((c) => <option key={c.kind} value={c.kind}>{c.label}</option>)}
+              {sameCategory.map((c) => <option key={c.kind} value={c.kind}>{c.group} – {c.label}</option>)}
             </select>
           </label>
           {d.category === "page" && (
@@ -544,6 +544,11 @@ export function NodePanel({
               <button className="btn small" onClick={() => onAction("back")} title="Ctrl/⌘ + Shift + [">Na spód</button>
             </div>
           </div>
+          <label className="field">
+            Własna ikona (adres obrazka)
+            <input value={d.iconUrl ?? ""} placeholder="https://…/logo.png" onChange={(e) => onChange({ iconUrl: e.target.value || undefined })} />
+            <span className="hint">Np. logo klienta lub narzędzia. Puste = znacznik literowy.</span>
+          </label>
           <label className="field">
             Kolor akcentu
             <div className="row" style={{ flexWrap: "nowrap" }}>

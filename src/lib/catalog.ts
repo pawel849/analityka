@@ -26,6 +26,8 @@ export interface NodeData {
   goalName?: string;
   /** Wartość jednej konwersji celu (ujemna = koszt). */
   goalValue?: number;
+  /** Własna ikona (adres obrazka). */
+  iconUrl?: string;
   /** Własny kolor akcentu węzła. */
   color?: string;
   /** Miniatura strony z obrazka (URL). */
@@ -74,77 +76,209 @@ export const FILTER_OPS: { value: NodeFilter["op"]; label: string }[] = [
 export interface CatalogItem {
   kind: string;
   category: Category;
+  /** Podgrupa w palecie (np. „Reklamy płatne”). */
+  group: string;
   label: string;
   abbr: string;
   defaults?: Partial<NodeData>;
 }
 
 export const CATEGORY_LABELS: Record<Category, string> = {
-  source: "Źródła ruchu",
+  source: "Źródła",
   page: "Strony",
   action: "Akcje",
-  offline: "Offline / inne",
+  offline: "Ręczne",
 };
 
+/** Kolory znaczników podgrup (własne, bez logotypów marek). */
+export const GROUP_COLORS: Record<string, string> = {
+  "Reklamy płatne": "#2f5bea",
+  Wyszukiwarki: "#1f8a4c",
+  "Social (organicznie)": "#7a4fc9",
+  "Inne źródła": "#0e7490",
+  "CRM i e-mail": "#b45309",
+  Komunikatory: "#be185d",
+  "Inne serwisy": "#4b5563",
+  "Offline": "#0f766e",
+  "Konwersje": "#15803d",
+  "Zaangażowanie": "#c2410c",
+  "Integracje (webhook)": "#1d4ed8",
+  "Własne": "#6b7280",
+};
+
+const src = (group: string, kind: string, label: string, abbr: string, match: string): CatalogItem => ({
+  kind,
+  category: "source",
+  group,
+  label,
+  abbr,
+  defaults: { sourceMatch: match },
+});
+const act = (group: string, kind: string, label: string, abbr: string, defaults: Partial<NodeData>): CatalogItem => ({
+  kind,
+  category: "action",
+  group,
+  label,
+  abbr,
+  defaults,
+});
+const page = (kind: string, label: string, abbr: string): CatalogItem => ({ kind, category: "page", group: "Strony", label, abbr });
+
+const PAID = "Reklamy płatne";
+const SEARCH = "Wyszukiwarki";
+const SOCIAL = "Social (organicznie)";
+const OTHER = "Inne źródła";
+const CRM = "CRM i e-mail";
+const MSG = "Komunikatory";
+const SITES = "Inne serwisy";
+const OFF = "Offline";
+
 export const CATALOG: CatalogItem[] = [
-  // Źródła ruchu
-  { kind: "meta_ads", category: "source", label: "Meta Ads", abbr: "FB", defaults: { sourceMatch: "facebook,fb,instagram,ig,meta" } },
-  { kind: "google_ads", category: "source", label: "Google Ads", abbr: "GA", defaults: { sourceMatch: "google" } },
-  { kind: "youtube", category: "source", label: "YouTube", abbr: "YT", defaults: { sourceMatch: "youtube,youtube.com" } },
-  { kind: "tiktok", category: "source", label: "TikTok", abbr: "TT", defaults: { sourceMatch: "tiktok" } },
-  { kind: "linkedin", category: "source", label: "LinkedIn", abbr: "IN", defaults: { sourceMatch: "linkedin" } },
-  { kind: "instagram", category: "source", label: "Instagram (organicznie)", abbr: "IG", defaults: { sourceMatch: "instagram.com" } },
-  { kind: "email", category: "source", label: "E-mail", abbr: "@", defaults: { sourceMatch: "mailerlite,getresponse,newsletter,email" } },
-  { kind: "sms", category: "source", label: "SMS", abbr: "SM", defaults: { sourceMatch: "sms" } },
-  { kind: "organic", category: "source", label: "Wyszukiwarka (SEO)", abbr: "SE", defaults: { sourceMatch: "google.com,bing.com,duckduckgo.com" } },
-  { kind: "affiliate", category: "source", label: "Partner / afiliacja", abbr: "AF", defaults: { sourceMatch: "affiliate,partner" } },
-  { kind: "direct", category: "source", label: "Wejścia bezpośrednie", abbr: "DI", defaults: { sourceMatch: "(direct)" } },
-  { kind: "source_custom", category: "source", label: "Inne źródło", abbr: "SR" },
+  // Źródła – reklamy płatne (rozróżnienie płatne/organiczne: dodaj warunek utm_medium, np. „cpc”)
+  src(PAID, "meta_ads", "Facebook Ads", "FB", "facebook,fb,meta"),
+  src(PAID, "instagram_ads", "Instagram Ads", "IG", "instagram,ig"),
+  src(PAID, "google_ads", "Google Ads", "GA", "google"),
+  src(PAID, "bing_ads", "Bing Ads", "BA", "bing"),
+  src(PAID, "linkedin", "LinkedIn Ads", "LI", "linkedin"),
+  src(PAID, "youtube_ads", "YouTube Ads", "YT", "youtube"),
+  src(PAID, "x_ads", "X Ads", "X", "twitter,x.com,x"),
+  src(PAID, "tiktok", "TikTok Ads", "TT", "tiktok"),
+  src(PAID, "pinterest_ads", "Pinterest Ads", "PI", "pinterest"),
+  src(PAID, "reddit_ads", "Reddit Ads", "RD", "reddit"),
+  // Wyszukiwarki
+  src(SEARCH, "organic", "Wszystkie wyszukiwarki", "SE", "google.com,bing.com,duckduckgo.com,yahoo.com,ecosia.org"),
+  src(SEARCH, "google_search", "Google (organicznie)", "G", "google.com,google.pl"),
+  src(SEARCH, "bing_search", "Bing (organicznie)", "B", "bing.com"),
+  src(SEARCH, "youtube", "YouTube (organicznie)", "YT", "youtube.com"),
+  // Social organicznie
+  src(SOCIAL, "facebook_org", "Facebook", "FB", "facebook.com"),
+  src(SOCIAL, "instagram", "Instagram", "IG", "instagram.com"),
+  src(SOCIAL, "linkedin_org", "LinkedIn", "LI", "linkedin.com,lnkd.in"),
+  src(SOCIAL, "tiktok_org", "TikTok", "TT", "tiktok.com"),
+  src(SOCIAL, "x_org", "X (Twitter)", "X", "t.co,x.com,twitter.com"),
+  src(SOCIAL, "pinterest_org", "Pinterest", "PI", "pinterest.com,pin.it"),
+  src(SOCIAL, "reddit_org", "Reddit", "RD", "reddit.com"),
+  // Inne źródła
+  src(OTHER, "email", "E-mail", "@", "mailerlite,getresponse,newsletter,email"),
+  src(OTHER, "direct", "Wejścia bezpośrednie", "DI", "(direct)"),
+  src(OTHER, "affiliate", "Partnerzy / afiliacja", "AF", "affiliate,partner"),
+  { kind: "source_custom", category: "source", group: OTHER, label: "Inne źródło", abbr: "SR" },
+  // CRM i e-mail marketing (oznaczaj linki utm_source=<nazwa>)
+  src(CRM, "mailerlite", "MailerLite", "ML", "mailerlite"),
+  src(CRM, "getresponse", "GetResponse", "GR", "getresponse"),
+  src(CRM, "kajabi", "Kajabi", "KJ", "kajabi"),
+  src(CRM, "activecampaign", "ActiveCampaign", "AC", "activecampaign"),
+  src(CRM, "mailchimp", "Mailchimp", "MC", "mailchimp"),
+  src(CRM, "hubspot", "HubSpot", "HS", "hubspot"),
+  src(CRM, "ontraport", "Ontraport", "ON", "ontraport"),
+  src(CRM, "keap", "Keap", "KP", "keap,infusionsoft"),
+  src(CRM, "pipedrive", "Pipedrive", "PD", "pipedrive"),
+  src(CRM, "intercom", "Intercom", "IC", "intercom"),
+  src(CRM, "marketo", "Marketo", "MK", "marketo"),
+  src(CRM, "constant_contact", "Constant Contact", "CC", "constantcontact,constant_contact"),
+  src(CRM, "drip", "Drip", "DR", "drip"),
+  src(CRM, "salesforce", "Salesforce", "SF", "salesforce"),
+  // Komunikatory
+  src(MSG, "chat_box", "Czat na stronie", "CZ", "chat,livechat"),
+  src(MSG, "messenger", "Messenger", "MS", "messenger,m.me"),
+  src(MSG, "whatsapp", "WhatsApp", "WA", "whatsapp,wa.me"),
+  src(MSG, "telegram", "Telegram", "TG", "telegram,t.me"),
+  src(MSG, "slack", "Slack", "SL", "slack"),
+  src(MSG, "sms", "SMS", "SM", "sms"),
+  src(MSG, "chatbot", "Chatbot", "BOT", "chatbot,manychat"),
+  // Inne serwisy
+  src(SITES, "zoho", "Zoho", "ZO", "zoho"),
+  src(SITES, "yelp", "Yelp", "YE", "yelp"),
+  src(SITES, "zendesk", "Zendesk", "ZD", "zendesk"),
+  src(SITES, "drift", "Drift", "DF", "drift"),
+  src(SITES, "gotomeeting", "GoToMeeting", "GTM", "gotomeeting"),
+  src(SITES, "amazon", "Amazon", "AM", "amazon"),
+  src(SITES, "zoom", "Zoom", "ZM", "zoom"),
+  src(SITES, "gmail", "Gmail", "GM", "gmail,mail.google.com"),
+  src(SITES, "spotify", "Spotify", "SP", "spotify"),
+  src(SITES, "snapchat", "Snapchat", "SC", "snapchat"),
+  src(SITES, "clutch", "Clutch", "CL", "clutch"),
+  src(SITES, "google_maps", "Mapy Google", "MAP", "maps.google,google_maps,gmb"),
+  // Offline (oznaczaj linki/QR kody utm_source=<nazwa>)
+  src(OFF, "job_interview", "Rozmowa o pracę", "RP", "job_interview"),
+  src(OFF, "print_ad", "Reklama w prasie", "PR", "print"),
+  src(OFF, "conference", "Konferencja", "KF", "conference"),
+  src(OFF, "online_meeting", "Spotkanie online", "SO", "online_meeting,webinar"),
+  src(OFF, "banner", "Baner", "BN", "banner"),
+  src(OFF, "direct_mail", "Direct mail", "DM", "direct_mail"),
+  src(OFF, "tv_ad", "Reklama TV", "TV", "tv"),
+  src(OFF, "biz_directory", "Katalog firm", "KT", "directory"),
+  src(OFF, "workshop", "Warsztaty", "WS", "workshop"),
+  src(OFF, "radio", "Radio", "RA", "radio"),
+  src(OFF, "guest_blog", "Gościnny wpis", "GB", "guest_blog"),
+  src(OFF, "job_site", "Portal z ofertami pracy", "PP", "job_site"),
+  src(OFF, "meeting_src", "Spotkanie", "SP", "meeting"),
+  src(OFF, "billboard", "Billboard", "BB", "billboard"),
+  src(OFF, "business_card", "Wizytówka", "WZ", "business_card"),
+  src(OFF, "career_site", "Strona kariery", "SK", "career"),
+  src(OFF, "phone_src", "Telefon", "TEL", "phone"),
+  src(OFF, "report", "Raport / e-book", "PDF", "report,ebook"),
+  src(OFF, "qr_code", "Kod QR", "QR", "qr"),
 
   // Strony
-  { kind: "landing", category: "page", label: "Landing page", abbr: "LP" },
-  { kind: "optin", category: "page", label: "Strona zapisu (opt-in)", abbr: "OP" },
-  { kind: "download", category: "page", label: "Strona pobrania", abbr: "DL" },
-  { kind: "popup", category: "page", label: "Popup", abbr: "PU" },
-  { kind: "sales", category: "page", label: "Strona sprzedażowa", abbr: "SP" },
-  { kind: "vsl", category: "page", label: "VSL (strona z wideo)", abbr: "VS" },
-  { kind: "webinar_reg", category: "page", label: "Rejestracja na webinar", abbr: "WR" },
-  { kind: "webinar", category: "page", label: "Pokój webinaru", abbr: "WB" },
-  { kind: "replay", category: "page", label: "Powtórka webinaru", abbr: "RP" },
-  { kind: "application", category: "page", label: "Ankieta / aplikacja", abbr: "AP" },
-  { kind: "booking", category: "page", label: "Rezerwacja rozmowy", abbr: "KL" },
-  { kind: "checkout", category: "page", label: "Formularz zamówienia", abbr: "ZA" },
-  { kind: "upsell", category: "page", label: "Upsell", abbr: "UP" },
-  { kind: "downsell", category: "page", label: "Downsell", abbr: "DS" },
-  { kind: "oto", category: "page", label: "Oferta jednorazowa (OTO)", abbr: "OT" },
-  { kind: "thankyou", category: "page", label: "Strona podziękowania", abbr: "TY" },
-  { kind: "members", category: "page", label: "Strefa członkowska", abbr: "SC" },
-  { kind: "blog", category: "page", label: "Artykuł / blog", abbr: "BL" },
-  { kind: "home", category: "page", label: "Strona główna", abbr: "HM" },
-  { kind: "page_custom", category: "page", label: "Inna strona", abbr: "PG" },
+  page("landing", "Landing page", "LP"),
+  page("optin", "Strona zapisu (opt-in)", "OP"),
+  page("download", "Strona pobrania", "DL"),
+  page("popup", "Popup", "PU"),
+  page("sales", "Strona sprzedażowa", "SP"),
+  page("vsl", "VSL (strona z wideo)", "VS"),
+  page("webinar_reg", "Rejestracja na webinar", "WR"),
+  page("webinar", "Pokój webinaru", "WB"),
+  page("replay", "Powtórka webinaru", "RP"),
+  page("application", "Ankieta / aplikacja", "AP"),
+  page("booking", "Rezerwacja rozmowy (kalendarz)", "KL"),
+  page("checkout", "Formularz zamówienia", "ZA"),
+  page("upsell", "Upsell", "UP"),
+  page("downsell", "Downsell", "DS"),
+  page("oto", "Oferta jednorazowa (OTO)", "OT"),
+  page("thankyou", "Strona podziękowania", "TY"),
+  page("members", "Strefa członkowska", "SC"),
+  page("blog", "Artykuł / blog", "BL"),
+  page("home", "Strona główna", "HM"),
+  page("page_custom", "Inna strona", "PG"),
 
-  // Akcje
-  { kind: "click", category: "action", label: "Kliknięcie", abbr: "KL", defaults: { eventType: "click" } },
-  { kind: "lead", category: "action", label: "Zapis (lead)", abbr: "LD", defaults: { eventType: "lead" } },
-  { kind: "form_submit", category: "action", label: "Wysłanie formularza", abbr: "FS", defaults: { eventType: "form_submit" } },
-  { kind: "purchase", category: "action", label: "Zakup", abbr: "ZK", defaults: { eventType: "purchase" } },
-  { kind: "add_to_cart", category: "action", label: "Dodanie do koszyka", abbr: "KO", defaults: { eventType: "add_to_cart" } },
-  { kind: "video_play", category: "action", label: "Odtworzenie wideo", abbr: "VP", defaults: { eventType: "video_play" } },
-  { kind: "scroll", category: "action", label: "Przewinięcie strony", abbr: "SC", defaults: { eventType: "scroll", eventName: "75" } },
-  { kind: "booking_done", category: "action", label: "Umówione spotkanie", abbr: "UM", defaults: { eventType: "booking" } },
-  { kind: "action_custom", category: "action", label: "Zdarzenie własne", abbr: "ZW", defaults: { eventType: "custom" } },
+  // Akcje – konwersje
+  act("Konwersje", "purchase", "Zakup", "ZK", { eventType: "purchase" }),
+  act("Konwersje", "lead", "Zapis (lead)", "LD", { eventType: "lead" }),
+  act("Konwersje", "form_submit", "Wypełniony formularz", "FS", { eventType: "form_submit" }),
+  act("Konwersje", "booking_done", "Umówione spotkanie", "UM", { eventType: "booking" }),
+  act("Konwersje", "deal_won", "Wygrana transakcja", "WT", { eventType: "custom", eventName: "deal_won" }),
+  act("Konwersje", "add_to_cart", "Dodanie do koszyka", "KO", { eventType: "add_to_cart" }),
+  // Akcje – zaangażowanie
+  act("Zaangażowanie", "video_play", "Odtworzenie wideo", "VP", { eventType: "video_play" }),
+  act("Zaangażowanie", "link_click", "Kliknięcie linku", "LK", { eventType: "link_click" }),
+  act("Zaangażowanie", "button_click", "Kliknięcie przycisku", "BT", { eventType: "button_click" }),
+  act("Zaangażowanie", "click", "Dowolne kliknięcie", "KL", { eventType: "click" }),
+  act("Zaangażowanie", "scroll", "Przewinięcie strony", "SC", { eventType: "scroll", eventName: "75" }),
+  act("Zaangażowanie", "deal_status", "Zmiana statusu transakcji", "ST", { eventType: "custom", eventName: "deal_status" }),
+  // Akcje – integracje (dane przychodzą webhookiem: ?type=custom&name=<nazwa>)
+  act("Integracje (webhook)", "ghl_appointment", "GHL – spotkanie", "GA", { eventType: "custom", eventName: "ghl_appointment" }),
+  act("Integracje (webhook)", "ghl_order", "GHL – zamówienie", "GO", { eventType: "custom", eventName: "ghl_order" }),
+  act("Integracje (webhook)", "ghl_opportunity", "GHL – szansa sprzedaży", "GS", { eventType: "custom", eventName: "ghl_opportunity" }),
+  act("Integracje (webhook)", "ghl_opportunity_won", "GHL – szansa wygrana", "GW", { eventType: "custom", eventName: "ghl_opportunity_won" }),
+  act("Integracje (webhook)", "hubspot_deal", "HubSpot – transakcja", "HD", { eventType: "custom", eventName: "hubspot_deal" }),
+  act("Integracje (webhook)", "hubspot_deal_won", "HubSpot – transakcja wygrana", "HW", { eventType: "custom", eventName: "hubspot_deal_won" }),
+  // Akcje – własne
+  act("Własne", "action_custom", "Zdarzenie własne", "ZW", { eventType: "custom" }),
 
-  // Offline / inne
-  { kind: "call", category: "offline", label: "Rozmowa telefoniczna", abbr: "TL" },
-  { kind: "meeting", category: "offline", label: "Spotkanie", abbr: "SP" },
-  { kind: "email_msg", category: "offline", label: "Wiadomość e-mail", abbr: "EM" },
-  { kind: "note", category: "offline", label: "Notatka", abbr: "NT" },
+  // Ręczne (offline, liczby wpisywane ręcznie)
+  { kind: "call", category: "offline", group: "Ręczne", label: "Rozmowa telefoniczna", abbr: "TL" },
+  { kind: "meeting", category: "offline", group: "Ręczne", label: "Spotkanie", abbr: "SP" },
+  { kind: "email_msg", category: "offline", group: "Ręczne", label: "Wiadomość e-mail", abbr: "EM" },
+  { kind: "note", category: "offline", group: "Ręczne", label: "Notatka", abbr: "NT" },
 ];
 
 export const CATALOG_BY_KIND: Record<string, CatalogItem> = Object.fromEntries(CATALOG.map((c) => [c.kind, c]));
 
 export const EVENT_TYPES: { value: string; label: string }[] = [
-  { value: "click", label: "Kliknięcie" },
+  { value: "click", label: "Kliknięcie (dowolne)" },
+  { value: "link_click", label: "Kliknięcie linku" },
+  { value: "button_click", label: "Kliknięcie przycisku" },
   { value: "lead", label: "Zapis (lead)" },
   { value: "form_submit", label: "Wysłanie formularza" },
   { value: "purchase", label: "Zakup" },

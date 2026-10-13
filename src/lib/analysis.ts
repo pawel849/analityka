@@ -237,8 +237,15 @@ function matchesSource(tokens: string[], ev: TrackedEvent): boolean {
   return tokens.some((t) => (t === "*" ? true : t === "(direct)" ? src === "(direct)" : src === t || src.includes(t)));
 }
 
+const LINK_RE = /\| https?:\/\//;
+
 function matchesAction(d: NodeData, ev: TrackedEvent): boolean {
-  if (!d.eventType || ev.type !== d.eventType) return false;
+  if (!d.eventType) return false;
+  // Kliknięcie linku / przycisku: zdarzenie click z adresem (link) lub bez (przycisk).
+  if (d.eventType === "link_click" || d.eventType === "button_click") {
+    if (ev.type !== "click") return false;
+    if (LINK_RE.test(ev.element) !== (d.eventType === "link_click")) return false;
+  } else if (ev.type !== d.eventType) return false;
   const name = (d.eventName ?? "").trim().toLowerCase();
   if (name) {
     if (d.eventType === "scroll") {

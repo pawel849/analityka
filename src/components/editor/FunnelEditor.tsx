@@ -20,7 +20,7 @@ import {
   type Connection,
   type Edge,
 } from "@xyflow/react";
-import { CATALOG, CATALOG_BY_KIND, CATEGORY_LABELS, type Category, type ChecklistItem, type NodeData, type NodeFilter } from "@/lib/catalog";
+import { CATALOG, CATALOG_BY_KIND, CATEGORY_LABELS, GROUP_COLORS, type Category, type ChecklistItem, type NodeData, type NodeFilter } from "@/lib/catalog";
 import type { FullAnalysis } from "@/lib/funnel-analysis";
 import { api } from "../forms";
 import { DEFAULT_LAYERS, EditorCtx, FlowEdge, FunnelNodeView, type EdgeData, type FunnelNode, type Layers, type Mode } from "./parts";
@@ -434,12 +434,18 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
     if (name.trim() && name !== funnel.name) await api(`/api/funnels/${funnel.id}`, "PATCH", { name }).catch(() => {});
   }
 
-  const grouped = useMemo(() => {
-    const g: Record<Category, typeof CATALOG> = { source: [], page: [], action: [], offline: [] };
+  const [paletteCat, setPaletteCat] = useState<Category>("source");
+  // Lista [podgrupa, elementy] – przy wyszukiwaniu ze wszystkich kategorii.
+  const groupedPalette = useMemo(() => {
     const q = paletteQuery.trim().toLowerCase();
-    for (const c of CATALOG) if (!q || c.label.toLowerCase().includes(q)) g[c.category].push(c);
-    return g;
-  }, [paletteQuery]);
+    const out = new Map<string, typeof CATALOG>();
+    for (const c of CATALOG) {
+      if (q ? !(c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)) : c.category !== paletteCat) continue;
+      const key = q ? `${CATEGORY_LABELS[c.category]} · ${c.group}` : c.group;
+      out.set(key, [...(out.get(key) ?? []), c]);
+    }
+    return [...out.entries()];
+  }, [paletteQuery, paletteCat]);
 
   const saveLabel = { saved: "Zapisano", dirty: "Zmiany…", saving: "Zapisywanie…", error: "Błąd zapisu" }[saveState];
 
@@ -595,27 +601,43 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
           {leftTab === "elements" && (
             <input className="pal-search" placeholder="Szukaj elementu…" value={paletteQuery} onChange={(e) => setPaletteQuery(e.target.value)} />
           )}
-          {leftTab === "elements" && (Object.keys(grouped) as Category[]).filter((cat) => grouped[cat].length).map((cat) => (
-            <div key={cat}>
-              <h4>{CATEGORY_LABELS[cat]}</h4>
-              {grouped[cat].map((item) => (
-                <div
-                  key={item.kind}
-                  className={`pal-item cat-${cat}`}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("application/x-anl-kind", item.kind);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDoubleClick={() => addNode(item.kind)}
-                  title="Przeciągnij na mapę lub kliknij dwukrotnie"
-                >
-                  <span className="abbr">{item.abbr}</span>
-                  {item.label}
-                </div>
+          {leftTab === "elements" && !paletteQuery.trim() && (
+            <div className="pal-tabs">
+              {(Object.keys(CATEGORY_LABELS) as Category[]).map((cat) => (
+                <button key={cat} className={paletteCat === cat ? "on" : ""} onClick={() => setPaletteCat(cat)}>
+                  {CATEGORY_LABELS[cat]}
+                </button>
               ))}
             </div>
-          ))}
+          )}
+          {leftTab === "elements" &&
+            groupedPalette.map(([group, items]) => (
+              <div key={group}>
+                <h4>{group}</h4>
+                <div className="pal-grid">
+                  {items.map((item) => (
+                    <div
+                      key={item.kind}
+                      className={`pal-tile cat-${item.category}`}
+                      style={{ "--node-accent": GROUP_COLORS[item.group] ?? undefined } as React.CSSProperties}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("application/x-anl-kind", item.kind);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDoubleClick={() => addNode(item.kind)}
+                      title={`${item.label} – przeciągnij na mapę lub kliknij dwukrotnie`}
+                    >
+                      <span className={`pal-icon shape-${item.category}`}>
+                        <span>{item.abbr}</span>
+                      </span>
+                      <span className="pal-label">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          {leftTab === "elements" && !groupedPalette.length && <p className="hint">Brak elementów dla „{paletteQuery}”.</p>}
           </div>
         </aside>
 

@@ -191,3 +191,18 @@ test("previous range and delta", async () => {
   assert.equal(delta(120, 100), 0.2);
   assert.equal(delta(5, 0), null);
 });
+
+test("link vs button click", () => {
+  const nodes = [
+    { id: "l", data: { kind: "link_click", category: "action" as const, label: "Link", eventType: "link_click" } },
+    { id: "b", data: { kind: "button_click", category: "action" as const, label: "Przycisk", eventType: "button_click" } },
+  ];
+  const events: TrackedEvent[] = [
+    ev({ visitor_id: "1", type: "click", element: "Kupuję | https://x.pl/zamowienie" }),
+    ev({ visitor_id: "2", type: "click", element: "Wyślij" }),
+    ev({ visitor_id: "3", type: "click", element: "Zapisz się" }),
+  ];
+  const r = analyze(nodes, [], events, []);
+  assert.equal(r.nodes.l.people, 1);
+  assert.equal(r.nodes.b.people, 2);
+});

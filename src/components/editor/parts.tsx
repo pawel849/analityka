@@ -11,7 +11,7 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { CATALOG_BY_KIND, type NodeData } from "@/lib/catalog";
+import { CATALOG_BY_KIND, GROUP_COLORS, type NodeData } from "@/lib/catalog";
 import { formatValue, type NodeStats } from "@/lib/analysis";
 import type { FullAnalysis } from "@/lib/funnel-analysis";
 import { PageThumb } from "./PageThumb";
@@ -147,7 +147,11 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
   return (
     <div
       className={`fnode cat-${data.category} ${selected ? "selected" : ""} ${data.goal ? "is-goal" : ""}`}
-      style={data.color ? ({ "--node-accent": data.color } as React.CSSProperties) : undefined}
+      style={
+        data.color || (item && GROUP_COLORS[item.group])
+          ? ({ "--node-accent": data.color || GROUP_COLORS[item!.group] } as React.CSSProperties)
+          : undefined
+      }
     >
       {data.goal && (
         <div className="goal-badge" title={`Cel${data.goalName ? `: ${data.goalName}` : ""}${data.goalValue ? ` · ${data.goalValue} zł` : ""}`}>
@@ -156,7 +160,14 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
       )}
       {data.category !== "source" && <Handle type="target" position={Position.Left} />}
       <div className="fnode-head">
-        <span className="abbr">{item?.abbr ?? "?"}</span>
+        {data.iconUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="abbr-img" src={data.iconUrl} alt="" />
+        ) : (
+          <span className={`abbr shape-${data.category}`}>
+            <span>{item?.abbr ?? "?"}</span>
+          </span>
+        )}
         <div>
           <div className="fnode-title">{data.label}</div>
           <div className="fnode-kind">{item?.label ?? data.kind}</div>
