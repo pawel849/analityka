@@ -11,6 +11,7 @@ import {
   MarkerType,
   MiniMap,
   Panel,
+  type Node,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -24,11 +25,15 @@ import type { FullAnalysis } from "@/lib/funnel-analysis";
 import { api } from "../forms";
 import { DEFAULT_LAYERS, EditorCtx, FlowEdge, FunnelNodeView, type EdgeData, type FunnelNode, type Layers, type Mode } from "./parts";
 import { EdgePanel } from "./EdgePanel";
+import { AnnotationPanel } from "./AnnotationPanel";
+import { TemplatePicker } from "./TemplatePicker";
+import { ImageNodeView, ShapeNodeView, TextNodeView, WidgetNodeView, WIDGETS, type WidgetKind } from "./annotations";
+import type { DataMode } from "@/lib/analysis";
 import { ChecklistEditor, NodePanel } from "./NodePanel";
 import { ExplorePanel } from "./ExplorePanel";
 import { MetricsBar } from "./MetricsBar";
 
-const nodeTypes = { funnel: FunnelNodeView };
+const nodeTypes = { funnel: FunnelNodeView, text: TextNodeView, shape: ShapeNodeView, image: ImageNodeView, widget: WidgetNodeView };
 const edgeTypes = { flow: FlowEdge };
 const defaultEdgeOptions = { type: "flow", markerEnd: { type: MarkerType.ArrowClosed } };
 
@@ -69,8 +74,13 @@ function Editor({ funnel, project, client }: EditorProps) {
   const rf = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
 
-  const selected = nodes.find((n) => n.selected);
-  const selectedEdge = selected ? undefined : edges.find((e) => e.selected);
+  const selectedAny = nodes.find((n) => n.selected);
+  const selected = selectedAny && (selectedAny.type ?? "funnel") === "funnel" ? selectedAny : undefined;
+  const selectedAnno = selectedAny && !selected ? (selectedAny as unknown as Node) : undefined;
+  const selectedEdge = selectedAny ? undefined : edges.find((e) => e.selected);
+  const [dataMode, setDataMode] = useState<DataMode>("traffic");
+  const [showTemplates, setShowTemplates] = useState((funnel.graph.nodes ?? []).length === 0);
+  const [widgetMenu, setWidgetMenu] = useState(false);
   const [layers, setLayers] = useState<Layers>(DEFAULT_LAYERS);
   useEffect(() => {
     try {
@@ -95,7 +105,7 @@ function Editor({ funnel, project, client }: EditorProps) {
   const graphJson = useMemo(
     () =>
       JSON.stringify({
-        nodes: nodes.map(({ id, type, position, data, zIndex }) => ({ id, type, position, data, zIndex })),
+        nodes: nodes.map(({ id, type, position, data, zIndex, width, height, style }) => ({ id, type, position, data, zIndex, width, height, style })),
         edges: edges.map(({ id, source, target, sourceHandle, targetHandle, type, markerEnd, data }) => ({ id, source, target, sourceHandle, targetHandle, type, markerEnd, data })),
         meta,
       }),
@@ -132,18 +142,18 @@ function Editor({ funnel, project, client }: EditorProps) {
         lastSaved.current = g;
         setSaveState("saved");
       }
-      setAnalysis(await api<FullAnalysis>(`/api/funnels/${funnel.id}/analysis?from=${from}&to=${to}`));
+      setAnalysis(await api<FullAnalysis>(`/api/funnels/${funnel.id}/analysis?from=${from}&to=${to}&mode=${dataMode}`));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [funnel.id, from, to]);
+  }, [funnel.id, from, to, dataMode]);
 
   useEffect(() => {
     if (mode === "analyze") loadAnalysis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, from, to]);
+  }, [mode, from, to, dataMode]);
 
   // --- Dodawanie węzłów ---
   const addNode = useCallback(
@@ -161,6 +171,37 @@ function Editor({ funnel, project, client }: EditorProps) {
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { id, type: "funnel", position: pos, data, selected: true }]);
     },
     [rf, setNodes],
+  );
+
+  const centerPos = useCallback(() => {
+    const r = wrapper.current?.getBoundingClientRect();
+    return rf.screenToFlowPosition({ x: (r?.left ?? 0) + (r?.width ?? 600) / 2 - 100, y: (r?.top ?? 0) + (r?.height ?? 400) / 2 - 50 });
+  }, [rf]);
+
+  const annoCount = useRef(0);
+  const addAnnotation = useCallback(
+    (type: "text" | "shape" | "image" | "widget", data: Record<string, unknown>, size?: { width: number; height: number }) => {
+      const id = `${type}_${crypto.randomUUID().slice(0, 8)}`;
+      const c = centerPos();
+      const k = annoCount.current++ % 6;
+      const node = { id, type, position: { x: c.x + k * 40, y: c.y + k * 40 }, data, selected: true, ...(size ? { width: size.width, height: size.height, style: { ...size } } : {}) };
+      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), node as unknown as FunnelNode]);
+    },
+    [centerPos, setNodes],
+  );
+
+  const applyTemplate = useCallback(
+    (g: { nodes: unknown[]; edges: unknown[] }) => {
+      const tn = g.nodes as FunnelNode[];
+      const te = g.edges as Edge[];
+      // Wstaw obok istniejących elementów (po prawej), żeby niczego nie nadpisać.
+      const maxX = nodes.length ? Math.max(...nodes.map((n) => n.position.x)) + 400 : 0;
+      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...tn.map((n) => ({ ...n, position: { x: n.position.x + maxX, y: n.position.y } }))]);
+      setEdges((es) => [...es, ...te]);
+      setShowTemplates(false);
+      setTimeout(() => rf.fitView({ maxZoom: 1.1, duration: 300 }), 50);
+    },
+    [nodes, setNodes, setEdges, rf],
   );
 
   const onDrop = useCallback(
@@ -226,7 +267,17 @@ function Editor({ funnel, project, client }: EditorProps) {
       const newNodes: FunnelNode[] = src.nodes.map((n) => {
         const id = `n_${crypto.randomUUID().slice(0, 8)}`;
         map.set(n.id, id);
-        return { id, type: "funnel", position: { x: n.position.x + 40, y: n.position.y + 40 }, data: structuredClone(n.data), zIndex: n.zIndex, selected: true };
+        return {
+          id,
+          type: n.type ?? "funnel",
+          position: { x: n.position.x + 40, y: n.position.y + 40 },
+          data: structuredClone(n.data),
+          zIndex: n.zIndex,
+          width: n.width,
+          height: n.height,
+          style: n.style,
+          selected: true,
+        } as FunnelNode;
       });
       const newEdges: Edge[] = src.edges.map((e) => ({
         ...e,
@@ -340,6 +391,36 @@ function Editor({ funnel, project, client }: EditorProps) {
               <button className="btn small" onClick={loadAnalysis} disabled={loading}>{loading ? "Liczę…" : "Odśwież"}</button>
             </div>
           )}
+          <div className="row tool-group">
+            <button className="btn small icon" title="Dodaj tekst" aria-label="Dodaj tekst" onClick={() => addAnnotation("text", { text: "", size: 24 })}>T</button>
+            <button className="btn small icon" title="Dodaj kształt" aria-label="Dodaj kształt" onClick={() => addAnnotation("shape", { shape: "rect", fill: "transparent" }, { width: 320, height: 200 })}>▭</button>
+            <button className="btn small icon" title="Dodaj obraz" aria-label="Dodaj obraz" onClick={() => addAnnotation("image", { src: "" }, { width: 240, height: 160 })}>▣</button>
+            <div style={{ position: "relative" }}>
+              <button className="btn small" title="Dodaj widget" onClick={() => setWidgetMenu((v) => !v)}>Widget ▾</button>
+              {widgetMenu && (
+                <div className="dropdown">
+                  {WIDGETS.map((w) => (
+                    <button
+                      key={w.kind}
+                      onClick={() => {
+                        addAnnotation("widget", { widget: w.kind as WidgetKind });
+                        setWidgetMenu(false);
+                      }}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="btn small" onClick={() => setShowTemplates(true)}>Szablony</button>
+          </div>
+          {mode === "analyze" && (
+            <select value={dataMode} onChange={(e) => setDataMode(e.target.value as DataMode)} title="Tryb danych" aria-label="Tryb danych">
+              <option value="traffic">Dane: ruch</option>
+              <option value="funnel">Dane: lejek</option>
+            </select>
+          )}
           <div className="mode-switch" role="tablist">
             <button className={mode === "plan" ? "on" : ""} onClick={() => setMode("plan")}>Planowanie</button>
             <button className={mode === "analyze" ? "on" : ""} onClick={() => setMode("analyze")}>Analiza</button>
@@ -450,12 +531,15 @@ function Editor({ funnel, project, client }: EditorProps) {
               style={{ width: 160, height: 100 }}
               bgColor="var(--fe-panel)"
               maskColor="color-mix(in srgb, var(--fe-bg) 65%, transparent)"
-              nodeColor={(n) => `var(--cat-${(n.data as NodeData).category})`}
+              nodeColor={(n) => ((n.type ?? "funnel") === "funnel" ? `var(--cat-${(n.data as NodeData).category})` : "var(--fe-chip)")}
             />
           </ReactFlow>
           {nodes.length === 0 && (
             <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
-              <p className="hint">Przeciągnij elementy z lewego panelu i połącz je strzałkami (od kropki po prawej do kropki po lewej).</p>
+              <div style={{ textAlign: "center", pointerEvents: "auto" }}>
+                <p className="hint">Przeciągnij elementy z lewego panelu i połącz je strzałkami (od kropki po prawej do kropki po lewej).</p>
+                <button className="btn primary" onClick={() => setShowTemplates(true)}>Zacznij od szablonu</button>
+              </div>
             </div>
           )}
         </div>
@@ -477,6 +561,20 @@ function Editor({ funnel, project, client }: EditorProps) {
                 else reorder(a);
               }}
               onManualChange={() => mode === "analyze" && loadAnalysis()}
+            />
+          ) : selectedAnno ? (
+            <AnnotationPanel
+              key={selectedAnno.id}
+              node={selectedAnno}
+              onChange={(patch) =>
+                setNodes((ns) => ns.map((n) => (n.id === selectedAnno.id ? { ...n, data: { ...n.data, ...patch } as NodeData } : n)))
+              }
+              onDelete={() => deleteNode(selectedAnno.id)}
+              onAction={(a) => {
+                if (a === "copy") copySelection();
+                else if (a === "duplicate") duplicate();
+                else reorder(a);
+              }}
             />
           ) : selectedEdge ? (
             <EdgePanel
@@ -509,6 +607,9 @@ function Editor({ funnel, project, client }: EditorProps) {
 
         {mode === "analyze" && (
           <MetricsBar funnelId={funnel.id} analysis={analysis} loading={loading} error={error} onChanged={loadAnalysis} />
+        )}
+        {showTemplates && (
+        <TemplatePicker funnelId={funnel.id} range={{ from, to }} onPick={applyTemplate} onClose={() => setShowTemplates(false)} />
         )}
       </div>
     </EditorCtx.Provider>

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS events (
   is_test BOOLEAN NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS events_project_ts ON events(project_id, ts);
+ALTER TABLE events ADD COLUMN IF NOT EXISTS country TEXT NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS manual_data (
   id TEXT PRIMARY KEY,
   funnel_id TEXT NOT NULL REFERENCES funnels(id) ON DELETE CASCADE,

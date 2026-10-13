@@ -16,7 +16,10 @@ export const POST = guarded(async (req, { params }: Params<"id">) => {
   if (!project || !funnel) return notFound();
   const graph = typeof funnel.graph === "string" ? JSON.parse(funnel.graph) : funnel.graph;
   const host = (project.domain || "przyklad.pl").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-  const events = generateTestEvents(graph.nodes ?? [], graph.edges ?? [], host);
+  const funnelNodes = (graph.nodes ?? []).filter(
+    (n: { type?: string; data?: NodeData }) => (n.type ?? "funnel") === "funnel" && n.data?.category,
+  );
+  const events = generateTestEvents(funnelNodes, graph.edges ?? [], host);
   await insertEvents(id, events, true);
   return json({ inserted: events.length });
 });

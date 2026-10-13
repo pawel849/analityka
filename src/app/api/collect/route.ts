@@ -18,7 +18,13 @@ export async function POST(req: Request) {
     const payload = JSON.parse(text) as { k?: string; ev?: IncomingEvent[] };
     const projectId = payload.k ? await projectIdForKey(String(payload.k)) : null;
     if (!projectId) return new Response("unknown key", { status: 404, headers: CORS });
-    const events = (Array.isArray(payload.ev) ? payload.ev : []).slice(0, 50).map(clean).filter((e) => e !== null);
+    // Kraj z nagłówka geolokalizacji Vercel (lokalnie brak).
+    const country = req.headers.get("x-vercel-ip-country") ?? "";
+    const events = (Array.isArray(payload.ev) ? payload.ev : [])
+      .slice(0, 50)
+      .map(clean)
+      .filter((e) => e !== null)
+      .map((e) => ({ ...e, country }));
     await insertEvents(projectId, events);
     return new Response(null, { status: 204, headers: CORS });
   } catch (e) {

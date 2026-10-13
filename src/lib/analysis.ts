@@ -28,6 +28,7 @@ export interface TrackedEvent {
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
+  country?: string;
   element: string;
   value: number | null;
   scroll: number | null;
@@ -67,6 +68,9 @@ export interface EdgeStats {
   rate: number | null;
   estimated: boolean;
 }
+
+/** Ruch: każdy krok liczy wszystkich. Lejek: krok liczy tylko osoby, które doszły do niego strzałkami. */
+export type DataMode = "traffic" | "funnel";
 
 export interface Totals {
   spend: number;
@@ -228,7 +232,7 @@ function sourceTokens(d: NodeData): string[] {
 function matchesSource(tokens: string[], ev: TrackedEvent): boolean {
   if (ev.type !== "pageview") return false;
   const src = eventSource(ev);
-  return tokens.some((t) => (t === "(direct)" ? src === "(direct)" : src === t || src.includes(t)));
+  return tokens.some((t) => (t === "*" ? true : t === "(direct)" ? src === "(direct)" : src === t || src.includes(t)));
 }
 
 function matchesAction(d: NodeData, ev: TrackedEvent): boolean {
@@ -280,6 +284,7 @@ export function analyze(
   edges: GraphEdge[],
   events: TrackedEvent[],
   manual: ManualRow[],
+  opts: { mode?: DataMode } = {},
 ): AnalysisResult {
   const manualBy = new Map<string, Map<string, number>>();
   for (const m of manual) {
@@ -428,6 +433,53 @@ export function analyze(
     nodeStats[n.id] = st;
   }
 
+  const flowVisitors = (e: GraphEdge): Set<string> => {
+    const out = new Set<string>();
+    const a = spans.get(e.source);
+    const b = spans.get(e.target);
+    if (!a || !b) return out;
+    const conn = e.data?.connection ?? "direct";
+    if (conn === "none") return out;
+    for (const [v, sa] of a) {
+      const sb = b.get(v);
+      if (!sb || sb.last < sa.first) continue;
+      if (conn === "indirect" || directStep(timeline.get(v) ?? [], e.source, e.target)) out.add(v);
+    }
+    return out;
+  };
+
+  if (opts.mode === "funnel") {
+    // Kolejność topologiczna; w cyklach węzły przetwarzane w kolejności z mapy.
+    const incoming = new Map<string, GraphEdge[]>();
+    for (const e of edges) incoming.set(e.target, [...(incoming.get(e.target) ?? []), e]);
+    const done = new Set<string>();
+    const order: string[] = [];
+    let progress = true;
+    while (order.length < nodes.length && progress) {
+      progress = false;
+      for (const n of nodes) {
+        if (done.has(n.id)) continue;
+        const inc = (incoming.get(n.id) ?? []).filter((e) => nodeStats[e.source]);
+        if (inc.every((e) => done.has(e.source))) {
+          done.add(n.id);
+          order.push(n.id);
+          progress = true;
+        }
+      }
+    }
+    for (const n of nodes) if (!done.has(n.id)) order.push(n.id);
+    for (const id of order) {
+      const st = nodeStats[id];
+      const inc = (incoming.get(id) ?? []).filter((e) => nodeStats[e.source]?.tracked && (e.data?.connection ?? "direct") !== "none");
+      if (!st?.tracked || !inc.length) continue;
+      const allowed = new Set<string>();
+      for (const e of inc) for (const v of flowVisitors(e)) allowed.add(v);
+      const span = spans.get(id)!;
+      for (const v of [...span.keys()]) if (!allowed.has(v)) span.delete(v);
+      st.people = span.size;
+    }
+  }
+
   const edgeStats: Record<string, EdgeStats> = {};
   for (const e of edges) {
     const s = nodeStats[e.source];
@@ -441,14 +493,7 @@ export function analyze(
       continue;
     }
     if (s.tracked && t.tracked) {
-      const a = spans.get(e.source)!;
-      const b = spans.get(e.target)!;
-      people = 0;
-      for (const [v, sa] of a) {
-        const sb = b.get(v);
-        if (!sb || sb.last < sa.first) continue;
-        if (connection === "indirect" || directStep(timeline.get(v) ?? [], e.source, e.target)) people++;
-      }
+      people = flowVisitors(e).size;
     } else {
       people = Math.min(t.people, s.people || t.people);
       estimated = true;

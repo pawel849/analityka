@@ -41,6 +41,7 @@ export function generateTestEvents(nodes: N[], edges: E[], host: string, visitor
 
   for (let i = 0; i < visitors; i++) {
     const vid = `test_${i}_${Math.random().toString(36).slice(2, 8)}`;
+    const country = rand(["PL", "PL", "PL", "PL", "DE", "GB", "US", "NL"]);
     let ts = now - Math.random() * 29 * 86400_000;
     let utm = "";
     let lastUrl = `https://${host}/`;
@@ -62,6 +63,7 @@ export function generateTestEvents(nodes: N[], edges: E[], host: string, visitor
         element: "",
         value: null as number | null,
         scroll: null as number | null,
+        country,
       };
       if (d.category === "source") {
         const tok = (d.sourceMatch ?? "").split(",")[0]?.trim() ?? "";

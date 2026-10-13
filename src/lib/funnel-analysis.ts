@@ -1,4 +1,4 @@
-import { analyze, type AnalysisResult, type GraphEdge, type GraphNode, type ManualRow, type TrackedEvent } from "./analysis";
+import { analyze, type AnalysisResult, type DataMode, type GraphEdge, type GraphNode, type ManualRow, type TrackedEvent } from "./analysis";
 import { evaluate } from "./formula";
 import { one, q } from "./db";
 
@@ -9,7 +9,18 @@ export interface CustomMetric {
   format: string;
 }
 
+export interface DailyPoint {
+  day: string;
+  visitors: number;
+  leads: number;
+  sales: number;
+  revenue: number;
+}
+
 export interface FullAnalysis extends AnalysisResult {
+  mode: DataMode;
+  daily: DailyPoint[];
+  countries: { country: string; people: number }[];
   from: string;
   to: string;
   eventCount: number;
@@ -35,14 +46,17 @@ export async function loadFunnel(funnelId: string) {
   return { projectId: funnel.project_id, nodes: (graph.nodes ?? []) as GraphNode[], edges: (graph.edges ?? []) as GraphEdge[] };
 }
 
-export async function runFunnelAnalysis(funnelId: string, from: string, to: string): Promise<FullAnalysis | null> {
+export async function runFunnelAnalysis(funnelId: string, from: string, to: string, mode: DataMode = "traffic"): Promise<FullAnalysis | null> {
   const funnel = await one<{ project_id: string; graph: { nodes: GraphNode[]; edges: GraphEdge[] } }>(
     "SELECT project_id, graph FROM funnels WHERE id = $1",
     [funnelId],
   );
   if (!funnel) return null;
   const graph = typeof funnel.graph === "string" ? JSON.parse(funnel.graph) : funnel.graph;
-  const nodes: GraphNode[] = (graph.nodes ?? []).map((n: GraphNode) => ({ id: n.id, data: n.data }));
+  // Tylko elementy lejka (bez tekstów, kształtów i widgetów).
+  const nodes: GraphNode[] = (graph.nodes ?? [])
+    .filter((n: GraphNode & { type?: string }) => (n.type ?? "funnel") === "funnel" && n.data?.category)
+    .map((n: GraphNode) => ({ id: n.id, data: n.data }));
   const edges: GraphEdge[] = (graph.edges ?? []).map((e: GraphEdge) => ({ id: e.id, source: e.source, target: e.target, data: e.data }));
 
   const { events, truncated } = await loadEvents(funnel.project_id, from, to);
@@ -55,7 +69,7 @@ export async function runFunnelAnalysis(funnelId: string, from: string, to: stri
     )
   ).map((m): ManualRow => ({ ...m, value: Number(m.value) }));
 
-  const result = analyze(nodes, edges, events, manual);
+  const result = analyze(nodes, edges, events, manual, { mode });
 
   const metrics = await q<CustomMetric>(
     "SELECT id, name, formula, format FROM custom_metrics WHERE funnel_id = $1 ORDER BY created_at",
@@ -87,7 +101,7 @@ export async function runFunnelAnalysis(funnelId: string, from: string, to: stri
     }
   });
 
-  return { ...result, from, to, eventCount: events.length, truncated, custom };
+  return { ...result, mode, daily: dailySeries(events, from, to), countries: topCountries(events), from, to, eventCount: events.length, truncated, custom };
 }
 
 export async function loadEvents(projectId: string, from: string, to: string): Promise<{ events: TrackedEvent[]; truncated: boolean }> {
@@ -107,11 +121,12 @@ export async function loadEvents(projectId: string, from: string, to: string): P
     utm_campaign: string;
     utm_content: string;
     utm_term: string;
+    country: string;
     element: string;
     value: number | null;
     scroll: number | null;
   }>(
-    `SELECT id, ts, type, name, visitor_id, url, path, referrer, utm_source, utm_medium, utm_campaign, utm_content, utm_term, element, value, scroll
+    `SELECT id, ts, type, name, visitor_id, url, path, referrer, utm_source, utm_medium, utm_campaign, utm_content, utm_term, country, element, value, scroll
      FROM events WHERE project_id = $1 AND ts >= $2 AND ts <= $3 ORDER BY ts LIMIT ${MAX_EVENTS + 1}`,
     [projectId, fromTs, toTs],
   );
@@ -124,4 +139,34 @@ export async function loadEvents(projectId: string, from: string, to: string): P
   }));
 
   return { events, truncated };
+}
+
+function dailySeries(events: TrackedEvent[], from: string, to: string): DailyPoint[] {
+  const days = new Map<string, { v: Set<string>; leads: Set<string>; sales: number; revenue: number }>();
+  for (let t = Date.parse(`${from}T00:00:00Z`); t <= Date.parse(`${to}T00:00:00Z`); t += 86400_000) {
+    days.set(new Date(t).toISOString().slice(0, 10), { v: new Set(), leads: new Set(), sales: 0, revenue: 0 });
+  }
+  for (const e of events) {
+    const d = days.get(new Date(e.ts).toISOString().slice(0, 10));
+    if (!d) continue;
+    if (e.type === "pageview") d.v.add(e.visitor_id);
+    else if (e.type === "lead" || e.type === "form_submit") d.leads.add(e.visitor_id);
+    else if (e.type === "purchase") {
+      d.sales++;
+      d.revenue += e.value ?? 0;
+    }
+  }
+  return [...days.entries()].map(([day, d]) => ({ day, visitors: d.v.size, leads: d.leads.size, sales: d.sales, revenue: d.revenue }));
+}
+
+function topCountries(events: TrackedEvent[]): { country: string; people: number }[] {
+  const m = new Map<string, Set<string>>();
+  for (const e of events) {
+    if (e.type !== "pageview") continue;
+    const c = e.country || "??";
+    const s = m.get(c) ?? new Set<string>();
+    s.add(e.visitor_id);
+    m.set(c, s);
+  }
+  return [...m.entries()].map(([country, s]) => ({ country, people: s.size })).sort((a, b) => b.people - a.people).slice(0, 10);
 }

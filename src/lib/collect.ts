@@ -62,6 +62,7 @@ export interface CleanEvent {
   element: string;
   value: number | null;
   scroll: number | null;
+  country?: string;
   ts?: Date;
 }
 
@@ -99,7 +100,7 @@ export function clean(ev: IncomingEvent): CleanEvent | null {
 
 export async function insertEvents(projectId: string, events: CleanEvent[], isTest = false) {
   if (!events.length) return;
-  const cols = 17;
+  const cols = 18;
   const chunk = 500;
   for (let i = 0; i < events.length; i += chunk) {
     const part = events.slice(i, i + chunk);
@@ -123,13 +124,14 @@ export async function insertEvents(projectId: string, events: CleanEvent[], isTe
         e.element,
         e.value,
         e.scroll,
+        (e.country ?? "").slice(0, 2).toUpperCase(),
       );
       const b = j * (cols + 0);
       return `(${Array.from({ length: cols }, (_, k) => `$${b + k + 1}`).join(",")}, ${isTest ? "true" : "false"})`;
     });
     await q(
       `INSERT INTO events (project_id, ts, type, name, visitor_id, session_id, url, path, referrer,
-        utm_source, utm_medium, utm_campaign, utm_content, utm_term, element, value, scroll, is_test)
+        utm_source, utm_medium, utm_campaign, utm_content, utm_term, element, value, scroll, country, is_test)
        VALUES ${rows.join(",")}`,
       values,
     );

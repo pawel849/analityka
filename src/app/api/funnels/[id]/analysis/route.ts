@@ -10,6 +10,7 @@ export const GET = guarded(async (req, { params }: Params<"id">) => {
   const from = url.searchParams.get("from") ?? def.from;
   const to = url.searchParams.get("to") ?? def.to;
   if (!DAY.test(from) || !DAY.test(to)) return json({ error: "Daty w formacie RRRR-MM-DD" }, 400);
-  const res = await runFunnelAnalysis(id, from, to);
+  const mode = url.searchParams.get("mode") === "funnel" ? "funnel" : "traffic";
+  const res = await runFunnelAnalysis(id, from, to, mode);
   return res ? json(res) : notFound();
 });

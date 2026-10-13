@@ -128,3 +128,44 @@ test("forecast for range", async () => {
   assert.equal(forecastForRange({ period: "week", people: 70 }, "2026-10-01", "2026-10-14"), 140);
   assert.equal(forecastForRange(undefined, "2026-10-01", "2026-10-07"), null);
 });
+
+test("funnel mode restricts to people arriving via arrows", () => {
+  const nodes = [
+    { id: "s", data: { kind: "meta_ads", category: "source" as const, label: "Meta", sourceMatch: "facebook" } },
+    { id: "a", data: { kind: "optin", category: "page" as const, label: "Opt-in", url: "/zapis" } },
+    { id: "b", data: { kind: "thankyou", category: "page" as const, label: "Dzięki", url: "/dzieki" } },
+  ];
+  const edges = [
+    { id: "e1", source: "s", target: "a" },
+    { id: "e2", source: "a", target: "b" },
+  ];
+  const events: TrackedEvent[] = [
+    ev({ visitor_id: "1", ts: 1, path: "/zapis", utm_source: "facebook" }),
+    ev({ visitor_id: "1", ts: 2, path: "/dzieki", utm_source: "facebook" }),
+    ev({ visitor_id: "2", ts: 1, path: "/zapis" }),
+    ev({ visitor_id: "2", ts: 2, path: "/dzieki" }),
+    ev({ visitor_id: "3", ts: 1, path: "/dzieki" }),
+  ];
+  const traffic = analyze(nodes, edges, events, []);
+  assert.equal(traffic.nodes.a.people, 2);
+  assert.equal(traffic.nodes.b.people, 3);
+  const funnel = analyze(nodes, edges, events, [], { mode: "funnel" });
+  assert.equal(funnel.nodes.s.people, 1);
+  assert.equal(funnel.nodes.a.people, 1);
+  assert.equal(funnel.nodes.b.people, 1);
+  assert.equal(funnel.edges.e2.people, 1);
+});
+
+test("wildcard source and all pages", () => {
+  const nodes = [
+    { id: "s", data: { kind: "source_custom", category: "source" as const, label: "Wszystkie", sourceMatch: "*" } },
+    { id: "p", data: { kind: "page_custom", category: "page" as const, label: "Wszystkie strony", url: "/*" } },
+  ];
+  const events: TrackedEvent[] = [
+    ev({ visitor_id: "1", path: "/a" }),
+    ev({ visitor_id: "2", path: "/b/c", utm_source: "google" }),
+  ];
+  const r = analyze(nodes, [], events, []);
+  assert.equal(r.nodes.s.people, 2);
+  assert.equal(r.nodes.p.people, 2);
+});
