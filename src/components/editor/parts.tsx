@@ -4,6 +4,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  getStraightPath,
   Handle,
   Position,
   type EdgeProps,
@@ -17,7 +18,19 @@ import { PageThumb } from "./PageThumb";
 import { forecastForRange } from "@/lib/forecast";
 
 export type Mode = "plan" | "analyze";
-export const EditorCtx = createContext<{ mode: Mode; analysis: FullAnalysis | null }>({ mode: "plan", analysis: null });
+export interface Layers {
+  numbers: boolean;
+  thumbs: boolean;
+  plan: boolean;
+}
+export const DEFAULT_LAYERS: Layers = { numbers: true, thumbs: true, plan: true };
+export const EditorCtx = createContext<{ mode: Mode; analysis: FullAnalysis | null; layers: Layers }>({
+  mode: "plan",
+  analysis: null,
+  layers: DEFAULT_LAYERS,
+});
+
+export type EdgeData = { connection?: "direct" | "indirect" | "none"; line?: "curved" | "straight" };
 
 export type FunnelNode = Node<NodeData, "funnel">;
 
@@ -105,7 +118,8 @@ function PlanBadges({ d }: { d: NodeData }) {
 }
 
 export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
-  const { mode, analysis } = useContext(EditorCtx);
+  const { mode, analysis: rawAnalysis, layers } = useContext(EditorCtx);
+  const analysis = layers.numbers ? rawAnalysis : null;
   const item = CATALOG_BY_KIND[data.kind];
   const stats = analysis?.nodes[id];
   const foot = planFooter(data);
@@ -129,7 +143,7 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
       </div>
       {mode === "plan" ? (
         <>
-          {data.category === "page" && (
+          {data.category === "page" && layers.thumbs && (
             <div className="fnode-thumb">
               {data.thumbnailUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -139,11 +153,13 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
               )}
             </div>
           )}
-          <PlanBadges d={data} />
+          {layers.plan && <PlanBadges d={data} />}
           <div className={`fnode-foot ${foot.warn ? "warn" : ""}`}>{foot.text}</div>
         </>
       ) : stats ? (
         <Stats d={data} s={stats} range={{ from: analysis!.from, to: analysis!.to }} />
+      ) : !layers.numbers ? (
+        <div className="fnode-foot">liczby ukryte</div>
       ) : (
         <div className="fnode-foot">brak danych</div>
       )}
@@ -154,18 +170,34 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
 
 export function FlowEdge(props: EdgeProps) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, style } = props;
-  const { mode, analysis } = useContext(EditorCtx);
-  const [path, lx, ly] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const data = (props.data ?? {}) as EdgeData;
+  const { mode, analysis, layers } = useContext(EditorCtx);
+  const [path, lx, ly] =
+    data.line === "straight"
+      ? getStraightPath({ sourceX, sourceY, targetX, targetY })
+      : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const s = analysis?.edges[id];
+  const conn = data.connection ?? "direct";
+  const edgeStyle = {
+    ...style,
+    ...(conn === "indirect" ? { strokeDasharray: "6 5" } : {}),
+    ...(conn === "none" ? { strokeDasharray: "2 4", opacity: 0.55 } : {}),
+  };
   return (
     <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
-      {mode === "analyze" && s && (
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={edgeStyle} />
+      {mode === "analyze" && layers.numbers && s && conn !== "none" && (
         <EdgeLabelRenderer>
           <div
             className={`edge-label nodrag nopan ${s.estimated ? "est" : ""}`}
             style={{ transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)` }}
-            title={s.estimated ? "Szacunek – co najmniej jeden węzeł ma tylko dane ręczne" : "Osoby, które przeszły z węzła A do B"}
+            title={
+              s.estimated
+                ? "Szacunek – co najmniej jeden węzeł ma tylko dane ręczne"
+                : conn === "indirect"
+                  ? "Osoby, które po A trafiły kiedykolwiek do B (z pominięciem kroków)"
+                  : "Osoby, dla których B było następnym krokiem po A"
+            }
           >
             {n(s.people)}
             <b>{pct(s.rate)}</b>

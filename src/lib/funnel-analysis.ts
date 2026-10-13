@@ -43,7 +43,7 @@ export async function runFunnelAnalysis(funnelId: string, from: string, to: stri
   if (!funnel) return null;
   const graph = typeof funnel.graph === "string" ? JSON.parse(funnel.graph) : funnel.graph;
   const nodes: GraphNode[] = (graph.nodes ?? []).map((n: GraphNode) => ({ id: n.id, data: n.data }));
-  const edges: GraphEdge[] = (graph.edges ?? []).map((e: GraphEdge) => ({ id: e.id, source: e.source, target: e.target }));
+  const edges: GraphEdge[] = (graph.edges ?? []).map((e: GraphEdge) => ({ id: e.id, source: e.source, target: e.target, data: e.data }));
 
   const { events, truncated } = await loadEvents(funnel.project_id, from, to);
 

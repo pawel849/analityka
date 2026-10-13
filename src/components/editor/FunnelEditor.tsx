@@ -10,6 +10,7 @@ import {
   Controls,
   MarkerType,
   MiniMap,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -21,7 +22,8 @@ import {
 import { CATALOG, CATALOG_BY_KIND, CATEGORY_LABELS, type Category, type NodeData } from "@/lib/catalog";
 import type { FullAnalysis } from "@/lib/funnel-analysis";
 import { api } from "../forms";
-import { EditorCtx, FlowEdge, FunnelNodeView, type FunnelNode, type Mode } from "./parts";
+import { DEFAULT_LAYERS, EditorCtx, FlowEdge, FunnelNodeView, type EdgeData, type FunnelNode, type Layers, type Mode } from "./parts";
+import { EdgePanel } from "./EdgePanel";
 import { NodePanel } from "./NodePanel";
 import { MetricsBar } from "./MetricsBar";
 
@@ -57,17 +59,39 @@ function Editor({ funnel, project, client }: EditorProps) {
   const wrapper = useRef<HTMLDivElement>(null);
 
   const selected = nodes.find((n) => n.selected);
+  const selectedEdge = selected ? undefined : edges.find((e) => e.selected);
+  const [layers, setLayers] = useState<Layers>(DEFAULT_LAYERS);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("anl_layers");
+      if (raw) setLayers({ ...DEFAULT_LAYERS, ...JSON.parse(raw) });
+    } catch {
+      /* brak dostępu do pamięci przeglądarki */
+    }
+  }, []);
+  const toggleLayer = (k: keyof Layers) =>
+    setLayers((l) => {
+      const next = { ...l, [k]: !l[k] };
+      try {
+        localStorage.setItem("anl_layers", JSON.stringify(next));
+      } catch {
+        /* ignoruj */
+      }
+      return next;
+    });
 
   // --- Autozapis mapy ---
   const graphJson = useMemo(
     () =>
       JSON.stringify({
-        nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data })),
-        edges: edges.map(({ id, source, target, sourceHandle, targetHandle, type, markerEnd }) => ({ id, source, target, sourceHandle, targetHandle, type, markerEnd })),
+        nodes: nodes.map(({ id, type, position, data, zIndex }) => ({ id, type, position, data, zIndex })),
+        edges: edges.map(({ id, source, target, sourceHandle, targetHandle, type, markerEnd, data }) => ({ id, source, target, sourceHandle, targetHandle, type, markerEnd, data })),
       }),
     [nodes, edges],
   );
   const lastSaved = useRef(graphJson);
+  const currentGraph = useRef(graphJson);
+  currentGraph.current = graphJson;
   useEffect(() => {
     if (graphJson === lastSaved.current) return;
     setSaveState("dirty");
@@ -90,9 +114,10 @@ function Editor({ funnel, project, client }: EditorProps) {
     setError("");
     try {
       // upewnij się, że serwer liczy na aktualnej mapie
-      if (graphJson !== lastSaved.current) {
-        await api(`/api/funnels/${funnel.id}`, "PATCH", { graph: JSON.parse(graphJson) });
-        lastSaved.current = graphJson;
+      const g = currentGraph.current;
+      if (g !== lastSaved.current) {
+        await api(`/api/funnels/${funnel.id}`, "PATCH", { graph: JSON.parse(g) });
+        lastSaved.current = g;
         setSaveState("saved");
       }
       setAnalysis(await api<FullAnalysis>(`/api/funnels/${funnel.id}/analysis?from=${from}&to=${to}`));
@@ -101,7 +126,6 @@ function Editor({ funnel, project, client }: EditorProps) {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [funnel.id, from, to]);
 
   useEffect(() => {
@@ -154,6 +178,108 @@ function Editor({ funnel, project, client }: EditorProps) {
     [setNodes, setEdges],
   );
 
+  const updateEdge = useCallback(
+    (id: string, patch: EdgeData) => setEdges((es) => es.map((e) => (e.id === id ? { ...e, data: { ...(e.data ?? {}), ...patch } } : e))),
+    [setEdges],
+  );
+
+  // --- Kopiuj / wklej / duplikuj / kolejność warstw ---
+  const clipboard = useRef<{ nodes: FunnelNode[]; edges: Edge[] } | null>(null);
+  const copySelection = useCallback(() => {
+    const sel = nodes.filter((n) => n.selected);
+    if (!sel.length) return false;
+    const ids = new Set(sel.map((n) => n.id));
+    const payload = { nodes: sel, edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)) };
+    clipboard.current = payload;
+    try {
+      localStorage.setItem("anl_clipboard", JSON.stringify(payload));
+    } catch {
+      /* ignoruj */
+    }
+    return true;
+  }, [nodes, edges]);
+
+  const paste = useCallback(
+    (payload?: { nodes: FunnelNode[]; edges: Edge[] } | null) => {
+      let src = payload ?? clipboard.current;
+      if (!src) {
+        try {
+          src = JSON.parse(localStorage.getItem("anl_clipboard") ?? "null");
+        } catch {
+          src = null;
+        }
+      }
+      if (!src?.nodes?.length) return;
+      const map = new Map<string, string>();
+      const newNodes: FunnelNode[] = src.nodes.map((n) => {
+        const id = `n_${crypto.randomUUID().slice(0, 8)}`;
+        map.set(n.id, id);
+        return { id, type: "funnel", position: { x: n.position.x + 40, y: n.position.y + 40 }, data: structuredClone(n.data), zIndex: n.zIndex, selected: true };
+      });
+      const newEdges: Edge[] = src.edges.map((e) => ({
+        ...e,
+        id: `e_${crypto.randomUUID().slice(0, 8)}`,
+        source: map.get(e.source)!,
+        target: map.get(e.target)!,
+        selected: false,
+      }));
+      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...newNodes]);
+      setEdges((es) => [...es, ...newEdges]);
+      clipboard.current = { nodes: newNodes, edges: newEdges };
+    },
+    [setNodes, setEdges],
+  );
+
+  const duplicate = useCallback(() => {
+    const sel = nodes.filter((n) => n.selected);
+    if (!sel.length) return;
+    const ids = new Set(sel.map((n) => n.id));
+    paste({ nodes: sel, edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)) });
+  }, [nodes, edges, paste]);
+
+  const reorder = useCallback(
+    (how: "forward" | "front" | "backward" | "back") =>
+      setNodes((ns) => {
+        const zs = ns.map((n) => n.zIndex ?? 0);
+        const max = Math.max(0, ...zs);
+        const min = Math.min(0, ...zs);
+        return ns.map((n) => {
+          if (!n.selected) return n;
+          const z = n.zIndex ?? 0;
+          const next = how === "forward" ? z + 1 : how === "backward" ? z - 1 : how === "front" ? max + 1 : min - 1;
+          return { ...n, zIndex: next };
+        });
+      }),
+    [setNodes],
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const k = e.key.toLowerCase();
+      if (k === "c") {
+        if (copySelection()) e.preventDefault();
+      } else if (k === "v") {
+        e.preventDefault();
+        paste();
+      } else if (k === "d") {
+        e.preventDefault();
+        duplicate();
+      } else if (e.key === "]" || e.key === "}") {
+        e.preventDefault();
+        reorder(e.shiftKey ? "front" : "forward");
+      } else if (e.key === "[" || e.key === "{") {
+        e.preventDefault();
+        reorder(e.shiftKey ? "back" : "backward");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [copySelection, paste, duplicate, reorder]);
+
   async function saveName() {
     if (name.trim() && name !== funnel.name) await api(`/api/funnels/${funnel.id}`, "PATCH", { name }).catch(() => {});
   }
@@ -167,7 +293,7 @@ function Editor({ funnel, project, client }: EditorProps) {
   const saveLabel = { saved: "Zapisano", dirty: "Zmiany…", saving: "Zapisywanie…", error: "Błąd zapisu" }[saveState];
 
   return (
-    <EditorCtx.Provider value={{ mode, analysis: mode === "analyze" ? analysis : null }}>
+    <EditorCtx.Provider value={{ mode, analysis: mode === "analyze" ? analysis : null, layers }}>
       <div className={`fe mode-${mode}`}>
         <div className="fe-toolbar">
           <div className="fe-crumbs">
@@ -254,6 +380,20 @@ function Editor({ funnel, project, client }: EditorProps) {
               color="var(--fe-grid)"
             />
             <Controls showInteractive={false} />
+            <Panel position="top-right" className="layers-panel">
+              <span className="hint">Warstwy</span>
+              {(
+                [
+                  ["numbers", "Liczby"],
+                  ["thumbs", "Miniatury"],
+                  ["plan", "Plan"],
+                ] as [keyof Layers, string][]
+              ).map(([k, label]) => (
+                <label key={k} title={`Włącz/wyłącz warstwę: ${label}`}>
+                  <input type="checkbox" checked={layers[k]} onChange={() => toggleLayer(k)} /> {label}
+                </label>
+              ))}
+            </Panel>
             <MiniMap
               pannable
               zoomable
@@ -281,7 +421,25 @@ function Editor({ funnel, project, client }: EditorProps) {
               range={{ from, to }}
               onChange={(patch) => updateNode(selected.id, patch)}
               onDelete={() => deleteNode(selected.id)}
+              onAction={(a) => {
+                if (a === "copy") copySelection();
+                else if (a === "duplicate") duplicate();
+                else reorder(a);
+              }}
               onManualChange={() => mode === "analyze" && loadAnalysis()}
+            />
+          ) : selectedEdge ? (
+            <EdgePanel
+              key={selectedEdge.id}
+              edge={selectedEdge}
+              nodes={nodes}
+              mode={mode}
+              stats={analysis?.edges[selectedEdge.id]}
+              onChange={(patch) => {
+                updateEdge(selectedEdge.id, patch);
+                if (mode === "analyze" && patch.connection) setTimeout(loadAnalysis, 50);
+              }}
+              onDelete={() => setEdges((es) => es.filter((e) => e.id !== selectedEdge.id))}
             />
           ) : (
             <div className="hint">
@@ -290,6 +448,11 @@ function Editor({ funnel, project, client }: EditorProps) {
               <p>2. Dla stron wpisz adres (np. <code>/zapis</code>), dla źródeł wartości utm_source, dla akcji typ zdarzenia.</p>
               <p>3. Przełącz na <b>Analizę</b> – liczby pojawią się na węzłach i strzałkach.</p>
               <p>Koszty reklam i inne dane spoza skryptu wpisujesz ręcznie w panelu węzła.</p>
+              <p>Kliknij strzałkę, żeby ustawić typ linii i połączenia.</p>
+              <p>
+                Skróty: <code>Ctrl/⌘+C</code> kopiuj, <code>+V</code> wklej (także w innym lejku), <code>+D</code> duplikuj,{" "}
+                <code>+]</code>/<code>+[</code> wyżej/niżej (z Shift – na wierzch/spód), <code>Delete</code> usuń.
+              </p>
             </div>
           )}
         </aside>

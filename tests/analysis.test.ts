@@ -38,7 +38,10 @@ test("flow, conversion, metrics", () => {
   ];
   const edges = [
     { id: "e1", source: "s", target: "a" },
-    { id: "e2", source: "a", target: "b" },
+    { id: "e2", source: "a", target: "b", data: { connection: "indirect" as const } },
+    { id: "e3", source: "a", target: "b" },
+    { id: "e4", source: "a", target: "l" },
+    { id: "e5", source: "a", target: "b", data: { connection: "none" as const } },
   ];
   const events: TrackedEvent[] = [];
   for (let i = 0; i < 10; i++) {
@@ -63,6 +66,10 @@ test("flow, conversion, metrics", () => {
   assert.equal(r.edges.e1.people, 6);
   assert.equal(r.edges.e2.people, 4);
   assert.equal(r.edges.e2.rate, 0.4);
+  // bezpośrednio: po opt-inie najpierw jest lead, więc opt-in → podziękowanie = 0, opt-in → lead = 4
+  assert.equal(r.edges.e3.people, 0);
+  assert.equal(r.edges.e4.people, 4);
+  assert.equal(r.edges.e5.rate, null);
   assert.equal(r.nodes.a.ctrPage, 0.4);
   assert.equal(r.nodes.a.scroll?.p75, 0.5);
   assert.equal(r.totals.leads, 4);

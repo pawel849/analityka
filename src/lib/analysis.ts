@@ -6,10 +6,13 @@ export interface GraphNode {
   id: string;
   data: NodeData;
 }
+export type ConnectionType = "direct" | "indirect" | "none";
+
 export interface GraphEdge {
   id: string;
   source: string;
   target: string;
+  data?: { connection?: ConnectionType; line?: "curved" | "straight" };
 }
 export interface TrackedEvent {
   id: number | string;
@@ -59,6 +62,7 @@ export interface NodeStats {
 }
 
 export interface EdgeStats {
+  connection: ConnectionType;
   people: number;
   rate: number | null;
   estimated: boolean;
@@ -241,6 +245,29 @@ function matchesAction(d: NodeData, ev: TrackedEvent): boolean {
   return true;
 }
 
+/**
+ * Przejście bezpośrednie A → B: po którymś trafieniu w A najbliższym kolejnym krokiem z mapy
+ * (pomijając źródła ruchu) jest B. Trafienia z tego samego zdarzenia co A, ale z innego węzła, też się liczą
+ * (np. źródło i strona docelowa to ta sama odsłona).
+ */
+function directStep(hits: { ts: number; idx: number; node: string; source: boolean }[], from: string, to: string): boolean {
+  if (!hits.length) return false;
+  if (!(hits as unknown as { sorted?: boolean }).sorted) {
+    hits.sort((x, y) => x.ts - y.ts || x.idx - y.idx || Number(y.source) - Number(x.source));
+    (hits as unknown as { sorted?: boolean }).sorted = true;
+  }
+  for (let i = 0; i < hits.length; i++) {
+    if (hits[i].node !== from) continue;
+    for (let j = i + 1; j < hits.length; j++) {
+      const h = hits[j];
+      if (h.node === from || h.source) continue;
+      if (h.node === to) return true;
+      break;
+    }
+  }
+  return false;
+}
+
 interface Span {
   first: number;
   last: number;
@@ -272,11 +299,19 @@ export function analyze(
 
   const totals = { spend: 0, pageviews: 0, page_clicks: 0, impressions: 0, clicks: 0, video_3s: 0 };
   const goals = { count: 0, value: 0 };
+  // Oś czasu trafień w węzły dla każdej osoby (do przejść bezpośrednich).
+  const evIndex = new Map<TrackedEvent, number>(events.map((e, i) => [e, i]));
+  const timeline = new Map<string, { ts: number; idx: number; node: string; source: boolean }[]>();
 
   for (const n of nodes) {
     const d = n.data;
     const visitors = new Map<string, Span>();
-    const touch = (v: string, ts: number) => {
+    const touch = (ev: TrackedEvent) => {
+      const v = ev.visitor_id;
+      const ts = ev.ts;
+      const hits = timeline.get(v) ?? [];
+      hits.push({ ts, idx: evIndex.get(ev) ?? 0, node: n.id, source: d.category === "source" });
+      timeline.set(v, hits);
       const s = visitors.get(v);
       if (!s) visitors.set(v, { first: ts, last: ts });
       else {
@@ -290,7 +325,7 @@ export function analyze(
       const match = presenceMatcher(d);
       if (match) {
         st.tracked = true;
-        for (const ev of events) if (match(ev)) touch(ev.visitor_id, ev.ts);
+        for (const ev of events) if (match(ev)) touch(ev);
       }
       st.spend = man(n.id, "spend") ?? 0;
       st.impressions = man(n.id, "impressions") ?? 0;
@@ -314,7 +349,7 @@ export function analyze(
           if (!matchesAnyPage(urls, ev) || !matchesFilters(d.filters, ev)) continue;
           if (ev.type === "pageview") {
             pv++;
-            touch(ev.visitor_id, ev.ts);
+            touch(ev);
           } else if (ev.type === "click") clicks++;
           else if (ev.type === "scroll" && ev.scroll != null) {
             scrollMax.set(ev.visitor_id, Math.max(scrollMax.get(ev.visitor_id) ?? 0, ev.scroll));
@@ -342,7 +377,7 @@ export function analyze(
         let count = 0;
         for (const ev of events) {
           if (!matchesAction(d, ev) || !matchesFilters(d.filters, ev)) continue;
-          touch(ev.visitor_id, ev.ts);
+          touch(ev);
           count++;
           if (d.eventType === "purchase") {
             rev += ev.value ?? 0;
@@ -396,21 +431,27 @@ export function analyze(
     const s = nodeStats[e.source];
     const t = nodeStats[e.target];
     if (!s || !t) continue;
+    const connection: ConnectionType = e.data?.connection ?? "direct";
     let people: number;
     let estimated = false;
+    if (connection === "none") {
+      edgeStats[e.id] = { connection, people: 0, rate: null, estimated: false };
+      continue;
+    }
     if (s.tracked && t.tracked) {
       const a = spans.get(e.source)!;
       const b = spans.get(e.target)!;
       people = 0;
       for (const [v, sa] of a) {
         const sb = b.get(v);
-        if (sb && sb.last >= sa.first) people++;
+        if (!sb || sb.last < sa.first) continue;
+        if (connection === "indirect" || directStep(timeline.get(v) ?? [], e.source, e.target)) people++;
       }
     } else {
       people = Math.min(t.people, s.people || t.people);
       estimated = true;
     }
-    edgeStats[e.id] = { people, rate: div(people, s.people), estimated };
+    edgeStats[e.id] = { connection, people, rate: div(people, s.people), estimated };
   }
 
   // Sprzedaż: zdarzenia purchase, a jeśli w lejku nie ma węzła zakupu – wszystkie zakupy z projektu.

@@ -415,6 +415,7 @@ export function NodePanel({
   onChange,
   onDelete,
   onManualChange,
+  onAction,
 }: {
   funnelId: string;
   node: FunnelNode;
@@ -424,6 +425,7 @@ export function NodePanel({
   onChange: (patch: Partial<NodeData>) => void;
   onDelete: () => void;
   onManualChange: () => void;
+  onAction: (a: "copy" | "duplicate" | "forward" | "front" | "backward" | "back") => void;
 }) {
   const d = node.data;
   const item = CATALOG_BY_KIND[d.kind];
@@ -531,6 +533,17 @@ export function NodePanel({
               <span className="hint">Wklej link do zrzutu ekranu strony. Puste = makieta zależna od typu.</span>
             </label>
           )}
+          <div className="field">
+            Kolejność i kopiowanie
+            <div className="choice-grid">
+              <button className="btn small" onClick={() => onAction("copy")} title="Ctrl/⌘ + C">Kopiuj</button>
+              <button className="btn small" onClick={() => onAction("duplicate")} title="Ctrl/⌘ + D">Duplikuj</button>
+              <button className="btn small" onClick={() => onAction("forward")} title="Ctrl/⌘ + ]">Wyżej</button>
+              <button className="btn small" onClick={() => onAction("front")} title="Ctrl/⌘ + Shift + ]">Na wierzch</button>
+              <button className="btn small" onClick={() => onAction("backward")} title="Ctrl/⌘ + [">Niżej</button>
+              <button className="btn small" onClick={() => onAction("back")} title="Ctrl/⌘ + Shift + [">Na spód</button>
+            </div>
+          </div>
           <label className="field">
             Kolor akcentu
             <div className="row" style={{ flexWrap: "nowrap" }}>
