@@ -126,7 +126,7 @@ function GoalEditor({ d, onChange }: { d: NodeData; onChange: (p: Partial<NodeDa
   );
 }
 
-function ChecklistEditor({ items, onChange }: { items: ChecklistItem[]; onChange: (i: ChecklistItem[]) => void }) {
+export function ChecklistEditor({ items, onChange }: { items: ChecklistItem[]; onChange: (i: ChecklistItem[]) => void }) {
   const [hideDone, setHideDone] = useState(false);
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");

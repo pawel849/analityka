@@ -207,6 +207,8 @@ function matchesAnyPage(urls: string[], ev: TrackedEvent): boolean {
 export function presenceMatcher(d: NodeData): ((ev: TrackedEvent) => boolean) | null {
   if (d.category === "source") {
     const tokens = sourceTokens(d);
+    // Źródło bez dopasowania, ale z warunkami (np. konkretna kampania) – dowolna odsłona spełniająca warunki.
+    if (!tokens.length && d.filters?.some((f) => f.key)) return (ev) => ev.type === "pageview" && matchesFilters(d.filters, ev);
     return tokens.length ? (ev) => matchesSource(tokens, ev) && matchesFilters(d.filters, ev) : null;
   }
   if (d.category === "page") {

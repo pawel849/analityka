@@ -20,10 +20,11 @@ import { forecastForRange } from "@/lib/forecast";
 export type Mode = "plan" | "analyze";
 export interface Layers {
   numbers: boolean;
+  flow: boolean;
   thumbs: boolean;
   plan: boolean;
 }
-export const DEFAULT_LAYERS: Layers = { numbers: true, thumbs: true, plan: true };
+export const DEFAULT_LAYERS: Layers = { numbers: true, flow: false, thumbs: true, plan: true };
 export const EditorCtx = createContext<{ mode: Mode; analysis: FullAnalysis | null; layers: Layers }>({
   mode: "plan",
   analysis: null,
@@ -178,14 +179,22 @@ export function FlowEdge(props: EdgeProps) {
       : getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
   const s = analysis?.edges[id];
   const conn = data.connection ?? "direct";
+  // Warstwa przepływu: grubość linii proporcjonalna do liczby osób (względem największej strzałki).
+  let flowWidth: number | undefined;
+  if (mode === "analyze" && layers.flow && s && conn !== "none" && analysis) {
+    const max = Math.max(1, ...Object.values(analysis.edges).map((x) => x.people));
+    flowWidth = 1.5 + (s.people / max) * 16;
+  }
   const edgeStyle = {
     ...style,
+    ...(flowWidth ? { strokeWidth: flowWidth, strokeOpacity: 0.55, stroke: "var(--fe-accent)" } : {}),
     ...(conn === "indirect" ? { strokeDasharray: "6 5" } : {}),
     ...(conn === "none" ? { strokeDasharray: "2 4", opacity: 0.55 } : {}),
   };
   return (
     <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={edgeStyle} />
+      {/* Grot strzałki skaluje się z grubością linii, więc w warstwie przepływu go pomijamy. */}
+      <BaseEdge id={id} path={path} markerEnd={flowWidth ? undefined : markerEnd} style={edgeStyle} />
       {mode === "analyze" && layers.numbers && s && conn !== "none" && (
         <EdgeLabelRenderer>
           <div

@@ -19,21 +19,29 @@ import {
   type Connection,
   type Edge,
 } from "@xyflow/react";
-import { CATALOG, CATALOG_BY_KIND, CATEGORY_LABELS, type Category, type NodeData } from "@/lib/catalog";
+import { CATALOG, CATALOG_BY_KIND, CATEGORY_LABELS, type Category, type ChecklistItem, type NodeData } from "@/lib/catalog";
 import type { FullAnalysis } from "@/lib/funnel-analysis";
 import { api } from "../forms";
 import { DEFAULT_LAYERS, EditorCtx, FlowEdge, FunnelNodeView, type EdgeData, type FunnelNode, type Layers, type Mode } from "./parts";
 import { EdgePanel } from "./EdgePanel";
-import { NodePanel } from "./NodePanel";
+import { ChecklistEditor, NodePanel } from "./NodePanel";
+import { ExplorePanel } from "./ExplorePanel";
 import { MetricsBar } from "./MetricsBar";
 
 const nodeTypes = { funnel: FunnelNodeView };
 const edgeTypes = { flow: FlowEdge };
 const defaultEdgeOptions = { type: "flow", markerEnd: { type: MarkerType.ArrowClosed } };
 
+export interface FunnelMeta {
+  notes?: string;
+  checklist?: ChecklistItem[];
+}
+
+type LeftTab = "elements" | "explore" | "notes" | "checklist";
+
 export interface EditorProps {
-  funnel: { id: string; name: string; graph: { nodes: FunnelNode[]; edges: Edge[] } };
-  project: { id: string; name: string };
+  funnel: { id: string; name: string; graph: { nodes: FunnelNode[]; edges: Edge[]; meta?: FunnelMeta } };
+  project: { id: string; name: string; trackingKey: string };
   client: { id: string; name: string };
 }
 
@@ -48,6 +56,9 @@ function Editor({ funnel, project, client }: EditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<FunnelNode>(funnel.graph.nodes ?? []);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(funnel.graph.edges ?? []);
   const [name, setName] = useState(funnel.name);
+  const [meta, setMeta] = useState<FunnelMeta>(funnel.graph.meta ?? {});
+  const [leftTab, setLeftTab] = useState<LeftTab>("elements");
+  const [paletteQuery, setPaletteQuery] = useState("");
   const [mode, setMode] = useState<Mode>("plan");
   const [from, setFrom] = useState(daysAgo(29));
   const [to, setTo] = useState(iso(new Date()));
@@ -86,8 +97,9 @@ function Editor({ funnel, project, client }: EditorProps) {
       JSON.stringify({
         nodes: nodes.map(({ id, type, position, data, zIndex }) => ({ id, type, position, data, zIndex })),
         edges: edges.map(({ id, source, target, sourceHandle, targetHandle, type, markerEnd, data }) => ({ id, source, target, sourceHandle, targetHandle, type, markerEnd, data })),
+        meta,
       }),
-    [nodes, edges],
+    [nodes, edges, meta],
   );
   const lastSaved = useRef(graphJson);
   const currentGraph = useRef(graphJson);
@@ -135,7 +147,7 @@ function Editor({ funnel, project, client }: EditorProps) {
 
   // --- Dodawanie węzłów ---
   const addNode = useCallback(
-    (kind: string, position?: { x: number; y: number }) => {
+    (kind: string, position?: { x: number; y: number }, patch?: Partial<NodeData>) => {
       const item = CATALOG_BY_KIND[kind];
       if (!item) return;
       const pos =
@@ -144,7 +156,7 @@ function Editor({ funnel, project, client }: EditorProps) {
           const r = wrapper.current?.getBoundingClientRect();
           return rf.screenToFlowPosition({ x: (r?.left ?? 0) + (r?.width ?? 600) / 2 - 95, y: (r?.top ?? 0) + (r?.height ?? 400) / 2 - 40 });
         })();
-      const data: NodeData = { kind, category: item.category, label: item.label, ...item.defaults };
+      const data: NodeData = { kind, category: item.category, label: item.label, ...item.defaults, ...patch };
       const id = `n_${crypto.randomUUID().slice(0, 8)}`;
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { id, type: "funnel", position: pos, data, selected: true }]);
     },
@@ -286,9 +298,10 @@ function Editor({ funnel, project, client }: EditorProps) {
 
   const grouped = useMemo(() => {
     const g: Record<Category, typeof CATALOG> = { source: [], page: [], action: [], offline: [] };
-    for (const c of CATALOG) g[c.category].push(c);
+    const q = paletteQuery.trim().toLowerCase();
+    for (const c of CATALOG) if (!q || c.label.toLowerCase().includes(q)) g[c.category].push(c);
     return g;
-  }, []);
+  }, [paletteQuery]);
 
   const saveLabel = { saved: "Zapisano", dirty: "Zmiany…", saving: "Zapisywanie…", error: "Błąd zapisu" }[saveState];
 
@@ -333,8 +346,43 @@ function Editor({ funnel, project, client }: EditorProps) {
           </div>
         </div>
 
-        <aside className="fe-palette">
-          {(Object.keys(grouped) as Category[]).map((cat) => (
+        <aside className="fe-left">
+          <nav className="fe-rail">
+            {(
+              [
+                ["elements", "▦", "Elementy mapy"],
+                ["explore", "⌕", "Eksploruj dane i skrypt"],
+                ["notes", "✎", "Notatki lejka"],
+                ["checklist", "✓", "Checklista lejka"],
+              ] as [LeftTab, string, string][]
+            ).map(([k, icon, title]) => (
+              <button key={k} className={leftTab === k ? "on" : ""} title={title} aria-label={title} onClick={() => setLeftTab(k)}>
+                {icon}
+              </button>
+            ))}
+          </nav>
+          <div className="fe-palette">
+          {leftTab === "explore" && (
+            <ExplorePanel funnelId={funnel.id} trackingKey={project.trackingKey} range={{ from, to }} onAdd={(kind, patch) => addNode(kind, undefined, patch)} />
+          )}
+          {leftTab === "notes" && (
+            <div>
+              <h4>Notatki lejka</h4>
+              <textarea
+                className="meta-notes"
+                value={meta.notes ?? ""}
+                placeholder="Cele lejka, założenia, linki, ustalenia z klientem…"
+                onChange={(e) => setMeta((m) => ({ ...m, notes: e.target.value }))}
+              />
+            </div>
+          )}
+          {leftTab === "checklist" && (
+            <ChecklistEditor items={meta.checklist ?? []} onChange={(checklist) => setMeta((m) => ({ ...m, checklist }))} />
+          )}
+          {leftTab === "elements" && (
+            <input className="pal-search" placeholder="Szukaj elementu…" value={paletteQuery} onChange={(e) => setPaletteQuery(e.target.value)} />
+          )}
+          {leftTab === "elements" && (Object.keys(grouped) as Category[]).filter((cat) => grouped[cat].length).map((cat) => (
             <div key={cat}>
               <h4>{CATEGORY_LABELS[cat]}</h4>
               {grouped[cat].map((item) => (
@@ -355,6 +403,7 @@ function Editor({ funnel, project, client }: EditorProps) {
               ))}
             </div>
           ))}
+          </div>
         </aside>
 
         <div className="fe-canvas" ref={wrapper} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
@@ -385,6 +434,7 @@ function Editor({ funnel, project, client }: EditorProps) {
               {(
                 [
                   ["numbers", "Liczby"],
+                  ["flow", "Przepływ"],
                   ["thumbs", "Miniatury"],
                   ["plan", "Plan"],
                 ] as [keyof Layers, string][]

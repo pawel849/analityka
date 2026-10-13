@@ -15,7 +15,7 @@
   --fe-good: #1f8a4c;
   --fe-bad: #c4372f;
   display: grid;
-  grid-template-columns: 230px 1fr 300px;
+  grid-template-columns: 270px 1fr 300px;
   grid-template-rows: auto 1fr auto;
   height: calc(100vh - 49px);
   background: var(--fe-bg);
@@ -216,3 +216,23 @@
   border-radius: 8px; padding: 5px 10px; font-size: 12px; color: var(--fe-ink);
 }
 .layers-panel label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+
+/* Lewy pasek */
+.fe-left { display: grid; grid-template-columns: 40px 1fr; min-height: 0; border-right: 1px solid var(--fe-panel-border); background: var(--fe-panel); }
+.fe-left .fe-palette { border-right: 0; min-width: 0; }
+.fe-rail { display: flex; flex-direction: column; gap: 4px; padding: 8px 4px; border-right: 1px solid var(--fe-panel-border); }
+.fe-rail button {
+  width: 32px; height: 32px; border-radius: 8px; border: 0; background: transparent; color: var(--fe-ink-2); font-size: 18px; line-height: 1; cursor: pointer;
+}
+.fe-rail button:hover { background: var(--fe-chip); }
+.fe-rail button.on { background: var(--fe-accent); color: #fff; }
+.pal-search { width: 100%; margin-bottom: 8px; }
+.meta-notes { width: 100%; min-height: 60vh; resize: vertical; }
+.explore-sec { margin-top: 10px; }
+.explore-sec h4 { margin: 8px 0 4px; }
+.explore-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; padding: 2px 0; }
+.explore-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) {
+  .fe-left { border-right: 0; border-bottom: 1px solid var(--fe-panel-border); max-height: 240px; }
+  .fe-left .fe-palette { max-height: 240px; }
+}
