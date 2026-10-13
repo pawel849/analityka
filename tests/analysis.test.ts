@@ -114,3 +114,10 @@ test("multi-URL, filters, goals", () => {
   assert.equal(r.totals.goals, 2);
   assert.equal(r.totals.goal_value, 20);
 });
+
+test("forecast for range", async () => {
+  const { forecastForRange } = await import("../src/lib/forecast.ts");
+  assert.equal(forecastForRange({ period: "day", people: 10 }, "2026-10-01", "2026-10-07"), 70);
+  assert.equal(forecastForRange({ period: "week", people: 70 }, "2026-10-01", "2026-10-14"), 140);
+  assert.equal(forecastForRange(undefined, "2026-10-01", "2026-10-07"), null);
+});

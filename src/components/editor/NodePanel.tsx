@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { CATALOG, CATALOG_BY_KIND, EVENT_TYPES, FILTER_KEYS, FILTER_OPS, MANUAL_METRICS, type NodeData, type NodeFilter } from "@/lib/catalog";
+import { CATALOG, CATALOG_BY_KIND, EVENT_TYPES, FILTER_KEYS, FILTER_OPS, MANUAL_METRICS, type ChecklistItem, type NodeData, type NodeFilter } from "@/lib/catalog";
 import { formatValue, type NodeStats } from "@/lib/analysis";
+import { forecastForRange } from "@/lib/forecast";
 import { api } from "../forms";
 import type { FunnelNode, Mode } from "./parts";
 
@@ -88,6 +89,156 @@ function ManualData({ funnelId, nodeId, category, onChanged }: { funnelId: strin
 }
 
 const CATEGORY_COLORS: Record<NodeData["category"], string> = { source: "#2f5bea", page: "#0e8a7e", action: "#c2601b", offline: "#7a4fc9" };
+
+function GoalEditor({ d, onChange }: { d: NodeData; onChange: (p: Partial<NodeData>) => void }) {
+  const [raw, setRaw] = useState(d.goalValue != null ? String(d.goalValue) : "");
+  return (
+    <>
+      <label className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+        <b>Cel konwersji</b>
+        <input type="checkbox" checked={!!d.goal} onChange={(e) => onChange({ goal: e.target.checked })} />
+      </label>
+      {d.goal && (
+        <>
+          <div className="manual-row">
+            <label className="field">
+              Nazwa celu
+              <input value={d.goalName ?? ""} placeholder="np. Zapis" onChange={(e) => onChange({ goalName: e.target.value })} />
+            </label>
+            <label className="field">
+              Wartość (zł)
+              <input
+                inputMode="decimal"
+                value={raw}
+                placeholder="0"
+                onChange={(e) => {
+                  setRaw(e.target.value);
+                  const v = Number(e.target.value.replace(",", "."));
+                  onChange({ goalValue: e.target.value.trim() && Number.isFinite(v) ? v : undefined });
+                }}
+              />
+            </label>
+          </div>
+          <p className="hint">Wartość jednej konwersji; ujemna = koszt.</p>
+        </>
+      )}
+    </>
+  );
+}
+
+function ChecklistEditor({ items, onChange }: { items: ChecklistItem[]; onChange: (i: ChecklistItem[]) => void }) {
+  const [hideDone, setHideDone] = useState(false);
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState("");
+  const done = items.filter((i) => i.done).length;
+  const visible = hideDone ? items.filter((i) => !i.done) : items;
+  const add = () => {
+    if (!text.trim()) return;
+    onChange([...items, { id: crypto.randomUUID().slice(0, 8), text: text.trim(), done: false }]);
+    setText("");
+  };
+  return (
+    <div>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h3 style={{ margin: 0 }}>Checklista</h3>
+        <span className="hint">{done} / {items.length}</span>
+      </div>
+      <div className="progress"><i style={{ width: items.length ? `${(done / items.length) * 100}%` : 0 }} /></div>
+      {visible.map((it) => (
+        <div key={it.id} className="check-item">
+          <input type="checkbox" checked={it.done} onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, done: e.target.checked } : x)))} />
+          <input
+            value={it.text}
+            className={it.done ? "done" : ""}
+            onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))}
+          />
+          <button className="btn small" type="button" title="Usuń" onClick={() => onChange(items.filter((x) => x.id !== it.id))}>×</button>
+        </div>
+      ))}
+      <div className="check-item">
+        <input type="checkbox" disabled />
+        <input
+          value={text}
+          placeholder="Nowe zadanie… (Enter)"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button className="btn small" type="button" onClick={add}>+</button>
+      </div>
+      <div className="row" style={{ justifyContent: "space-between", marginTop: 6 }}>
+        <button
+          className="btn small"
+          type="button"
+          disabled={!items.length}
+          onClick={() =>
+            navigator.clipboard
+              .writeText(items.map((i) => `[${i.done ? "x" : " "}] ${i.text}`).join("\n"))
+              .then(() => setMsg("Skopiowano"))
+          }
+        >
+          Kopiuj checklistę
+        </button>
+        <label className="row hint" style={{ gap: 4 }}>
+          <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} /> Ukryj zrobione
+        </label>
+      </div>
+      {msg && <div className="hint">{msg}</div>}
+    </div>
+  );
+}
+
+const PERIODS: { value: NonNullable<NodeData["forecast"]>["period"]; label: string }[] = [
+  { value: "day", label: "dziennie" },
+  { value: "week", label: "tygodniowo" },
+  { value: "month", label: "miesięcznie" },
+];
+
+function ForecastEditor({ d, onChange }: { d: NodeData; onChange: (p: Partial<NodeData>) => void }) {
+  const f = d.forecast ?? { period: "day" as const, people: 0 };
+  return (
+    <div>
+      <h3>Prognoza</h3>
+      <div className="manual-row">
+        <label className="field">
+          Okres
+          <select value={f.period} onChange={(e) => onChange({ forecast: { ...f, period: e.target.value as typeof f.period } })}>
+            {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          Osoby
+          <input
+            inputMode="numeric"
+            value={f.people || ""}
+            placeholder="0"
+            onChange={(e) => {
+              const v = Number(e.target.value.replace(",", "."));
+              onChange({ forecast: Number.isFinite(v) && v > 0 ? { ...f, people: v } : undefined });
+            }}
+          />
+        </label>
+      </div>
+      <p className="hint">W trybie Analiza zobaczysz wykonanie prognozy dla wybranego zakresu dat.</p>
+    </div>
+  );
+}
+
+function ForecastResult({ d, stats, range }: { d: NodeData; stats?: NodeStats; range: { from: string; to: string } }) {
+  const expected = forecastForRange(d.forecast, range.from, range.to);
+  if (expected == null) return null;
+  const actual = stats ? (d.category === "action" && d.eventType === "purchase" ? stats.conversions ?? 0 : stats.people) : 0;
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div className="kv"><span>Prognoza w zakresie</span><span>{formatValue(expected, "number")}</span></div>
+      <div className="kv"><span>Wykonanie</span><span>{formatValue(expected ? actual / expected : null, "percent")}</span></div>
+    </div>
+  );
+}
 
 function UrlList({ urls, onChange }: { urls: string[]; onChange: (u: string[]) => void }) {
   return (
@@ -277,102 +428,123 @@ export function NodePanel({
   const d = node.data;
   const item = CATALOG_BY_KIND[d.kind];
   const sameCategory = CATALOG.filter((c) => c.category === d.category);
+  const [tab, setTab] = useState<"setup" | "plan" | "style" | "results">(mode === "analyze" ? "results" : "setup");
+  useEffect(() => {
+    if (mode === "analyze") setTab("results");
+    else setTab((t) => (t === "results" ? "setup" : t));
+  }, [mode]);
+
+  const tabs: [typeof tab, string][] = [
+    ["setup", "Śledzenie"],
+    ["plan", "Plan"],
+    ["style", "Styl"],
+  ];
+  if (mode === "analyze") tabs.unshift(["results", "Wyniki"]);
 
   return (
     <div>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
-        <span className={`abbr cat-${d.category}`}>{item?.abbr}</span>
-        <button className="btn small danger" onClick={onDelete}>Usuń element</button>
+        <div className="row" style={{ flexWrap: "nowrap", minWidth: 0 }}>
+          <span className={`abbr cat-${d.category}`} style={d.color ? ({ "--node-accent": d.color } as React.CSSProperties) : undefined}>{item?.abbr}</span>
+          <b style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</b>
+        </div>
+        <button className="btn small danger" onClick={onDelete}>Usuń</button>
+      </div>
+      <div className="side-tabs">
+        {tabs.map(([k, label]) => (
+          <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{label}</button>
+        ))}
       </div>
 
-      <label className="field">
-        Nazwa
-        <input value={d.label} onChange={(e) => onChange({ label: e.target.value })} />
-      </label>
-      <label className="field">
-        Typ
-        <select value={d.kind} onChange={(e) => onChange({ kind: e.target.value })}>
-          {sameCategory.map((c) => <option key={c.kind} value={c.kind}>{c.label}</option>)}
-        </select>
-      </label>
+      {tab === "setup" && (
+        <>
+          {d.category === "page" && (
+            <label className="field">
+              Adres strony
+              <input value={d.url ?? ""} placeholder="/zapis lub klient.pl/oferta" onChange={(e) => onChange({ url: e.target.value })} />
+              <span className="hint">„/ścieżka” = dokładnie ta ścieżka; „/kurs/*” = wszystko pod /kurs/; inny tekst = adres zawiera ten fragment.</span>
+            </label>
+          )}
+          {d.category === "page" && <UrlList urls={d.urls ?? []} onChange={(urls) => onChange({ urls })} />}
+          {d.category === "source" && (
+            <label className="field">
+              Dopasowanie źródła
+              <input value={d.sourceMatch ?? ""} placeholder="facebook,fb" onChange={(e) => onChange({ sourceMatch: e.target.value })} />
+              <span className="hint">Wartości utm_source lub domeny odsyłające, po przecinku. „(direct)” = wejścia bez źródła.</span>
+            </label>
+          )}
+          {d.category === "action" && (
+            <>
+              <label className="field">
+                Zdarzenie
+                <select value={d.eventType ?? ""} onChange={(e) => onChange({ eventType: e.target.value })}>
+                  {EVENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                {d.eventType === "scroll" ? "Próg przewinięcia (%)" : d.eventType === "custom" ? "Nazwa zdarzenia" : "Tekst / nazwa (opcjonalnie)"}
+                <input value={d.eventName ?? ""} onChange={(e) => onChange({ eventName: e.target.value })} placeholder={d.eventType === "scroll" ? "75" : d.eventType === "click" ? "np. Kupuję teraz" : ""} />
+              </label>
+              <label className="field">
+                Tylko na stronie (opcjonalnie)
+                <input value={d.pageUrl ?? ""} placeholder="/oferta" onChange={(e) => onChange({ pageUrl: e.target.value })} />
+              </label>
+            </>
+          )}
+          {d.category === "offline" && <p className="hint">Element offline – liczby wpisujesz ręcznie w trybie Analiza.</p>}
+          {d.category !== "offline" && <FiltersEditor filters={d.filters ?? []} onChange={(filters) => onChange({ filters })} />}
 
-      {d.category === "page" && (
-        <label className="field">
-          Adres strony
-          <input value={d.url ?? ""} placeholder="/zapis lub klient.pl/oferta" onChange={(e) => onChange({ url: e.target.value })} />
-          <span className="hint">„/ścieżka” = dokładnie ta ścieżka; „/kurs/*” = wszystko pod /kurs/; inny tekst = adres zawiera ten fragment.</span>
-        </label>
+          <hr className="side-sep" />
+          <GoalEditor d={d} onChange={onChange} />
+        </>
       )}
-      {d.category === "page" && <UrlList urls={d.urls ?? []} onChange={(urls) => onChange({ urls })} />}
-      {d.category === "source" && (
-        <label className="field">
-          Dopasowanie źródła
-          <input value={d.sourceMatch ?? ""} placeholder="facebook,fb" onChange={(e) => onChange({ sourceMatch: e.target.value })} />
-          <span className="hint">Wartości utm_source lub domeny odsyłające, po przecinku. „(direct)” = wejścia bez źródła.</span>
-        </label>
-      )}
-      {d.category === "action" && (
+
+      {tab === "plan" && (
         <>
           <label className="field">
-            Zdarzenie
-            <select value={d.eventType ?? ""} onChange={(e) => onChange({ eventType: e.target.value })}>
-              {EVENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            Notatki
+            <textarea rows={6} value={d.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} placeholder="Np. co jest na stronie, kto odpowiada, linki do materiałów…" />
+          </label>
+          <hr className="side-sep" />
+          <ChecklistEditor items={d.checklist ?? []} onChange={(checklist) => onChange({ checklist })} />
+          <hr className="side-sep" />
+          <ForecastEditor d={d} onChange={onChange} />
+        </>
+      )}
+
+      {tab === "style" && (
+        <>
+          <label className="field">
+            Nazwa
+            <input value={d.label} onChange={(e) => onChange({ label: e.target.value })} />
+          </label>
+          <label className="field">
+            Typ / ikona
+            <select value={d.kind} onChange={(e) => onChange({ kind: e.target.value })}>
+              {sameCategory.map((c) => <option key={c.kind} value={c.kind}>{c.label}</option>)}
             </select>
           </label>
+          {d.category === "page" && (
+            <label className="field">
+              Miniatura z obrazka (adres URL)
+              <input value={d.thumbnailUrl ?? ""} placeholder="https://…/zrzut-strony.png" onChange={(e) => onChange({ thumbnailUrl: e.target.value })} />
+              <span className="hint">Wklej link do zrzutu ekranu strony. Puste = makieta zależna od typu.</span>
+            </label>
+          )}
           <label className="field">
-            {d.eventType === "scroll" ? "Próg przewinięcia (%)" : d.eventType === "custom" ? "Nazwa zdarzenia" : "Tekst / nazwa (opcjonalnie)"}
-            <input value={d.eventName ?? ""} onChange={(e) => onChange({ eventName: e.target.value })} placeholder={d.eventType === "scroll" ? "75" : d.eventType === "click" ? "np. Kupuję teraz" : ""} />
-          </label>
-          <label className="field">
-            Tylko na stronie (opcjonalnie)
-            <input value={d.pageUrl ?? ""} placeholder="/oferta" onChange={(e) => onChange({ pageUrl: e.target.value })} />
+            Kolor akcentu
+            <div className="row" style={{ flexWrap: "nowrap" }}>
+              <input type="color" value={d.color ?? CATEGORY_COLORS[d.category]} onChange={(e) => onChange({ color: e.target.value })} style={{ height: 32, padding: 2, flex: 1 }} />
+              {d.color && <button className="btn small" type="button" onClick={() => onChange({ color: undefined })}>Domyślny</button>}
+            </div>
           </label>
         </>
       )}
-      {d.category !== "offline" && <FiltersEditor filters={d.filters ?? []} onChange={(filters) => onChange({ filters })} />}
 
-      <hr className="side-sep" />
-      <label className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-        <b>Cel konwersji</b>
-        <input type="checkbox" checked={!!d.goal} onChange={(e) => onChange({ goal: e.target.checked })} />
-      </label>
-      {d.goal && (
-        <div className="manual-row">
-          <label className="field">
-            Nazwa celu
-            <input value={d.goalName ?? ""} placeholder="np. Zapis" onChange={(e) => onChange({ goalName: e.target.value })} />
-          </label>
-          <label className="field">
-            Wartość (zł)
-            <input
-              inputMode="decimal"
-              value={d.goalValue ?? ""}
-              placeholder="0"
-              onChange={(e) => {
-                const v = e.target.value.replace(",", ".");
-                onChange({ goalValue: v === "" || v === "-" ? undefined : Number(v) });
-              }}
-            />
-          </label>
-        </div>
-      )}
-      {d.goal && <p className="hint">Wartość jednej konwersji; ujemna = koszt.</p>}
-
-      <label className="field">
-        Kolor akcentu
-        <input type="color" value={d.color ?? CATEGORY_COLORS[d.category]} onChange={(e) => onChange({ color: e.target.value })} style={{ height: 32, padding: 2 }} />
-      </label>
-
-      <label className="field">
-        Notatki
-        <textarea rows={3} value={d.notes ?? ""} onChange={(e) => onChange({ notes: e.target.value })} />
-      </label>
-
-      {mode === "analyze" && (
+      {tab === "results" && mode === "analyze" && (
         <>
-          <hr className="side-sep" />
-          <h3>Wyniki</h3>
           {stats ? <StatsView d={d} s={stats} /> : <p className="hint">Brak danych – odśwież analizę.</p>}
+          <ForecastResult d={d} stats={stats} range={range} />
           <hr className="side-sep" />
           <ManualData funnelId={funnelId} nodeId={node.id} category={d.category} onChanged={onManualChange} />
           {d.category !== "offline" && (

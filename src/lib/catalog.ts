@@ -28,7 +28,19 @@ export interface NodeData {
   goalValue?: number;
   /** Własny kolor akcentu węzła. */
   color?: string;
+  /** Miniatura strony z obrazka (URL). */
+  thumbnailUrl?: string;
+  /** Lista zadań do wdrożenia elementu. */
+  checklist?: ChecklistItem[];
+  /** Prognozowana liczba osób na okres. */
+  forecast?: { period: "day" | "week" | "month"; people: number };
   [key: string]: unknown;
+}
+
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
 }
 
 export interface NodeFilter {

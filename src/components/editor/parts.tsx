@@ -14,6 +14,7 @@ import { CATALOG_BY_KIND, type NodeData } from "@/lib/catalog";
 import { formatValue, type NodeStats } from "@/lib/analysis";
 import type { FullAnalysis } from "@/lib/funnel-analysis";
 import { PageThumb } from "./PageThumb";
+import { forecastForRange } from "@/lib/forecast";
 
 export type Mode = "plan" | "analyze";
 export const EditorCtx = createContext<{ mode: Mode; analysis: FullAnalysis | null }>({ mode: "plan", analysis: null });
@@ -40,7 +41,8 @@ function planFooterBase(d: NodeData): { text: string; warn: boolean } {
   return { text: "dane ręczne", warn: false };
 }
 
-function Stats({ d, s }: { d: NodeData; s: NodeStats }) {
+function Stats({ d, s, range }: { d: NodeData; s: NodeStats; range: { from: string; to: string } }) {
+  const expected = forecastForRange(d.forecast, range.from, range.to);
   const unit = d.category === "action" ? (d.eventType === "purchase" ? "zakupów" : "osób") : "osób";
   return (
     <div className="fnode-stats">
@@ -71,6 +73,12 @@ function Stats({ d, s }: { d: NodeData; s: NodeStats }) {
           )}
         </>
       )}
+      {expected != null && (
+        <div className="fnode-kv">
+          <span>Prognoza</span>
+          <span>{pct(expected ? (d.category === "action" && d.eventType === "purchase" ? s.conversions ?? 0 : s.people) / expected : null)} z {n(Math.round(expected))}</span>
+        </div>
+      )}
       {s.goalCount != null && (
         <div className="fnode-kv"><span>Cel</span><span>{n(s.goalCount)}{s.goalValue ? ` · ${formatValue(s.goalValue, "money")}` : ""}</span></div>
       )}
@@ -78,6 +86,20 @@ function Stats({ d, s }: { d: NodeData; s: NodeStats }) {
         <div className="fnode-kv"><span>Przychód</span><span>{formatValue(s.revenue, "money")}</span></div>
       )}
       {!s.tracked && d.category !== "offline" && <div className="fnode-kv"><span>dane</span><span>ręczne / brak konfiguracji</span></div>}
+    </div>
+  );
+}
+
+function PlanBadges({ d }: { d: NodeData }) {
+  const items = d.checklist ?? [];
+  const done = items.filter((i) => i.done).length;
+  const per = { day: "/dz.", week: "/tydz.", month: "/mies." };
+  if (!items.length && !d.forecast && !d.notes?.trim()) return null;
+  return (
+    <div className="fnode-badges">
+      {items.length > 0 && <span title="Checklista">✓ {done}/{items.length}</span>}
+      {d.forecast && <span title="Prognoza">≈ {n(d.forecast.people)}{per[d.forecast.period]}</span>}
+      {d.notes?.trim() && <span title={d.notes}>notatka</span>}
     </div>
   );
 }
@@ -109,13 +131,19 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
         <>
           {data.category === "page" && (
             <div className="fnode-thumb">
-              <PageThumb kind={data.kind} />
+              {data.thumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="fnode-img" src={data.thumbnailUrl} alt="" loading="lazy" />
+              ) : (
+                <PageThumb kind={data.kind} />
+              )}
             </div>
           )}
+          <PlanBadges d={data} />
           <div className={`fnode-foot ${foot.warn ? "warn" : ""}`}>{foot.text}</div>
         </>
       ) : stats ? (
-        <Stats d={data} s={stats} />
+        <Stats d={data} s={stats} range={{ from: analysis!.from, to: analysis!.to }} />
       ) : (
         <div className="fnode-foot">brak danych</div>
       )}
