@@ -2,7 +2,7 @@ import { analyze, matchesFilters, type AnalysisResult, type DataMode, type Graph
 import { evaluate } from "./formula";
 import type { NodeFilter } from "./catalog";
 import { loadAds } from "./project-data";
-import { fold } from "./csv";
+import { parseAdsMatch, adMatches } from "./setup";
 import { one, q } from "./db";
 
 export interface CustomMetric {
@@ -96,11 +96,10 @@ export async function runFunnelAnalysis(
     const f = Date.parse(`${from}T00:00:00Z`);
     const t = Date.parse(`${to}T00:00:00Z`);
     for (const n of adNodes) {
-      const tokens = n.data.adsMatch!.split(",").map((x) => fold(x)).filter(Boolean);
+      const tokens = parseAdsMatch(n.data.adsMatch!);
       const sums = { spend: 0, impressions: 0, clicks: 0, video_3s: 0 };
       for (const a of ads) {
-        const name = fold(`${a.campaign} | ${a.adset} | ${a.ad}`);
-        if (!tokens.some((tk) => name.includes(tk))) continue;
+        if (!adMatches(tokens, a.source, `${a.campaign} | ${a.adset} | ${a.ad}`)) continue;
         const s = Date.parse(`${a.start}T00:00:00Z`);
         const e = Date.parse(`${a.end}T00:00:00Z`);
         const days = Math.round((e - s) / 86400_000) + 1;

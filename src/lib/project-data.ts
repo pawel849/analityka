@@ -23,6 +23,8 @@ export async function loadOrders(projectId: string): Promise<EconOrder[]> {
 }
 
 export interface AdRecord extends EconAd {
+  /** Źródło importu (meta, meta_api, google_ads, ads_other). */
+  source: string;
   adset: string;
   ad: string;
   impressions: number;
@@ -38,15 +40,17 @@ export interface AdRecord extends EconAd {
 
 export async function loadAds(projectId: string, from?: string, to?: string): Promise<AdRecord[]> {
   const rows = await q<Record<string, unknown>>(
-    `SELECT to_char(period_start, 'YYYY-MM-DD') AS start, to_char(period_end, 'YYYY-MM-DD') AS "end", campaign, adset, ad,
-       spend, impressions, clicks, video_3s, thruplay, registrations, purchases, purchase_value, title, body
-     FROM ad_rows WHERE project_id = $1 AND ($2::date IS NULL OR period_end >= $2::date) AND ($3::date IS NULL OR period_start <= $3::date)
-     ORDER BY period_start`,
+    `SELECT to_char(a.period_start, 'YYYY-MM-DD') AS start, to_char(a.period_end, 'YYYY-MM-DD') AS "end", a.campaign, a.adset, a.ad,
+       a.spend, a.impressions, a.clicks, a.video_3s, a.thruplay, a.registrations, a.purchases, a.purchase_value, a.title, a.body, i.source
+     FROM ad_rows a JOIN imports i ON i.id = a.import_id
+     WHERE a.project_id = $1 AND ($2::date IS NULL OR a.period_end >= $2::date) AND ($3::date IS NULL OR a.period_start <= $3::date)
+     ORDER BY a.period_start`,
     [projectId, from ?? null, to ?? null],
   );
   return rows.map((r) => ({
     start: String(r.start),
     end: String(r.end),
+    source: String(r.source ?? ""),
     campaign: String(r.campaign ?? ""),
     adset: String(r.adset ?? ""),
     ad: String(r.ad ?? ""),

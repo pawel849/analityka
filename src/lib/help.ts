@@ -40,6 +40,19 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
+    id: "przewodnik",
+    title: "Przewodnik „Zbuduj ze mną” – konfiguracja krok po kroku",
+    tags: "przewodnik zbuduj ze mną start konfiguracja krok po kroku od czego zacząć nietechniczny kreator",
+    body: [
+      "Przy nowym projekcie wybierasz: „Zbuduj ze mną” (prowadzenie krok po kroku) albo „Sam zbuduję”.",
+      "Kroki: 1) Biznes – pytania o model sprzedaży, narzędzie do stron, płatności i źródła ruchu. 2) Strony – układasz strony lejka i wpisujesz ich adresy. 3) Skrypt – gotowy kod z instrukcją dla Twojego narzędzia i sprawdzaniem na żywo każdej strony. 4) Źródła – gotowe linki i parametry do reklam, postów i e-maili, ze sprawdzeniem. 5) Zapisy i zakupy – test formularza i podłączenie płatności (WooCommerce API, Stripe, kod na stronie podziękowania, Zapier/Make). 6) Koszty reklam – połączenie Meta API, import CSV z Google Ads. 7) Mapa – budowana automatycznie z odpowiedzi. 8) Metryki – wbudowane + do wyboru + własny wzór. 9) Gotowe – stan wszystkiego i kilkanaście opcji „co dalej”.",
+      "Znaczki kroków u góry: ✓ = działa, ! = do dokończenia. Każdy krok można pominąć i wrócić później.",
+      "Stan sprawdza się sam co 5 sekund – wystarczy otworzyć stronę lub kliknąć link, żeby zobaczyć zielony znak.",
+      "„Ukryj przewodnik” chowa zakładkę; wrócisz przyciskiem „Otwórz przewodnik „Zbuduj ze mną”” w zakładce Lejki i monitor.",
+      "Linki z przewodnika używają oznaczeń: ads_meta, ads_google, ads_youtube, ads_tiktok, ads_linkedin (reklamy), facebook.com, instagram.com, youtube.com, tiktok.com, linkedin.com (posty) i newsletter (e-maile) – dzięki temu płatne i bezpłatne wejścia się nie mieszają.",
+    ],
+  },
+  {
     id: "skrypt",
     title: "Skrypt śledzący – instalacja",
     tags: "skrypt śledzący t.js instalacja kod head wordpress tracking",

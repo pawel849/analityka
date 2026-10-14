@@ -4,6 +4,8 @@ import { headers } from "next/headers";
 import { one, q } from "@/lib/db";
 import { CreateForm, DeleteButton } from "@/components/forms";
 import { ApiConnections } from "@/components/ApiConnections";
+import { ReopenSetup, SetupChoice, SetupWizard } from "@/components/setup/SetupWizard";
+import type { SetupState } from "@/lib/setup";
 import { TrackingPanel } from "@/components/TrackingPanel";
 import { MonitorPanel } from "@/components/MonitorPanel";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
@@ -30,12 +32,15 @@ export default async function ProjectPage({
 }) {
   const { id } = await params;
   const { tab: rawTab } = await searchParams;
-  const tab = TABS.some(([k]) => k === rawTab) ? rawTab! : "lejki";
-  const project = await one<{ id: string; name: string; domain: string; tracking_key: string; client_id: string; client_name: string }>(
+  const project = await one<{ id: string; name: string; domain: string; tracking_key: string; client_id: string; client_name: string; setup: unknown }>(
     `SELECT p.*, c.name AS client_name FROM projects p JOIN clients c ON c.id = p.client_id WHERE p.id = $1`,
     [id],
   );
   if (!project) notFound();
+  const setup = (typeof project.setup === "string" ? JSON.parse(project.setup) : project.setup ?? {}) as SetupState;
+  const guided = setup.mode === "guided" && !setup.hidden;
+  const tabs: (readonly [string, string])[] = guided ? [["start", "Zbuduj ze mną"], ...TABS] : [...TABS];
+  const tab = tabs.some(([k]) => k === rawTab) ? rawTab! : guided && !setup.done ? "start" : "lejki";
   const funnels = await q<{ id: string; name: string; updated_at: string; nodes: string }>(
     `SELECT id, name, updated_at, jsonb_array_length(graph->'nodes') AS nodes FROM funnels WHERE project_id = $1 ORDER BY created_at`,
     [id],
@@ -56,16 +61,23 @@ export default async function ProjectPage({
       <p className="sub">{project.domain || "bez domeny"}</p>
 
       <nav className="page-tabs">
-        {TABS.map(([k, label]) => (
+        {tabs.map(([k, label]) => (
           <Link key={k} href={`/projects/${id}?tab=${k}`} className={tab === k ? "on" : ""} data-tour={`tab-${k}`}>
             {label}
           </Link>
         ))}
       </nav>
 
+      {tab === "start" && guided && (
+        <SetupWizard projectId={id} origin={origin} trackingKey={project.tracking_key} initial={setup} />
+      )}
+      {tab === "lejki" && !setup.mode && <SetupChoice projectId={id} />}
       {tab === "lejki" && (
         <>
-          <h2>Lejki</h2>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2>Lejki</h2>
+            {setup.mode && !guided && <ReopenSetup projectId={id} />}
+          </div>
           <div className="card" style={{ marginBottom: 16 }}>
             <CreateForm url="/api/funnels" extra={{ project_id: id }} fields={[{ name: "name", label: "Nazwa lejka", required: true }]} submitLabel="Nowy lejek" goTo="/funnels/" />
           </div>

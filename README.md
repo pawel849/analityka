@@ -30,6 +30,16 @@ Struktura: **Klient → Projekt (jeden skrypt śledzący) → Lejki (mapy)**.
   Podpis Stripe nie jest weryfikowany – zabezpieczeniem jest tajny adres.
 - **Kraj** zapisywany z nagłówka `x-vercel-ip-country` (działa na Vercel; lokalnie „Nieznany”).
 
+### Przewodnik „Zbuduj ze mną”
+
+Nowy projekt → wybór „Zbuduj ze mną” lub „Sam zbuduję”. Przewodnik (zakładka projektu) prowadzi przez 9 kroków:
+biznes (pytania) → strony (adresy i rodzaj) → skrypt (instrukcja dla WordPress/GetResponse/MailerLite/Kajabi/HTML + sprawdzanie
+każdej strony na żywo) → linki UTM dla każdego źródła → zapisy i zakupy (test formularza, WooCommerce API, Stripe, kod
+`anl("purchase")`, Zapier/Make) → koszty reklam (Meta API, CSV) → mapa budowana automatycznie → metryki → podsumowanie i „co dalej”.
+Odpowiedzi zapisują się w projekcie (`projects.setup`). Przewodnik można ukryć i otworzyć ponownie.
+
+Pole „Koszty z importu reklam” w węźle obsługuje prefiks platformy: `meta:*`, `google:webinar`, `inne:…`.
+
 ### Połączenia API (automatyczny import)
 
 Projekt → Integracje → „Połączenia API”:
