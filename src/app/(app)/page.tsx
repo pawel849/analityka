@@ -13,10 +13,10 @@ export default async function ClientsPage() {
     <main className="page">
       <h1>Klienci</h1>
       <p className="sub">Każdy klient ma własne projekty (np. strona, kampania), a w nich lejki.</p>
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16 }} data-tour="create-client">
         <CreateForm url="/api/clients" fields={[{ name: "name", label: "Nazwa klienta", required: true }]} submitLabel="Dodaj klienta" goTo="/clients/" />
       </div>
-      <div className="grid">
+      <div className="grid" data-tour="client-list">
         {clients.map((c) => (
           <Link key={c.id} href={`/clients/${c.id}`} className="card link">
             <h3>{c.name}</h3>

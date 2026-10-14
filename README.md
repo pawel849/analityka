@@ -30,6 +30,14 @@ Struktura: **Klient → Projekt (jeden skrypt śledzący) → Lejki (mapy)**.
   Podpis Stripe nie jest weryfikowany – zabezpieczeniem jest tajny adres.
 - **Kraj** zapisywany z nagłówka `x-vercel-ip-country` (działa na Vercel; lokalnie „Nieznany”).
 
+### Pomoc w aplikacji
+
+- Przycisk **?** w prawym górnym rogu: samouczki interaktywne (podświetlanie elementów krok po kroku – strona główna, projekt, edytor),
+  baza „Jak to działa” z wyszukiwarką i zakładka **Zapytaj**.
+- „Zapytaj” korzysta z Claude API, gdy na serwerze jest `ANTHROPIC_API_KEY` (płatne wg zużycia na koncie Anthropic).
+  Bez klucza pokazuje pasujące artykuły pomocy.
+- Prawy panel edytora wysuwa się po kliknięciu elementu; „Schowaj »” chowa go, „« Panel” przywraca.
+
 ### Dane klienta i ekonomia (zakładki projektu)
 
 Wszystko konfigurowane osobno dla każdego klienta (projektu):

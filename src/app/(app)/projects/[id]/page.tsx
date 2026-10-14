@@ -56,7 +56,7 @@ export default async function ProjectPage({
 
       <nav className="page-tabs">
         {TABS.map(([k, label]) => (
-          <Link key={k} href={`/projects/${id}?tab=${k}`} className={tab === k ? "on" : ""}>
+          <Link key={k} href={`/projects/${id}?tab=${k}`} className={tab === k ? "on" : ""} data-tour={`tab-${k}`}>
             {label}
           </Link>
         ))}

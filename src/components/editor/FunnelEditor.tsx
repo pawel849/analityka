@@ -36,6 +36,7 @@ import { getNodesBounds, getViewportForBounds } from "@xyflow/react";
 import { toPng } from "html-to-image";
 import { ExplorePanel } from "./ExplorePanel";
 import { MetricsBar } from "./MetricsBar";
+import { openHelp } from "../help/HelpCenter";
 
 const nodeTypes = { funnel: FunnelNodeView, text: TextNodeView, shape: ShapeNodeView, image: ImageNodeView, widget: WidgetNodeView };
 const edgeTypes = { flow: FlowEdge };
@@ -102,6 +103,11 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
   const selected = selectedAny && (selectedAny.type ?? "funnel") === "funnel" ? selectedAny : undefined;
   const selectedAnno = selectedAny && !selected ? (selectedAny as unknown as Node) : undefined;
   const selectedEdge = selectedAny ? undefined : edges.find((e) => e.selected);
+  const selectionKey = selectedAny?.id ?? selectedEdge?.id ?? "";
+  const [sideHidden, setSideHidden] = useState(false);
+  useEffect(() => setSideHidden(false), [selectionKey]);
+  const hasPanel = readOnly ? !!selected : !!selectionKey;
+  const sideOpen = hasPanel && !sideHidden;
   const [dataMode, setDataMode] = useState<DataMode>("traffic");
   const [showTemplates, setShowTemplates] = useState(!readOnly && (funnel.graph.nodes ?? []).length === 0);
   const [widgetMenu, setWidgetMenu] = useState(false);
@@ -451,7 +457,7 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
 
   return (
     <EditorCtx.Provider value={{ mode, analysis: mode === "analyze" ? analysis : null, compare: mode === "analyze" ? compare : null, layers }}>
-      <div className={`fe mode-${mode} ${readOnly ? "readonly" : ""}`}>
+      <div className={`fe mode-${mode} ${readOnly ? "readonly" : ""} ${sideOpen ? "side-open" : ""}`}>
         <div className="fe-top">
         <div className="fe-toolbar">
           <div className="fe-crumbs">
@@ -494,11 +500,11 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
                   </div>
                 )}
               </div>
-              <button className="btn small" onClick={() => setShowTemplates(true)}>Szablony</button>
+              <button className="btn small" data-tour="templates" onClick={() => setShowTemplates(true)}>Szablony</button>
             </div>
           )}
           <div style={{ position: "relative" }}>
-            <button className="btn small" title="Eksport, druk, udostępnianie" onClick={() => setMoreMenu((v) => !v)}>⋯</button>
+            <button className="btn small" data-tour="more" title="Eksport, druk, udostępnianie" onClick={() => setMoreMenu((v) => !v)}>⋯</button>
             {moreMenu && (
               <div className="dropdown" style={{ left: "auto", right: 0 }}>
                 <button onClick={() => { setMoreMenu(false); exportPng(); }}>Eksport PNG</button>
@@ -511,8 +517,8 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
             <input ref={importInput} type="file" accept="application/json,.json" hidden onChange={importJson} />
           </div>
           <div className="mode-switch" role="tablist">
-            <button className={mode === "plan" ? "on" : ""} onClick={() => setMode("plan")}>Planowanie</button>
-            <button className={mode === "analyze" ? "on" : ""} onClick={() => setMode("analyze")}>Analiza</button>
+            <button className={mode === "plan" ? "on" : ""} data-tour="mode-plan" onClick={() => setMode("plan")}>Planowanie</button>
+            <button className={mode === "analyze" ? "on" : ""} data-tour="mode-analyze" onClick={() => setMode("analyze")}>Analiza</button>
           </div>
         </div>
         {mode === "analyze" && (
@@ -694,13 +700,22 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
             <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
               <div style={{ textAlign: "center", pointerEvents: "auto" }}>
                 <p className="hint">Przeciągnij elementy z lewego panelu i połącz je strzałkami (od kropki po prawej do kropki po lewej).</p>
-                <button className="btn primary" onClick={() => setShowTemplates(true)}>Zacznij od szablonu</button>
+                <div className="row" style={{ justifyContent: "center" }}>
+                  <button className="btn primary" onClick={() => setShowTemplates(true)}>Zacznij od szablonu</button>
+                  {!readOnly && <button className="btn" onClick={() => openHelp("tours")}>Samouczek</button>}
+                </div>
               </div>
             </div>
           )}
+          {hasPanel && sideHidden && (
+            <button className="side-reopen" onClick={() => setSideHidden(false)} title="Pokaż panel ustawień">« Panel</button>
+          )}
         </div>
 
-        <aside className="fe-side">
+        <aside className="fe-side" aria-hidden={!sideOpen}>
+          {sideOpen && (
+            <button className="side-close" onClick={() => setSideHidden(true)} title="Schowaj panel" aria-label="Schowaj panel">Schowaj »</button>
+          )}
           {readOnly ? (
             selected ? (
               <div>
@@ -712,12 +727,7 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
                 )}
                 {selected.data.notes && <p style={{ whiteSpace: "pre-wrap" }}>{selected.data.notes}</p>}
               </div>
-            ) : (
-              <div className="hint">
-                <h3 style={{ color: "var(--fe-ink)" }}>Podgląd lejka</h3>
-                <p>Kliknij element, aby zobaczyć szczegóły. Przełącz na Analizę, aby zobaczyć liczby dla wybranego okresu.</p>
-              </div>
-            )
+            ) : null
           ) : selected ? (
             <NodePanel
               key={selected.id}
@@ -762,20 +772,7 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
               }}
               onDelete={() => setEdges((es) => es.filter((e) => e.id !== selectedEdge.id))}
             />
-          ) : (
-            <div className="hint">
-              <h3 style={{ color: "var(--fe-ink)" }}>Jak to działa</h3>
-              <p>1. Ułóż lejek: źródła ruchu → strony → akcje.</p>
-              <p>2. Dla stron wpisz adres (np. <code>/zapis</code>), dla źródeł wartości utm_source, dla akcji typ zdarzenia.</p>
-              <p>3. Przełącz na <b>Analizę</b> – liczby pojawią się na węzłach i strzałkach.</p>
-              <p>Koszty reklam i inne dane spoza skryptu wpisujesz ręcznie w panelu węzła.</p>
-              <p>Kliknij strzałkę, żeby ustawić typ linii i połączenia.</p>
-              <p>
-                Skróty: <code>Ctrl/⌘+C</code> kopiuj, <code>+V</code> wklej (także w innym lejku), <code>+D</code> duplikuj,{" "}
-                <code>+]</code>/<code>+[</code> wyżej/niżej (z Shift – na wierzch/spód), <code>Delete</code> usuń.
-              </p>
-            </div>
-          )}
+          ) : null}
         </aside>
 
         {mode === "analyze" && (
