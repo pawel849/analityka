@@ -54,6 +54,19 @@ Projekt → Integracje → „Połączenia API”:
 - Limit czasu jednego uruchomienia – duża historia pobiera się w kilku synchronizacjach.
 - Nie testowane na prawdziwych kontach (brak dostępu z tego środowiska) – tylko na atrapie API i testach jednostkowych.
 
+### Dostęp dla AI (serwer MCP)
+
+Górny pasek → „Dostęp dla AI”: klucze dostępu (w bazie tylko skrót SHA-256, pełny klucz widoczny raz, wyłączanie od ręki).
+Serwer MCP (Streamable HTTP, bez sesji, odpowiedzi JSON; oficjalne SDK `@modelcontextprotocol/sdk`):
+
+- `POST /api/mcp/{klucz}` – adres dla konektora w Claude (claude.ai / aplikacja),
+- `POST /api/mcp` z nagłówkiem `Authorization: Bearer {klucz}` – np. `claude mcp add --transport http analityka https://…/api/mcp --header "Authorization: Bearer …"`.
+
+22 narzędzia: klienci, projekty (skrypt, webhook), przewodnik (`get_setup_options`, `update_setup`, `check_setup`, `build_funnel_from_setup`),
+mapy (`get_catalog`, `create_funnel`, `get_funnel`, `edit_funnel`), analiza i metryki, dane ręczne, ustawienia, oś czasu, ekonomia,
+synchronizacja integracji, import reklam i zamówień. Bez usuwania klientów/projektów i bez odczytu kluczy API.
+Przetestowane klientem MCP z SDK na lokalnej instancji; z claude.ai nie testowane (brak dostępu z tego środowiska).
+
 ### Pomoc w aplikacji
 
 - Przycisk **?** w prawym górnym rogu: samouczki interaktywne (podświetlanie elementów krok po kroku – strona główna, projekt, edytor),

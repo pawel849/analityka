@@ -53,6 +53,20 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
+    id: "mcp",
+    title: "Dostęp dla AI (MCP) – Claude uzupełnia dane za Ciebie",
+    tags: "ai mcp claude konektor asystent klucz dostęp automatycznie uzupełnij",
+    body: [
+      "Górny pasek → „Dostęp dla AI” → „Utwórz klucz”. Skopiuj adres konektora (widoczny tylko raz).",
+      "W Claude: Ustawienia → Konektory → Dodaj własny konektor → wklej adres. W Claude Code: skopiowane polecenie „claude mcp add …”.",
+      "Potem w zwykłym czacie z Claude: np. „Załóż klientowi X projekt, lejek webinarowy, strony to … – i sprawdź, czy skrypt działa”.",
+      "Claude może: zakładać klientów/projekty/lejki, uzupełniać przewodnik „Zbuduj ze mną”, budować i zmieniać mapy, dodawać metryki, dane ręczne, wpisy na osi czasu, zmieniać ustawienia, importować dane reklam i zamówień, uruchamiać synchronizację, czytać liczby.",
+      "Nie może: wkleić skryptu na stronę, wygenerować tokenu Meta / kluczy WooCommerce, usuwać klientów i projektów.",
+      "Jeśli masz otwartą mapę w przeglądarce, odśwież ją po zmianach od Claude – inaczej edytor może nadpisać jego zmiany przy Twojej następnej edycji.",
+      "Klucz wyłączasz przyciskiem „Wyłącz” – dostęp znika od razu.",
+    ],
+  },
+  {
     id: "skrypt",
     title: "Skrypt śledzący – instalacja",
     tags: "skrypt śledzący t.js instalacja kod head wordpress tracking",

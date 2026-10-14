@@ -12,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="shell-header">
         <Link href="/" className="brand">Analityka<span>.</span></Link>
         <div className="spacer" />
+        <Link href="/ai" className="hint">Dostęp dla AI</Link>
         <HelpCenter />
         {authDisabled() ? <span className="hint">Tryb lokalny – logowanie wyłączone</span> : <LogoutButton />}
       </header>

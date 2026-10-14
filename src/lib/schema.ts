@@ -155,5 +155,13 @@ CREATE TABLE IF NOT EXISTS integrations (
   last_result JSONB NOT NULL DEFAULT '{}',
   enabled BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ai_keys (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  token_hash TEXT NOT NULL UNIQUE,
+  hint TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at TIMESTAMPTZ
 )
 `;
