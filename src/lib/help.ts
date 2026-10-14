@@ -105,7 +105,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     tags: "koszty wydatki spend ręcznie wyświetlenia kliknięcia hook rate dane ręczne nadpisanie",
     body: [
       "Dane spoza skryptu (wydatki, wyświetlenia, kliknięcia reklam, odtworzenia 3 s, nadpisanie liczby osób) wpisujesz w panelu węzła, zakładka Wyniki, w trybie Analiza.",
-      "Alternatywa: zaimportuj CSV z reklam (projekt → Dane) i w węźle źródła wpisz pole „Koszty z importu reklam” – fragmenty nazw kampanii/zestawów/reklam. Koszty liczą się proporcjonalnie do dni zakresu.",
+      "Alternatywa: połącz Meta Ads przez API (Integracje → Połączenia API) albo zaimportuj CSV z reklam (projekt → Dane), a w węźle źródła wpisz pole „Koszty z importu reklam” – fragmenty nazw kampanii/zestawów/reklam. Koszty liczą się proporcjonalnie do dni zakresu.",
     ],
   },
   {
@@ -142,6 +142,21 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       "Menu ⋯ w edytorze: Eksport PNG, Drukuj / zapisz PDF, eksport i import mapy (JSON), Udostępnij link.",
       "Udostępniony link jest tylko do odczytu – klient widzi mapę i liczby bez logowania. Link można wyłączyć.",
+    ],
+  },
+  {
+    id: "api",
+    title: "Automatyczny import: Meta Ads i WooCommerce (API)",
+    tags: "api meta facebook woocommerce sklep automatycznie synchronizacja token klucz połączenie import koszty zamówienia cron",
+    body: [
+      "Projekt → Integracje → „Połączenia API” (góra zakładki) → „+ Meta Ads” lub „+ WooCommerce”.",
+      "Meta Ads: ID konta reklamowego (same cyfry) i token z uprawnieniem ads_read (Business Manager → Użytkownicy systemowi). Pobiera dziennie na poziomie reklamy: wydatki, wyświetlenia, zasięg, kliknięcia linku, odtworzenia 3 s, ThruPlay, wyświetlenia strony docelowej, rejestracje/leady, koszyki, płatności, zakupy i ich wartość wg Meta.",
+      "WooCommerce: adres sklepu (https) i klucze REST API z uprawnieniem Odczyt (WooCommerce → Ustawienia → Zaawansowane → REST API). Pobiera zamówienia ze statusami z listy „opłacone” (domyślnie processing, completed); zamówienia, które zmieniły status (np. zwrot), są usuwane z danych.",
+      "Opcja „Dodawaj opłacone zamówienia jako zakupy na mapie” tworzy zdarzenia zakupu na mapie (bez duplikatów). Wyłącz ją, jeśli strona podziękowania wysyła już anl(\"purchase\").",
+      "Dane trafiają tam, gdzie import CSV: koszty reklam do węzłów źródeł (pole „Koszty z importu reklam”) i do Ekonomii; zamówienia do Ekonomii.",
+      "Pierwsza synchronizacja pobiera ostatnie N dni (domyślnie 90) – przy dużej historii w kilku podejściach. Kolejne pobierają ostatnie dni i nadpisują je (Meta poprawia dane wstecz).",
+      "Automat raz dziennie działa na Vercelu po ustawieniu zmiennej CRON_SECRET. Zawsze można kliknąć „Synchronizuj teraz”.",
+      "Nie mieszaj importu CSV z Meta i połączenia API dla tego samego okresu – wydatki policzą się podwójnie (aplikacja ostrzega).",
     ],
   },
   {
@@ -233,7 +248,7 @@ export const TOURS: Tour[] = [
     hint: "Otwórz dowolny projekt klienta.",
     steps: [
       { target: "[data-tour=tab-lejki]", title: "Lejki", text: "Mapy lejków tego projektu i Monitor (liczby, wykres dzienny, strony, źródła). Wszystkie lejki korzystają z tych samych danych ze skryptu." },
-      { target: "[data-tour=tab-integracje]", title: "Integracje", text: "Skrypt śledzący do wklejenia w <head> stron, ostatnie zdarzenia, dane testowe i webhook." },
+      { target: "[data-tour=tab-integracje]", title: "Integracje", text: "Połączenia API (Meta Ads, WooCommerce), skrypt śledzący do wklejenia w <head> stron, ostatnie zdarzenia, dane testowe i webhook." },
       { target: "[data-tour=tab-dane]", title: "Dane", text: "Import CSV z reklam (Meta, Google) i zamówień (WooCommerce, Publigo, inne)." },
       { target: "[data-tour=tab-ekonomia]", title: "Ekonomia", text: "CAC, LTV, powroty, zysk – liczone z zaimportowanych danych." },
       { target: "[data-tour=tab-os]", title: "Oś czasu", text: "Zmiany cen, starty kampanii i Twoje notatki na wykresie przychodu." },

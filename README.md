@@ -30,6 +30,20 @@ Struktura: **Klient → Projekt (jeden skrypt śledzący) → Lejki (mapy)**.
   Podpis Stripe nie jest weryfikowany – zabezpieczeniem jest tajny adres.
 - **Kraj** zapisywany z nagłówka `x-vercel-ip-country` (działa na Vercel; lokalnie „Nieznany”).
 
+### Połączenia API (automatyczny import)
+
+Projekt → Integracje → „Połączenia API”:
+
+- **Meta Ads** (Marketing API, domyślnie v26.0 – do zmiany w ustawieniach połączenia): ID konta + token `ads_read`.
+  Dziennie, poziom reklamy: wydatki, wyświetlenia, zasięg, kliknięcia linku, odtworzenia 3 s (`video_view`), ThruPlay,
+  wyświetlenia strony docelowej, rejestracje/leady, koszyki, płatności, zakupy i wartość zakupów wg Meta.
+- **WooCommerce** (REST API wc/v3): adres sklepu (https) + klucze z uprawnieniem Odczyt. Zamówienia o statusach „opłaconych”
+  (domyślnie processing, completed) → Ekonomia; zmiana statusu (zwrot, anulowanie) usuwa zamówienie. Opcjonalnie zakupy na mapie.
+- Klucze szyfrowane AES-256-GCM kluczem z `AUTH_SECRET` – po zmianie `AUTH_SECRET` trzeba je wpisać ponownie.
+- Automat: `vercel.json` → `/api/cron/sync` raz dziennie. Wymaga zmiennej **`CRON_SECRET`** (dowolny długi ciąg) na Vercelu.
+- Limit czasu jednego uruchomienia – duża historia pobiera się w kilku synchronizacjach.
+- Nie testowane na prawdziwych kontach (brak dostępu z tego środowiska) – tylko na atrapie API i testach jednostkowych.
+
 ### Pomoc w aplikacji
 
 - Przycisk **?** w prawym górnym rogu: samouczki interaktywne (podświetlanie elementów krok po kroku – strona główna, projekt, edytor),
@@ -89,4 +103,4 @@ npm test           # testy silnika analizy i wzorów
 ## Dalsze etapy
 
 - Etap 2: strony HTML z Twojego tekstu (tryb ręczny i tryb AI – `ANTHROPIC_API_KEY`), wdrażanie stron na hosting.
-- Etap 3: integracje API (GA4, PostHog, Meta Ads, Google Ads, MailerLite, GetResponse, Kajabi, Stripe, Fakturownia).
+- Etap 3: kolejne integracje API (GA4, PostHog, Google Ads, MailerLite, GetResponse, Kajabi, Stripe, Fakturownia).

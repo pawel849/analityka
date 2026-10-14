@@ -139,5 +139,20 @@ CREATE TABLE IF NOT EXISTS timeline_events (
   link TEXT NOT NULL DEFAULT '',
   confidence TEXT NOT NULL DEFAULT 'data',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS integrations (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  config JSONB NOT NULL DEFAULT '{}',
+  secret TEXT NOT NULL DEFAULT '',
+  state JSONB NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'new',
+  last_sync_at TIMESTAMPTZ,
+  last_error TEXT NOT NULL DEFAULT '',
+  last_result JSONB NOT NULL DEFAULT '{}',
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )
 `;

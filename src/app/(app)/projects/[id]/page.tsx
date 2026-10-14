@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { one, q } from "@/lib/db";
 import { CreateForm, DeleteButton } from "@/components/forms";
+import { ApiConnections } from "@/components/ApiConnections";
 import { TrackingPanel } from "@/components/TrackingPanel";
 import { MonitorPanel } from "@/components/MonitorPanel";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
@@ -87,6 +88,7 @@ export default async function ProjectPage({
       {tab === "ustawienia" && <SettingsPanel projectId={id} />}
       {tab === "integracje" && (
         <>
+          <ApiConnections projectId={id} />
           <TrackingPanel projectId={id} origin={origin} trackingKey={project.tracking_key} funnels={funnels.map((f) => ({ id: f.id, name: f.name }))} />
           <div className="section">
             <IntegrationsPanel projectId={id} origin={origin} />

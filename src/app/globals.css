@@ -187,3 +187,11 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: ta
 .tour-card p { margin: 0 0 4px; color: var(--text-2); font-size: 13px; }
 
 @media print { .help-offer, .help-drawer, .tour-layer { display: none !important; } }
+
+/* Połączenia API */
+.conn { border-top: 1px solid var(--border); padding: 10px 0; display: grid; gap: 4px; }
+.conn-err { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.conn-form { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin: 8px 0; background: var(--surface-2); }
+.conn-form input { width: 100%; }
+.conn-form input[type=checkbox] { width: auto; }
+.conn-form ol { margin: 6px 0; padding-left: 18px; }
