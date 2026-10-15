@@ -62,3 +62,32 @@ test("detect price change and campaigns", () => {
   assert.ok(ev.some((e) => e.title === "Koniec kampanii: Stara"));
   assert.ok(!ev.some((e) => e.title === "Koniec kampanii: Nowa"));
 });
+
+test("order bump: darmowe bonusy za 0 zł się nie liczą", () => {
+  const orders: EconOrder[] = [
+    { ref: "1", ts: t("2026-01-05"), customer: "a", gross: 797, products: [{ name: "Kurs Dykcja", price: 797 }, { name: "Bonus PDF", price: 0 }] },
+    { ref: "2", ts: t("2026-01-06"), customer: "b", gross: 1297, products: [{ name: "Kurs Dykcja", price: 797 }, { name: "Bonus PDF", price: 0 }, { name: "Sztuka Prezentacji", price: 500 }] },
+  ];
+  const st = periodStats(prepare(orders, S), [], S, { name: "I", from: "2026-01-01", to: "2026-01-31" });
+  assert.equal(st.orderBumpRate, 0.5);
+});
+
+test("zawężenie do produktu: tylko pasujące zamówienia, LTV z późniejszych zakupów", () => {
+  const orders: EconOrder[] = [
+    { ref: "1", ts: t("2026-01-05"), customer: "a", gross: 797, products: [{ name: "Dykcja dla każdego", price: 797 }] },
+    { ref: "2", ts: t("2026-01-06"), customer: "b", gross: 47, products: [{ name: "Minikurs oddechu", price: 47 }] },
+    { ref: "3", ts: t("2026-01-20"), customer: "a", gross: 200, products: [{ name: "Warsztat", price: 200 }] },
+    { ref: "4", ts: t("2026-06-01"), customer: "z", gross: 1, products: [{ name: "X", price: 1 }] },
+  ];
+  const match = (n: string) => n.toLowerCase().includes("dykcja dla");
+  const s2 = { ...S, mainCategory: "produkt: dykcja" };
+  const p = prepare(orders, s2, match);
+  const st = periodStats(p, [{ start: "2026-01-01", end: "2026-01-31", campaign: "VSL", spend: 300 }], s2, { name: "I", from: "2026-01-01", to: "2026-01-31" }, true);
+  assert.equal(st.newMainCustomers, 1, "minikurs nie jest produktem głównym, mimo reguły „kurs”");
+  assert.equal(st.mainPriceMedian, 797);
+  assert.equal(st.gross, 797, "przychód tylko z zamówień z produktem");
+  assert.equal(st.cac, 300);
+  assert.equal(st.ltv.find((l) => l.days === 30)!.gross, 997, "LTV obejmuje późniejszy warsztat");
+  const m = monthly(p, [], s2, "2026-01-01", "2026-01-31", true);
+  assert.equal(m[0].gross, 797);
+});

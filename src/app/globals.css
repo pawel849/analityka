@@ -261,3 +261,9 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: ta
   .wz-page > :nth-child(n+3) { grid-column: 2; }
   .wz-flow { grid-template-columns: 1fr; }
 }
+
+/* Zakres Ekonomii */
+.scope-bar { display: grid; gap: 6px; margin-bottom: 14px; }
+.scope-bar.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.scope-fields { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; }
+@media (max-width: 760px) { .scope-fields { grid-template-columns: 1fr; } }

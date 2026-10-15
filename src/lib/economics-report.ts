@@ -1,12 +1,32 @@
 import { loadAds, loadOrders, loadSettings } from "./project-data";
 import { monthly, periodStats, prepare } from "./economics";
+import { applyRules } from "./settings";
+import { adMatches, parseAdsMatch } from "./setup";
+import { fold } from "./csv";
+
+export interface EconScope {
+  /** Kampanie (składnia pola „Koszty z importu reklam”, np. „meta:VSL 797”). Puste = wszystkie. */
+  campaigns?: string | null;
+  /** Fragmenty nazw produktów po przecinku – stają się produktem głównym. Puste = reguły z ustawień. */
+  products?: string | null;
+}
+
+export function productMatcher(v: string | null | undefined): ((name: string) => boolean) | undefined {
+  const parts = (v ?? "").split(",").map((x) => fold(x.trim())).filter(Boolean);
+  return parts.length ? (name: string) => parts.some((x) => fold(name).includes(x)) : undefined;
+}
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Ekonomia jednostkowa projektu: miesiące + okresy z ustawień (lub cały zakres danych). */
-export async function economicsReport(id: string, fromIn?: string | null, toIn?: string | null) {
-  const [settings, orders, ads] = await Promise.all([loadSettings(id), loadOrders(id), loadAds(id)]);
-  const p = prepare(orders, settings);
+export async function economicsReport(id: string, fromIn?: string | null, toIn?: string | null, scope: EconScope = {}) {
+  const [settings0, orders, allAds] = await Promise.all([loadSettings(id), loadOrders(id), loadAds(id)]);
+  const campaigns = (scope.campaigns ?? "").trim();
+  const tokens = campaigns ? parseAdsMatch(campaigns) : null;
+  const ads = tokens ? allAds.filter((a) => adMatches(tokens, a.source, `${a.campaign} | ${a.adset} | ${a.ad}`)) : allAds;
+  const match = productMatcher(scope.products);
+  const settings = match ? { ...settings0, mainCategory: `produkt: ${(scope.products ?? "").trim()}` } : settings0;
+  const p = prepare(orders, settings, match);
   const dataFrom = [orders[0] ? new Date(orders[0].ts).toISOString().slice(0, 10) : null, ads[0]?.start ?? null].filter(Boolean).sort()[0] ?? null;
   const dataTo = [p.lastDataTs ? new Date(p.lastDataTs).toISOString().slice(0, 10) : null, ...ads.map((a) => a.end)].filter(Boolean).sort().pop() ?? null;
   const from = fromIn ?? dataFrom;
@@ -21,9 +41,46 @@ export async function economicsReport(id: string, fromIn?: string | null, toIn?:
     dataFrom,
     dataTo,
     lastOrder: p.lastDataTs ? new Date(p.lastDataTs).toISOString().slice(0, 10) : null,
-    counts: { orders: orders.length, adRows: ads.length, customersIdentified: new Set(orders.map((o) => o.customer).filter(Boolean)).size },
+    counts: { orders: orders.length, adRows: ads.length, adRowsAll: allAds.length, customersIdentified: new Set(orders.map((o) => o.customer).filter(Boolean)).size },
+    scope: { campaigns: campaigns || null, products: match ? (scope.products ?? "").trim() : null },
     settings,
-    monthly: monthly(p, ads, settings, from, to),
-    periods: periods.map((per) => periodStats(p, ads, settings, per)),
+    monthly: monthly(p, ads, settings, from, to, !!match),
+    periods: periods.map((per) => periodStats(p, ads, settings, per, !!match)),
+    products: productSummary(orders, settings0, from, to, match),
   };
+}
+
+/** Produkty w zamówieniach okresu: liczba, mediana ceny, kategoria wg reguł – do ustawiania reguł i zawężenia. */
+function productSummary(orders: Awaited<ReturnType<typeof loadOrders>>, s: Awaited<ReturnType<typeof loadSettings>>, from: string, to: string, match?: (n: string) => boolean) {
+  const f = Date.parse(`${from}T00:00:00Z`);
+  const t = Date.parse(`${to}T23:59:59Z`);
+  const m = new Map<string, { name: string; count: number; prices: number[]; gross: number }>();
+  for (const o of orders) {
+    if (o.ts < f || o.ts > t) continue;
+    for (const pr of o.products) {
+      const x = m.get(pr.name) ?? { name: pr.name, count: 0, prices: [], gross: 0 };
+      x.count++;
+      if (pr.price != null) {
+        x.prices.push(pr.price);
+        x.gross += pr.price;
+      }
+      m.set(pr.name, x);
+    }
+  }
+  const med = (xs: number[]) => {
+    if (!xs.length) return null;
+    const v = [...xs].sort((a, b) => a - b);
+    return v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+  };
+  return [...m.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 60)
+    .map((x) => ({
+      name: x.name,
+      count: x.count,
+      medianPrice: med(x.prices),
+      gross: x.prices.length ? x.gross : null,
+      category: applyRules(x.name, s.productRules, "inne"),
+      inScope: match ? match(x.name) : null,
+    }));
 }

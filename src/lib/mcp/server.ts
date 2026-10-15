@@ -508,11 +508,17 @@ export function buildMcpServer(origin: string): McpServer {
     "get_economics",
     {
       title: "Ekonomia projektu",
-      description: "Przychód vs wydatki miesięcznie i okresy: CAC, LTV 30/90/365, LTV/CAC, powroty, zysk – z importu zamówień i reklam.",
-      inputSchema: { project_id: z.string(), from: z.string().optional(), to: z.string().optional() },
+      description: "Przychód vs wydatki miesięcznie i okresy: CAC, LTV 30/90/365, LTV/CAC, powroty, order bump, zysk – z zamówień i reklam. Zwraca też listę produktów (nazwa, liczba, mediana ceny, kategoria wg reguł). Opcjonalnie zawężenie do kampanii i produktu.",
+      inputSchema: {
+        project_id: z.string(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        campaigns: z.string().optional().describe("Zawężenie wydatków do kampanii, np. „meta:VSL 797” (składnia jak w węźle źródła)"),
+        products: z.string().optional().describe("Zawężenie do produktu: fragmenty nazw po przecinku (np. „dykcja dla kazdego”) – liczone jako produkt główny"),
+      },
       annotations: RO,
     },
-    safe(async ({ project_id, from, to }) => ok(await economicsReport(project_id, from, to))),
+    safe(async ({ project_id, from, to, campaigns, products }) => ok(await economicsReport(project_id, from, to, { campaigns, products }))),
   );
 
   /* ---------- Integracje i import ---------- */

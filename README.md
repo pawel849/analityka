@@ -87,6 +87,9 @@ Wszystko konfigurowane osobno dla każdego klienta (projektu):
   (z podglądem na danych klienta), okresy analizy, koszty jako założenia.
 - **Ekonomia:** przychód (wg kategorii) vs wydatki miesięcznie, okresy: CAC, LTV 30/90/365 (tylko dojrzałe okna),
   LTV/CAC, powroty, back-end, order bump, „na 10 000 zł reklam”, zysk szacunkowy; rozkład zmiany na CAC i LTV (Shapley).
+- **Zakres Ekonomii:** zawężenie do kampanii (np. `meta:VSL 797`) i produktu (fragment nazwy) – wydatki tylko z tych kampanii,
+  przychód tylko z zamówień z tym produktem, CAC/LTV dla klientów, którzy go kupili. Lista produktów z kategoriami do sprawdzenia reguł.
+  Order bump nie liczy pozycji za 0 zł (darmowe bonusy).
 - **Oś czasu:** zdarzenia ręczne z oznaczeniem pewności + wykryte w danych (zmiany ceny, start/koniec kampanii),
   wykres przychodu i wydatków ze zdarzeniami, eksport dziennika zmian (.md).
 - **Mapa:** węzeł źródła może pobierać koszty z importu reklam (pole „Koszty z importu reklam”).

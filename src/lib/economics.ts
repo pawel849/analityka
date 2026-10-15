@@ -50,11 +50,19 @@ export interface Prepared {
   lastDataTs: number;
 }
 
-export function prepare(orders: EconOrder[], s: ProjectSettings): Prepared {
+/**
+ * `mainMatch` (zawężenie Ekonomii do produktu): pozycje pasujące stają się produktem głównym (kategoria s.mainCategory),
+ * niezależnie od reguł kategorii.
+ */
+export function prepare(orders: EconOrder[], s: ProjectSettings, mainMatch?: (name: string) => boolean): Prepared {
   const out = orders
     .map((o) => {
-      const categories = o.products.length ? o.products.map((p) => applyRules(p.name, s.productRules, "inne")) : ["inne"];
-      return { ...o, key: o.customer || `order:${o.ref}`, categories, hasMain: categories.includes(s.mainCategory) };
+      const categories = o.products.length
+        ? o.products.map((p) => (mainMatch ? (mainMatch(p.name) ? s.mainCategory : applyRules(p.name, s.productRules, "inne")) : applyRules(p.name, s.productRules, "inne")))
+        : ["inne"];
+      // Przy zawężeniu do produktu kategoria spoza zawężenia nie może udawać produktu głównego.
+      const cats = mainMatch ? categories.map((c, i) => (c === s.mainCategory && !mainMatch(o.products[i]?.name ?? "") ? "inne" : c)) : categories;
+      return { ...o, key: o.customer || `order:${o.ref}`, categories: cats, hasMain: cats.includes(s.mainCategory) };
     })
     .sort((a, b) => a.ts - b.ts);
   const firstMain = new Map<string, number>();
@@ -86,7 +94,8 @@ export interface MonthRow {
   adsShare: number | null;
 }
 
-export function monthly(p: Prepared, ads: EconAd[], s: ProjectSettings, from: string, to: string): MonthRow[] {
+/** `onlyMain` = przychód tylko z zamówień zawierających produkt główny (Ekonomia zawężona do produktu). */
+export function monthly(p: Prepared, ads: EconAd[], s: ProjectSettings, from: string, to: string, onlyMain = false): MonthRow[] {
   const rows = new Map<string, MonthRow>();
   for (let t = dayMs(`${from.slice(0, 7)}-01`); t <= dayMs(to); ) {
     const d = new Date(t);
@@ -97,7 +106,7 @@ export function monthly(p: Prepared, ads: EconAd[], s: ProjectSettings, from: st
   }
   for (const o of p.orders) {
     const r = rows.get(monthKey(o.ts));
-    if (!r) continue;
+    if (!r || (onlyMain && !o.hasMain)) continue;
     r.gross += o.gross;
     r.orders++;
     for (const [c, v] of splitByCategory(o)) r.byCategory[c] = (r.byCategory[c] ?? 0) + v;
@@ -144,10 +153,11 @@ export interface PeriodStats {
 
 const WINDOWS = [30, 90, 365];
 
-export function periodStats(p: Prepared, ads: EconAd[], s: ProjectSettings, period: Period): PeriodStats {
+export function periodStats(p: Prepared, ads: EconAd[], s: ProjectSettings, period: Period, onlyMain = false): PeriodStats {
   const f = dayMs(period.from);
   const t = dayMs(period.to) + DAY - 1;
-  const inP = p.orders.filter((o) => o.ts >= f && o.ts <= t);
+  // LTV i powroty liczą wszystkie zakupy klienta; przychód okresu – tylko zamówienia w zawężeniu.
+  const inP = p.orders.filter((o) => o.ts >= f && o.ts <= t && (!onlyMain || o.hasMain));
   const byCategory: Record<string, number> = {};
   let gross = 0;
   let mainUnits = 0;
@@ -161,7 +171,8 @@ export function periodStats(p: Prepared, ads: EconAd[], s: ProjectSettings, peri
     mainUnits += mains;
     if (o.hasMain) {
       mainOrders++;
-      if (o.categories.some((c) => c !== s.mainCategory)) bumpOrders++;
+      // Dodatek = płatna pozycja spoza produktu głównego (darmowe bonusy za 0 zł się nie liczą; brak ceny = nie wiadomo, liczymy).
+      if (o.products.some((pr, i) => o.categories[i] !== s.mainCategory && (pr.price == null || pr.price > 0))) bumpOrders++;
       o.products.forEach((pr, i) => {
         if (o.categories[i] === s.mainCategory && pr.price != null) mainPrices.push(pr.price);
       });
