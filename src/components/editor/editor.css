@@ -411,3 +411,9 @@
 @media print {
   .fe, .fe.left-closed, .fe.readonly { grid-template-columns: 1fr; }
 }
+
+/* Węzeł „Zakup”: wybór produktów */
+.np-products { width: 100%; max-height: 220px; overflow-y: auto; border: 1px solid var(--fe-panel-border); border-radius: 8px; padding: 3px; background: var(--fe-node); }
+.np-products label { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; padding: 3px 5px; border-radius: 5px; cursor: pointer; font-size: 12px; color: var(--fe-ink); }
+.np-products label.on { background: color-mix(in srgb, var(--fe-accent) 14%, transparent); }
+.np-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

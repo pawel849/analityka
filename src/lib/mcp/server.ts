@@ -335,6 +335,7 @@ export function buildMcpServer(origin: string): McpServer {
     event_type: z.string().optional().describe("Akcja: lead, form_submit, purchase, click, link_click, button_click, scroll, video_play, custom…"),
     event_name: z.string().optional(),
     page_url: z.string().optional().describe("Akcja: tylko na tej stronie"),
+    products: z.array(z.string()).optional().describe("Akcja purchase: licz tylko zakupy zawierające te produkty (pełne nazwy z get_economics.products lub fragmenty); [] = wszystkie"),
     filters: z.array(z.object({ key: z.string(), op: z.enum(["eq", "neq", "contains", "not_contains", "empty", "not_empty"]), value: z.string() })).optional(),
     goal: z.boolean().optional(),
     goal_name: z.string().optional(),

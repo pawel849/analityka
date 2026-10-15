@@ -91,6 +91,61 @@ function ManualData({ funnelId, nodeId, category, onChanged }: { funnelId: strin
 
 const CATEGORY_COLORS: Record<NodeData["category"], string> = { source: "#2f5bea", page: "#0e8a7e", action: "#c2601b", offline: "#7a4fc9" };
 
+/** Węzeł „Zakup”: tylko zakupy wybranych produktów (lista z zamówień projektu + własne fragmenty nazw). */
+function ProductPicker({ funnelId, value, onChange }: { funnelId: string; value: string[]; onChange: (v: string[]) => void }) {
+  const [list, setList] = useState<{ name: string; count: number }[] | null>(null);
+  const [q, setQ] = useState("");
+  const [own, setOwn] = useState("");
+  useEffect(() => {
+    api<{ name: string; count: number }[]>(`/api/funnels/${funnelId}/products`).then(setList).catch(() => setList([]));
+  }, [funnelId]);
+  const sel = new Set(value);
+  const toggle = (n: string) => onChange(sel.has(n) ? value.filter((x) => x !== n) : [...value, n]);
+  const items = [...(list ?? []).map((x) => ({ name: x.name, meta: `${x.count} szt.` })), ...value.filter((v) => !(list ?? []).some((x) => x.name === v)).map((v) => ({ name: v, meta: "fragment nazwy" }))];
+  const shown = items.filter((i) => !q.trim() || i.name.toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <div className="field">
+      <div className="row" style={{ justifyContent: "space-between", width: "100%" }}>
+        <span>Produkty</span>
+        <span className="hint">{value.length ? `liczę tylko: ${value.length}` : "wszystkie zakupy"}</span>
+      </div>
+      <span className="hint">Zaznacz produkty tego lejka – węzeł (i przychód, sprzedaże, ROAS na dole) policzy tylko zamówienia, które je zawierają.</span>
+      {list === null ? (
+        <span className="hint">Wczytuję produkty…</span>
+      ) : (
+        <>
+          {items.length > 6 && <input placeholder="Szukaj produktu…" value={q} onChange={(e) => setQ(e.target.value)} />}
+          <div className="np-products">
+            {shown.map((i) => (
+              <label key={i.name} className={sel.has(i.name) ? "on" : ""} title={i.name}>
+                <input type="checkbox" checked={sel.has(i.name)} onChange={() => toggle(i.name)} />
+                <span className="np-name">{i.name}</span>
+                <span className="hint">{i.meta}</span>
+              </label>
+            ))}
+            {!items.length && <span className="hint">Brak zamówień w projekcie – wpisz fragment nazwy poniżej.</span>}
+          </div>
+        </>
+      )}
+      <form
+        className="row"
+        style={{ width: "100%" }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (own.trim() && !sel.has(own.trim())) onChange([...value, own.trim()]);
+          setOwn("");
+        }}
+      >
+        <input value={own} onChange={(e) => setOwn(e.target.value)} placeholder="lub fragment nazwy, np. dykcja" style={{ flex: 1 }} />
+        <button className="btn small">Dodaj</button>
+      </form>
+      {value.length > 0 && (
+        <button type="button" className="btn small" onClick={() => onChange([])}>Wyczyść – licz wszystkie zakupy</button>
+      )}
+    </div>
+  );
+}
+
 function GoalEditor({ d, onChange }: { d: NodeData; onChange: (p: Partial<NodeData>) => void }) {
   const [raw, setRaw] = useState(d.goalValue != null ? String(d.goalValue) : "");
   return (
@@ -499,6 +554,9 @@ export function NodePanel({
                 Tylko na stronie (opcjonalnie)
                 <input value={d.pageUrl ?? ""} placeholder="/oferta" onChange={(e) => onChange({ pageUrl: e.target.value })} />
               </label>
+              {d.eventType === "purchase" && (
+                <ProductPicker funnelId={funnelId} value={d.products ?? []} onChange={(products) => onChange({ products: products.length ? products : undefined })} />
+              )}
             </>
           )}
           {d.category === "offline" && <p className="hint">Element offline – liczby wpisujesz ręcznie w trybie Analiza.</p>}

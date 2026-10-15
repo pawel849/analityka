@@ -206,3 +206,12 @@ test("link vs button click", () => {
   assert.equal(r.nodes.l.people, 1);
   assert.equal(r.nodes.b.people, 2);
 });
+
+import { matchesProducts } from "../src/lib/analysis.ts";
+test("węzeł Zakup: filtr produktów (pełna nazwa, fragment, bez polskich znaków)", () => {
+  const ev = { name: "Zamówienie WooCommerce #12", element: "Dykcja dla każdego. Mów tak - Standard | Bonus PDF" };
+  assert.ok(matchesProducts(["Dykcja dla każdego. Mów tak - Standard"], ev));
+  assert.ok(matchesProducts(["dykcja dla kazdego"], ev));
+  assert.ok(!matchesProducts(["Szkolenie medialne"], ev));
+  assert.ok(matchesProducts(["Kurs X"], { name: "Kurs X", element: "" }), "anl('purchase', 297, 'Kurs X') – nazwa w zdarzeniu");
+});

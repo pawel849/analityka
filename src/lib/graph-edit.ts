@@ -16,6 +16,7 @@ export interface NodeFields {
   goal_value?: number;
   notes?: string;
   checklist?: string[];
+  products?: string[];
 }
 
 export interface GraphEdits {
@@ -62,6 +63,7 @@ function patchFrom(f: NodeFields): Partial<NodeData> {
   if (f.goal_name !== undefined) p.goalName = f.goal_name;
   if (f.goal_value !== undefined) p.goalValue = f.goal_value;
   if (f.notes !== undefined) p.notes = f.notes;
+  if (f.products !== undefined) p.products = f.products;
   if (f.checklist !== undefined) p.checklist = f.checklist.map((text) => ({ id: rid(), text, done: false }));
   return p;
 }
@@ -141,7 +143,7 @@ export function describeGraph(g: Graph) {
         const out: Record<string, unknown> = { id: n.id, kind: d.kind, category: d.category, label: d.label, x: n.position.x, y: n.position.y };
         for (const [k, v] of Object.entries({
           url: d.url, urls: d.urls, source_match: d.sourceMatch, ads_match: d.adsMatch, event_type: d.eventType, event_name: d.eventName,
-          page_url: d.pageUrl, filters: d.filters, goal: d.goal, goal_name: d.goalName, goal_value: d.goalValue, notes: d.notes,
+          page_url: d.pageUrl, products: d.products, filters: d.filters, goal: d.goal, goal_name: d.goalName, goal_value: d.goalValue, notes: d.notes,
         })) {
           if (v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) out[k] = v;
         }

@@ -36,6 +36,8 @@ export interface NodeData {
   thumbnailUrl?: string;
   /** Lista zadań do wdrożenia elementu. */
   checklist?: ChecklistItem[];
+  /** Akcja „zakup”: licz tylko zakupy zawierające te produkty (nazwy lub fragmenty nazw). */
+  products?: string[];
   /** Prognozowana liczba osób na okres. */
   forecast?: { period: "day" | "week" | "month"; people: number };
   [key: string]: unknown;

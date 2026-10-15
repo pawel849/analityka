@@ -291,8 +291,8 @@ export function scriptTag(origin: string, key: string, domains: string[]): strin
   return `<script async src="${origin}/t.js" data-key="${key}" data-identify="forms"${d}></script>`;
 }
 
-export const PURCHASE_SNIPPET = (amount: string) =>
-  `<script>window.anl=window.anl||function(){(anl.q=anl.q||[]).push(arguments)};anl("purchase", ${Number(amount.replace(",", ".")) || 0});</script>`;
+export const PURCHASE_SNIPPET = (amount: string, product = "") =>
+  `<script>window.anl=window.anl||function(){(anl.q=anl.q||[]).push(arguments)};anl("purchase", ${Number(amount.replace(",", ".")) || 0}${product.trim() ? `, ${JSON.stringify(product.trim())}` : ""});</script>`;
 
 interface GNode {
   id: string;

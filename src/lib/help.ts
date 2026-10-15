@@ -103,6 +103,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "Akcja: typ zdarzenia (np. lead, zakup, kliknięcie, przewinięcie, własne zdarzenie z nazwą) i opcjonalnie strona, na której ma wystąpić.",
       "Filtry węzła (np. utm_campaign, kraj, param:xyz) zawężają osoby liczone w węźle.",
       "Cel: oznacz węzeł jako cel z wartością – pojawi się w metrykach celów.",
+      "Zakup: pole „Produkty” – zaznacz produkty lejka, a węzeł (oraz przychód, sprzedaże i ROAS na dole) policzy tylko zamówienia, które je zawierają. Lista pochodzi z zamówień projektu (WooCommerce / import). Dla kodu na stronie podziękowania: anl(\"purchase\", 297, \"Nazwa produktu\").",
     ],
   },
   {

@@ -257,8 +257,25 @@ function matchesAction(d: NodeData, ev: TrackedEvent): boolean {
     }
   }
   if (d.pageUrl && !matchesPage(d.pageUrl, ev)) return false;
+  // Zakup tylko wybranych produktów: nazwy produktów są w polu element (WooCommerce) albo w nazwie zdarzenia.
+  if (d.eventType === "purchase" && d.products?.length && !matchesProducts(d.products, ev)) return false;
   return true;
 }
+
+export function matchesProducts(products: string[], ev: { name: string; element: string }): boolean {
+  const hay = foldText(`${ev.element} | ${ev.name}`);
+  return products.some((p) => {
+    const f = foldText(p.trim());
+    return !!f && hay.includes(f);
+  });
+}
+
+const foldText = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l");
 
 /**
  * Przejście bezpośrednie A → B: po którymś trafieniu w A najbliższym kolejnym krokiem z mapy

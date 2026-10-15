@@ -529,6 +529,7 @@ function StepConversions({
 }) {
   const [hook, setHook] = useState("");
   const [amount, setAmount] = useState("");
+  const [product, setProduct] = useState(s.offer ?? "");
   useEffect(() => {
     api<{ secret: string }>(`/api/projects/${projectId}/webhook`).then((r) => setHook(`${origin}/api/hooks/${r.secret}`)).catch(() => {});
   }, [projectId, origin]);
@@ -603,8 +604,12 @@ function StepConversions({
               Cena produktu (zł)
               <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="np. 297" />
             </label>
-            <pre className="snippet">{PURCHASE_SNIPPET(amount || "0")}</pre>
-            <Copy text={PURCHASE_SNIPPET(amount || "0")} label="Kopiuj kod" />
+            <label className="field" style={{ maxWidth: 420 }}>
+              Nazwa produktu (żeby na mapie liczyć tylko ten produkt)
+              <input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="np. Dykcja dla każdego" />
+            </label>
+            <pre className="snippet">{PURCHASE_SNIPPET(amount || "0", product)}</pre>
+            <Copy text={PURCHASE_SNIPPET(amount || "0", product)} label="Kopiuj kod" />
             <p className="hint">Kilka produktów w różnych cenach = osobna strona podziękowania dla każdego albo sposób B. Jeśli platforma nie pozwala na własny kod na stronie podziękowania – użyj B.</p>
           </div>
           <div className="wz-box">

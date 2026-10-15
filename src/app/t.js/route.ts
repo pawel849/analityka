@@ -117,6 +117,7 @@ const SCRIPT = String.raw`(function () {
   // Publiczne API:
   //   anl("lead")                      – zapis
   //   anl("purchase", 297)             – zakup z kwotą
+  //   anl("purchase", 297, "Kurs X")   – zakup z kwotą i nazwą produktu
   //   anl("event", "nazwa", wartość)   – zdarzenie własne
   //   anl("track", "booking")          – dowolny wspierany typ
   //   anl("identify", "jan@firma.pl")  – połącz osobę z e-mailem (zakupy/leady z webhooków)
@@ -124,7 +125,7 @@ const SCRIPT = String.raw`(function () {
     if (cmd === "identify") { send("identify", { n: String(a || "") }); flush(true); return; }
     if (cmd === "event") send("custom", { n: String(a || ""), val: typeof b === "number" ? b : undefined });
     else if (cmd === "track") send(String(a), { val: typeof b === "number" ? b : undefined });
-    else send(String(cmd), { val: typeof a === "number" ? a : undefined, n: typeof a === "string" ? a : "" });
+    else send(String(cmd), { val: typeof a === "number" ? a : undefined, n: typeof a === "string" ? a : typeof b === "string" ? b : "" });
     if (cmd === "purchase" || cmd === "lead") flush(true);
   }
   var pending = (window.anl && window.anl.q) || [];

@@ -16,7 +16,8 @@ export interface IntegrationRow {
   name: string;
   config: Record<string, unknown>;
   secret: string;
-  state: { cursor?: string; done?: boolean; lastOkStart?: string };
+  /** ev2 = zakupy na mapie mają już nazwy produktów (jednorazowe ponowne pobranie starszych zamówień). */
+  state: { cursor?: string; done?: boolean; lastOkStart?: string; ev2?: boolean };
   last_sync_at: string | null;
 }
 
@@ -143,8 +144,12 @@ async function syncWoo(it: IntegrationRow, startedAt: string, budgetMs: number):
   const warnings: string[] = [];
 
   // Pierwsza synchronizacja: zamówienia utworzone od N dni (after); potem: zmienione od ostatniej synchronizacji (modified_after).
-  const backfill = !it.state.done;
-  const from = backfill ? it.state.cursor ?? `${startDate(it, today, 0)}T00:00:00` : `${addDays((it.state.lastOkStart ?? startedAt).slice(0, 10), -1)}T00:00:00`;
+  // Pełne pobranie: pierwsza synchronizacja albo jednorazowo, żeby dopisać nazwy produktów do zakupów na mapie.
+  const backfill = !it.state.done || (pushEvents && !it.state.ev2);
+  const days = Math.min(Math.max(Number(it.config.days) || 90, 1), 1095);
+  const from = backfill
+    ? it.state.cursor ?? `${addDays(today, -(days - 1))}T00:00:00`
+    : `${addDays((it.state.lastOkStart ?? startedAt).slice(0, 10), -1)}T00:00:00`;
   let rows = 0;
   let removed = 0;
   let events = 0;
@@ -176,7 +181,7 @@ async function syncWoo(it: IntegrationRow, startedAt: string, budgetMs: number):
     rows += keep.length;
     if (orders.length < 100 || (totalPages != null && page >= totalPages)) break;
   }
-  if (complete) it.state = { done: true, lastOkStart: startedAt };
+  if (complete) it.state = { done: true, lastOkStart: startedAt, ev2: true };
   else if (backfill && lastCreated) it.state.cursor = lastCreated.replace(/Z$/, "");
   else if (!complete) warnings.push("Nie wszystkie zmienione zamówienia zostały pobrane w tym uruchomieniu – kliknij „Synchronizuj teraz” ponownie.");
   await refreshImportCount(importId, "orders");
@@ -197,6 +202,16 @@ async function syncPurchaseEvents(projectId: string, orders: WooOrder[], keep: O
     (await q<{ name: string }>("SELECT name FROM events WHERE project_id = $1 AND origin = 'woocommerce' AND name = ANY($2)", [projectId, names])).map((r) => r.name),
   );
   const byRef = new Map(orders.map((o) => [wooOrderRef(o), o]));
+  // Nazwy produktów w polu element – węzeł „Zakup” może liczyć tylko wybrane produkty.
+  const productsOf = (k: OrderIn) => k.products.map((p) => p.name).join(" | ").slice(0, 1000);
+  const old = keep.filter((k) => existing.has(eventName(k.order_ref)));
+  if (old.length) {
+    await q(
+      `UPDATE events e SET element = v.el, value = v.val FROM (SELECT unnest($2::text[]) AS name, unnest($3::text[]) AS el, unnest($4::float8[]) AS val) v
+       WHERE e.project_id = $1 AND e.origin = 'woocommerce' AND e.name = v.name`,
+      [projectId, old.map((k) => eventName(k.order_ref)), old.map(productsOf), old.map((k) => k.gross)],
+    );
+  }
   const fresh = [];
   for (const k of keep) {
     const name = eventName(k.order_ref);
@@ -216,7 +231,7 @@ async function syncPurchaseEvents(projectId: string, orders: WooOrder[], keep: O
       utm_campaign: "",
       utm_content: "",
       utm_term: "",
-      element: "",
+      element: productsOf(k),
       value: k.gross,
       scroll: null,
       email,

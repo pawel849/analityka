@@ -52,7 +52,7 @@ const n = (v: number | undefined | null) => formatValue(v ?? 0, "number");
 const pct = (v: number | undefined | null) => formatValue(v, "percent");
 
 function planFooter(d: NodeData): { text: string; warn: boolean } {
-  const f = d.filters?.length ? ` · warunki: ${d.filters.length}` : "";
+  const f = (d.filters?.length ? ` · warunki: ${d.filters.length}` : "") + (d.products?.length ? ` · produkty: ${d.products.length === 1 ? d.products[0] : d.products.length}` : "");
   const r = planFooterBase(d);
   return { ...r, text: r.text + f };
 }
