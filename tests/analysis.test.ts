@@ -215,3 +215,25 @@ test("węzeł Zakup: filtr produktów (pełna nazwa, fragment, bez polskich znak
   assert.ok(!matchesProducts(["Szkolenie medialne"], ev));
   assert.ok(matchesProducts(["Kurs X"], { name: "Kurs X", element: "" }), "anl('purchase', 297, 'Kurs X') – nazwa w zdarzeniu");
 });
+
+test("tryb lejek: zakupy, przychód i cele tylko od osób, które przeszły kroki", () => {
+  const nodes = [
+    { id: "p", data: { kind: "checkout", category: "page", label: "Checkout", url: "/kasa" } },
+    { id: "z", data: { kind: "purchase", category: "action", label: "Zakup", eventType: "purchase", goal: true } },
+  ] as never;
+  const edges = [{ id: "e", source: "p", target: "z", data: { connection: "indirect" } }] as never;
+  const events = [
+    ev({ visitor_id: "a", path: "/kasa", url: "https://x.pl/kasa", ts: 1 }),
+    ev({ visitor_id: "a", type: "purchase", value: 797, ts: 2 }),
+    ev({ visitor_id: "b", type: "purchase", value: 297, ts: 2 }),
+  ];
+  const traffic = analyze(nodes, edges, events, []);
+  assert.equal(traffic.totals.sales, 2);
+  assert.equal(traffic.totals.revenue, 1094);
+  const funnel = analyze(nodes, edges, events, [], { mode: "funnel" });
+  assert.equal(funnel.nodes.z.people, 1);
+  assert.equal(funnel.nodes.z.conversions, 1);
+  assert.equal(funnel.totals.sales, 1);
+  assert.equal(funnel.totals.revenue, 797);
+  assert.equal(funnel.nodes.z.goalCount, 1);
+});

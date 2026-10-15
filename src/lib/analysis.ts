@@ -321,6 +321,8 @@ export function analyze(
   const man = (id: string, key: string) => manualBy.get(id)?.get(key);
 
   const spans = new Map<string, Map<string, Span>>();
+  // Zdarzenia złapane przez węzły akcji – po zawężeniu trybem „lejek” liczymy z nich konwersje i przychód.
+  const actionEvents = new Map<string, TrackedEvent[]>();
   const nodeStats: Record<string, NodeStats> = {};
   const purchaseIds = new Set<string>();
   let trackedRevenue = 0;
@@ -406,35 +408,19 @@ export function analyze(
     } else if (d.category === "action") {
       if (d.eventType) {
         st.tracked = true;
-        let rev = 0;
-        let count = 0;
+        const matched: TrackedEvent[] = [];
         for (const ev of events) {
           if (!matchesAction(d, ev) || !matchesFilters(d.filters, ev)) continue;
           touch(ev);
-          count++;
-          if (d.eventType === "purchase") {
-            rev += ev.value ?? 0;
-            const key = String(ev.id);
-            if (!purchaseIds.has(key)) {
-              purchaseIds.add(key);
-              trackedRevenue += ev.value ?? 0;
-            }
-          }
+          matched.push(ev);
         }
-        st.conversions = d.eventType === "purchase" ? count : visitors.size;
-        st.revenue = rev;
+        actionEvents.set(n.id, matched);
       }
+      // Konwersje, przychód, leady i zakupy liczone niżej (po ewentualnym zawężeniu trybem „lejek”).
       const mc = man(n.id, "conversions");
       const mr = man(n.id, "revenue");
-      if (mc !== undefined) st.conversions = mc;
-      if (mr !== undefined) {
-        st.revenue = (st.revenue ?? 0) + mr;
-        manualRevenue += mr;
-      }
-      if (d.eventType === "lead" || d.eventType === "form_submit") {
-        if (mc !== undefined) manualLeads += mc;
-        else for (const v of visitors.keys()) leadVisitors.add(v);
-      }
+      if (mr !== undefined) manualRevenue += mr;
+      if ((d.eventType === "lead" || d.eventType === "form_submit") && mc !== undefined) manualLeads += mc;
       if (d.eventType === "purchase" && mc !== undefined) manualSales += mc;
     } else {
       // offline – wyłącznie dane ręczne
@@ -450,12 +436,6 @@ export function analyze(
     const override = man(n.id, "visitors") ?? (d.category === "action" || d.category === "offline" ? man(n.id, "conversions") : undefined);
     st.people = override !== undefined ? override : visitors.size;
     if (override !== undefined) st.tracked = false;
-    if (d.goal) {
-      st.goalCount = d.category === "action" && d.eventType === "purchase" ? (st.conversions ?? 0) : st.people;
-      st.goalValue = st.goalCount * (Number(d.goalValue) || 0);
-      goals.count += st.goalCount;
-      goals.value += st.goalValue;
-    }
     nodeStats[n.id] = st;
   }
 
@@ -503,6 +483,41 @@ export function analyze(
       const span = spans.get(id)!;
       for (const v of [...span.keys()]) if (!allowed.has(v)) span.delete(v);
       st.people = span.size;
+    }
+  }
+
+  // Akcje: konwersje i przychód z osób, które zostały w węźle (w trybie „lejek” – tylko te, które przeszły wcześniejsze kroki).
+  for (const n of nodes) {
+    const d = n.data;
+    const st = nodeStats[n.id];
+    if (!st) continue;
+    if (d.category === "action") {
+      const mc = man(n.id, "conversions");
+      const mr = man(n.id, "revenue");
+      const span = spans.get(n.id) ?? new Map<string, Span>();
+      const evs = d.eventType ? (actionEvents.get(n.id) ?? []).filter((e) => span.has(e.visitor_id)) : [];
+      if (d.eventType === "purchase") {
+        st.conversions = mc ?? evs.length;
+        st.revenue = evs.reduce((a, e) => a + (e.value ?? 0), 0) + (mr ?? 0);
+        if (mc === undefined)
+          for (const e of evs) {
+            const key = String(e.id);
+            if (!purchaseIds.has(key)) {
+              purchaseIds.add(key);
+              trackedRevenue += e.value ?? 0;
+            }
+          }
+      } else {
+        st.conversions = mc ?? (d.eventType ? span.size : 0);
+        st.revenue = mr ?? 0;
+        if ((d.eventType === "lead" || d.eventType === "form_submit") && mc === undefined) for (const v of span.keys()) leadVisitors.add(v);
+      }
+    }
+    if (n.data.goal) {
+      st.goalCount = d.category === "action" && d.eventType === "purchase" ? (st.conversions ?? 0) : st.people;
+      st.goalValue = st.goalCount * (Number(d.goalValue) || 0);
+      goals.count += st.goalCount;
+      goals.value += st.goalValue;
     }
   }
 
