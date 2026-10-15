@@ -85,7 +85,8 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       "Lewy panel „Elementy”: źródła ruchu, strony, akcje i elementy offline. Przeciągnij element na mapę albo kliknij go dwukrotnie. Jest wyszukiwarka.",
       "Strzałkę rysujesz od kropki po prawej stronie węzła do kropki po lewej stronie kolejnego.",
-      "Kliknięcie węzła lub strzałki otwiera prawy panel ustawień (wysuwa się). Można go schować przyciskiem » i otworzyć ponownie zakładką « Panel przy prawej krawędzi.",
+      "Kliknięcie węzła lub strzałki wysuwa z prawej panel ustawień (nad mapą). Zamykasz go przyciskiem „Zamknij ×” albo kliknięciem w puste tło mapy. Przeciąganie elementu panelu nie otwiera.",
+      "Lewy panel chowasz ikoną na dole paska z lewej albo klikając ponownie aktywną zakładkę (ikonę).",
       "Szablony (przycisk „Szablony” na górze) wstawiają gotowe lejki strategiczne albo lejek zbudowany z Twoich danych.",
       "Tekst, kształty, obrazy i widgety dodajesz przyciskami T, ▭, ▣ i „Widget”.",
       "Mapa zapisuje się sama (status obok nazwy lejka).",

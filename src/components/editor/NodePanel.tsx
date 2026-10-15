@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { KindIcon } from "./icons";
 import { CATALOG, CATALOG_BY_KIND, EVENT_TYPES, FILTER_KEYS, FILTER_OPS, MANUAL_METRICS, type ChecklistItem, type NodeData, type NodeFilter } from "@/lib/catalog";
 import { formatValue, type NodeStats } from "@/lib/analysis";
 import { forecastForRange } from "@/lib/forecast";
@@ -447,7 +448,7 @@ export function NodePanel({
     <div>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
         <div className="row" style={{ flexWrap: "nowrap", minWidth: 0 }}>
-          <span className={`abbr cat-${d.category}`} style={d.color ? ({ "--node-accent": d.color } as React.CSSProperties) : undefined}>{item?.abbr}</span>
+          <span className={`abbr cat-${d.category}`} style={d.color ? ({ "--node-accent": d.color } as React.CSSProperties) : undefined} title={item?.abbr}><KindIcon kind={d.kind} size={14} /></span>
           <b style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</b>
         </div>
         <button className="btn small danger" onClick={onDelete}>Usuń</button>

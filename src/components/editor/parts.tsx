@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext } from "react";
+import { KindIcon } from "./icons";
 import {
   BaseEdge,
   EdgeLabelRenderer,
@@ -164,8 +165,8 @@ export function FunnelNodeView({ id, data, selected }: NodeProps<FunnelNode>) {
           // eslint-disable-next-line @next/next/no-img-element
           <img className="abbr-img" src={data.iconUrl} alt="" />
         ) : (
-          <span className={`abbr shape-${data.category}`}>
-            <span>{item?.abbr ?? "?"}</span>
+          <span className={`abbr shape-${data.category}`} title={item?.abbr}>
+            <span><KindIcon kind={data.kind} size={data.category === "action" ? 11 : 14} /></span>
           </span>
         )}
         <div>

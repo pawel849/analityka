@@ -37,6 +37,8 @@ import { toPng } from "html-to-image";
 import { ExplorePanel } from "./ExplorePanel";
 import { MetricsBar } from "./MetricsBar";
 import { openHelp } from "../help/HelpCenter";
+import { KindIcon } from "./icons";
+import { Compass, LayoutGrid, ListChecks, NotebookPen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 const nodeTypes = { funnel: FunnelNodeView, text: TextNodeView, shape: ShapeNodeView, image: ImageNodeView, widget: WidgetNodeView };
 const edgeTypes = { flow: FlowEdge };
@@ -103,10 +105,14 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
   const selected = selectedAny && (selectedAny.type ?? "funnel") === "funnel" ? selectedAny : undefined;
   const selectedAnno = selectedAny && !selected ? (selectedAny as unknown as Node) : undefined;
   const selectedEdge = selectedAny ? undefined : edges.find((e) => e.selected);
-  const selectionKey = selectedAny?.id ?? selectedEdge?.id ?? "";
-  const [sideHidden, setSideHidden] = useState(false);
+  // Prawy panel ustawień otwiera się tylko po kliknięciu elementu (jak w Funnelytics), zamyka po kliknięciu w tło.
+  const [panelFor, setPanelFor] = useState<{ type: "node" | "edge"; id: string } | null>(null);
+  const panelNode = panelFor?.type === "node" ? nodes.find((n) => n.id === panelFor.id) : undefined;
+  const pNode = panelNode && (panelNode.type ?? "funnel") === "funnel" ? panelNode : undefined;
+  const pAnno = panelNode && !pNode ? (panelNode as unknown as Node) : undefined;
+  const pEdge = panelFor?.type === "edge" ? edges.find((e) => e.id === panelFor.id) : undefined;
   // Widok mapy (pamiętany w przeglądarce): panel warstw rozwinięty/zwinięty, minimapa.
-  const [view, setView] = useState({ layersOpen: true, minimap: true });
+  const [view, setView] = useState({ layersOpen: true, minimap: true, leftOpen: true });
   useEffect(() => {
     try {
       const raw = localStorage.getItem("anl_map_view");
@@ -125,9 +131,7 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
       }
       return next;
     });
-  useEffect(() => setSideHidden(false), [selectionKey]);
-  const hasPanel = readOnly ? !!selected : !!selectionKey;
-  const sideOpen = hasPanel && !sideHidden;
+  const sideOpen = readOnly ? !!pNode : !!(pNode || pAnno || pEdge);
   const [dataMode, setDataMode] = useState<DataMode>("traffic");
   const [showTemplates, setShowTemplates] = useState(!readOnly && (funnel.graph.nodes ?? []).length === 0);
   const [widgetMenu, setWidgetMenu] = useState(false);
@@ -477,7 +481,7 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
 
   return (
     <EditorCtx.Provider value={{ mode, analysis: mode === "analyze" ? analysis : null, compare: mode === "analyze" ? compare : null, layers }}>
-      <div className={`fe mode-${mode} ${readOnly ? "readonly" : ""} ${sideOpen ? "side-open" : ""}`}>
+      <div className={`fe mode-${mode} ${readOnly ? "readonly" : ""} ${view.leftOpen ? "" : "left-closed"}`}>
         <div className="fe-top">
         <div className="fe-toolbar">
           <div className="fe-crumbs">
@@ -595,16 +599,37 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
           <nav className="fe-rail">
             {(
               [
-                ["elements", "▦", "Elementy mapy"],
-                ["explore", "⌕", "Eksploruj dane i skrypt"],
-                ["notes", "✎", "Notatki lejka"],
-                ["checklist", "✓", "Checklista lejka"],
-              ] as [LeftTab, string, string][]
-            ).map(([k, icon, title]) => (
-              <button key={k} className={leftTab === k ? "on" : ""} title={title} aria-label={title} onClick={() => setLeftTab(k)}>
-                {icon}
+                ["elements", LayoutGrid, "Elementy mapy"],
+                ["explore", Compass, "Eksploruj dane i skrypt"],
+                ["notes", NotebookPen, "Notatki lejka"],
+                ["checklist", ListChecks, "Checklista lejka"],
+              ] as [LeftTab, typeof LayoutGrid, string][]
+            ).map(([k, Icon, title]) => (
+              <button
+                key={k}
+                className={leftTab === k && view.leftOpen ? "on" : ""}
+                title={title}
+                aria-label={title}
+                onClick={() => {
+                  // Kliknięcie aktywnej zakładki chowa panel, innej – otwiera ją.
+                  if (leftTab === k && view.leftOpen) setViewOpt({ leftOpen: false });
+                  else {
+                    setLeftTab(k);
+                    if (!view.leftOpen) setViewOpt({ leftOpen: true });
+                  }
+                }}
+              >
+                <Icon size={18} strokeWidth={2} />
               </button>
             ))}
+            <div style={{ flex: 1 }} />
+            <button
+              title={view.leftOpen ? "Schowaj panel" : "Pokaż panel"}
+              aria-label={view.leftOpen ? "Schowaj panel" : "Pokaż panel"}
+              onClick={() => setViewOpt({ leftOpen: !view.leftOpen })}
+            >
+              {view.leftOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+            </button>
           </nav>
           <div className="fe-palette">
           {leftTab === "explore" && (
@@ -655,7 +680,8 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
                       title={`${item.label} – przeciągnij na mapę lub kliknij dwukrotnie`}
                     >
                       <span className={`pal-icon shape-${item.category}`}>
-                        <span>{item.abbr}</span>
+                        <span><KindIcon kind={item.kind} size={item.category === "action" ? 15 : 18} /></span>
+                        <em className="pal-abbr">{item.abbr}</em>
                       </span>
                       <span className="pal-label">{item.label}</span>
                     </div>
@@ -674,6 +700,9 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={readOnly ? undefined : onConnect}
+            onNodeClick={(_, n) => setPanelFor({ type: "node", id: n.id })}
+            onEdgeClick={(_, e) => setPanelFor({ type: "edge", id: e.id })}
+            onPaneClick={() => setPanelFor(null)}
             nodesDraggable={!readOnly}
             nodesConnectable={!readOnly}
             nodeTypes={nodeTypes}
@@ -734,73 +763,71 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
               </div>
             </div>
           )}
-          {hasPanel && sideHidden && (
-            <button className="side-reopen" onClick={() => setSideHidden(false)} title="Pokaż panel ustawień">« Panel</button>
-          )}
+          <aside className={`fe-side ${sideOpen ? "open" : ""}`} aria-hidden={!sideOpen}>
+            {sideOpen && (
+              <button className="side-close" onClick={() => setPanelFor(null)} title="Zamknij panel" aria-label="Zamknij panel">Zamknij ×</button>
+            )}
+            {readOnly ? (
+              pNode ? (
+                <div>
+                  <h3>{pNode.data.label}</h3>
+                  {analysis?.nodes[pNode.id] ? (
+                    <StatsView d={pNode.data} s={analysis.nodes[pNode.id]} />
+                  ) : (
+                    <p className="hint">Przełącz na Analizę, aby zobaczyć liczby.</p>
+                  )}
+                  {pNode.data.notes && <p style={{ whiteSpace: "pre-wrap" }}>{pNode.data.notes}</p>}
+                </div>
+              ) : null
+            ) : pNode ? (
+              <NodePanel
+                key={pNode.id}
+                funnelId={funnel.id}
+                node={pNode}
+                mode={mode}
+                stats={analysis?.nodes[pNode.id]}
+                range={{ from, to }}
+                onChange={(patch) => updateNode(pNode.id, patch)}
+                onDelete={() => deleteNode(pNode.id)}
+                onAction={(a) => {
+                  if (a === "copy") copySelection();
+                  else if (a === "duplicate") duplicate();
+                  else reorder(a);
+                }}
+                onManualChange={() => mode === "analyze" && loadAnalysis()}
+              />
+            ) : pAnno ? (
+              <AnnotationPanel
+                key={pAnno.id}
+                node={pAnno}
+                onChange={(patch) =>
+                  setNodes((ns) => ns.map((n) => (n.id === pAnno.id ? { ...n, data: { ...n.data, ...patch } as NodeData } : n)))
+                }
+                onDelete={() => deleteNode(pAnno.id)}
+                onAction={(a) => {
+                  if (a === "copy") copySelection();
+                  else if (a === "duplicate") duplicate();
+                  else reorder(a);
+                }}
+              />
+            ) : pEdge ? (
+              <EdgePanel
+                key={pEdge.id}
+                edge={pEdge}
+                nodes={nodes}
+                mode={mode}
+                stats={analysis?.edges[pEdge.id]}
+                onChange={(patch) => {
+                  updateEdge(pEdge.id, patch);
+                  if (mode === "analyze" && patch.connection) setTimeout(loadAnalysis, 50);
+                }}
+                onDelete={() => setEdges((es) => es.filter((e) => e.id !== pEdge.id))}
+              />
+            ) : null}
+          </aside>
         </div>
 
-        <aside className="fe-side" aria-hidden={!sideOpen}>
-          {sideOpen && (
-            <button className="side-close" onClick={() => setSideHidden(true)} title="Schowaj panel" aria-label="Schowaj panel">Schowaj »</button>
-          )}
-          {readOnly ? (
-            selected ? (
-              <div>
-                <h3>{selected.data.label}</h3>
-                {analysis?.nodes[selected.id] ? (
-                  <StatsView d={selected.data} s={analysis.nodes[selected.id]} />
-                ) : (
-                  <p className="hint">Przełącz na Analizę, aby zobaczyć liczby.</p>
-                )}
-                {selected.data.notes && <p style={{ whiteSpace: "pre-wrap" }}>{selected.data.notes}</p>}
-              </div>
-            ) : null
-          ) : selected ? (
-            <NodePanel
-              key={selected.id}
-              funnelId={funnel.id}
-              node={selected}
-              mode={mode}
-              stats={analysis?.nodes[selected.id]}
-              range={{ from, to }}
-              onChange={(patch) => updateNode(selected.id, patch)}
-              onDelete={() => deleteNode(selected.id)}
-              onAction={(a) => {
-                if (a === "copy") copySelection();
-                else if (a === "duplicate") duplicate();
-                else reorder(a);
-              }}
-              onManualChange={() => mode === "analyze" && loadAnalysis()}
-            />
-          ) : selectedAnno ? (
-            <AnnotationPanel
-              key={selectedAnno.id}
-              node={selectedAnno}
-              onChange={(patch) =>
-                setNodes((ns) => ns.map((n) => (n.id === selectedAnno.id ? { ...n, data: { ...n.data, ...patch } as NodeData } : n)))
-              }
-              onDelete={() => deleteNode(selectedAnno.id)}
-              onAction={(a) => {
-                if (a === "copy") copySelection();
-                else if (a === "duplicate") duplicate();
-                else reorder(a);
-              }}
-            />
-          ) : selectedEdge ? (
-            <EdgePanel
-              key={selectedEdge.id}
-              edge={selectedEdge}
-              nodes={nodes}
-              mode={mode}
-              stats={analysis?.edges[selectedEdge.id]}
-              onChange={(patch) => {
-                updateEdge(selectedEdge.id, patch);
-                if (mode === "analyze" && patch.connection) setTimeout(loadAnalysis, 50);
-              }}
-              onDelete={() => setEdges((es) => es.filter((e) => e.id !== selectedEdge.id))}
-            />
-          ) : null}
-        </aside>
+
 
         {mode === "analyze" && (
           <MetricsBar funnelId={funnel.id} analysis={analysis} compare={compare} loading={loading} error={error} onChanged={loadAnalysis} readOnly={readOnly} />
