@@ -105,6 +105,26 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
   const selectedEdge = selectedAny ? undefined : edges.find((e) => e.selected);
   const selectionKey = selectedAny?.id ?? selectedEdge?.id ?? "";
   const [sideHidden, setSideHidden] = useState(false);
+  // Widok mapy (pamiętany w przeglądarce): panel warstw rozwinięty/zwinięty, minimapa.
+  const [view, setView] = useState({ layersOpen: true, minimap: true });
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("anl_map_view");
+      if (raw) setView((v) => ({ ...v, ...JSON.parse(raw) }));
+    } catch {
+      /* brak pamięci przeglądarki */
+    }
+  }, []);
+  const setViewOpt = (patch: Partial<typeof view>) =>
+    setView((v) => {
+      const next = { ...v, ...patch };
+      try {
+        localStorage.setItem("anl_map_view", JSON.stringify(next));
+      } catch {
+        /* brak pamięci przeglądarki */
+      }
+      return next;
+    });
   useEffect(() => setSideHidden(false), [selectionKey]);
   const hasPanel = readOnly ? !!selected : !!selectionKey;
   const sideOpen = hasPanel && !sideHidden;
@@ -672,9 +692,11 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
               color="var(--fe-grid)"
             />
             <Controls showInteractive={false} />
-            <Panel position="top-right" className="layers-panel">
-              <span className="hint">Warstwy</span>
-              {(
+            <Panel position="top-right" className={`layers-panel ${view.layersOpen ? "" : "closed"}`}>
+              <button className="layers-toggle" onClick={() => setViewOpt({ layersOpen: !view.layersOpen })} title={view.layersOpen ? "Zwiń" : "Pokaż warstwy"}>
+                {view.layersOpen ? "Warstwy ▸" : "◂ Warstwy"}
+              </button>
+              {view.layersOpen && (
                 [
                   ["numbers", "Liczby"],
                   ["flow", "Przepływ"],
@@ -686,15 +708,20 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
                   <input type="checkbox" checked={layers[k]} onChange={() => toggleLayer(k)} /> {label}
                 </label>
               ))}
+              {view.layersOpen && (
+                <label title="Pokaż/ukryj minimapę w prawym dolnym rogu">
+                  <input type="checkbox" checked={view.minimap} onChange={() => setViewOpt({ minimap: !view.minimap })} /> Minimapa
+                </label>
+              )}
             </Panel>
-            <MiniMap
+            {view.minimap && <MiniMap
               pannable
               zoomable
               style={{ width: 160, height: 100 }}
               bgColor="var(--fe-panel)"
               maskColor="color-mix(in srgb, var(--fe-bg) 65%, transparent)"
               nodeColor={(n) => ((n.type ?? "funnel") === "funnel" ? `var(--cat-${(n.data as NodeData).category})` : "var(--fe-chip)")}
-            />
+            />}
           </ReactFlow>
           {nodes.length === 0 && (
             <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>

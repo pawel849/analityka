@@ -364,3 +364,37 @@
   .fe, .fe.side-open, .fe.readonly, .fe.readonly.side-open { grid-template-columns: 1fr; }
   .side-reopen { display: none; }
 }
+
+/* Pasek metryk: nagłówek + tabelki w grupach, zwijany */
+.fe-metrics { padding: 0; max-height: 38vh; display: flex; flex-direction: column; overflow: hidden; }
+.fe-metrics .m-head {
+  display: flex; align-items: center; gap: 16px; padding: 6px 14px; border-bottom: 1px solid var(--fe-panel-border); flex-wrap: wrap;
+}
+.fe-metrics.closed .m-head { border-bottom: 0; }
+.m-toggle {
+  font: inherit; font-size: 13px; font-weight: 600; background: none; border: 0; color: var(--fe-ink); cursor: pointer; padding: 2px 0;
+}
+.m-headline { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; }
+.m-headline b { font-variant-numeric: tabular-nums; }
+.m-range { margin-left: auto; font-size: 11px; }
+.m-body { overflow-y: auto; padding: 8px 14px 10px; }
+.m-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; align-items: start; }
+.m-table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--fe-node); border: 1px solid var(--fe-panel-border); border-radius: 8px; overflow: hidden; }
+.m-table th {
+  text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--fe-muted); font-weight: 600;
+  padding: 6px 10px; border-bottom: 1px solid var(--fe-panel-border);
+}
+.m-table td { padding: 4px 10px; border-bottom: 1px solid color-mix(in srgb, var(--fe-panel-border) 55%, transparent); color: var(--fe-ink-2); vertical-align: top; }
+.m-table tr:last-child td { border-bottom: 0; }
+.m-table .m-val { text-align: right; font-weight: 700; color: var(--fe-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.m-table .m-prev { text-align: right; font-size: 10px; color: var(--fe-muted); white-space: nowrap; }
+.m-table .m-del { width: 1%; }
+.m-table .m-del .btn { padding: 0 6px; }
+.m-formula { font-family: var(--mono); font-size: 10px; color: var(--fe-muted); max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-err { font-size: 10px; color: var(--fe-bad); }
+.m-custom { grid-column: span 1; }
+.m-add { margin-top: 10px; display: grid; gap: 8px; }
+
+/* Warstwy – zwijane */
+.layers-toggle { font: inherit; font-size: 12px; background: none; border: 0; color: var(--fe-ink); cursor: pointer; padding: 0; font-weight: 600; }
+.layers-panel.closed { padding: 5px 10px; }
