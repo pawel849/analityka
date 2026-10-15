@@ -91,3 +91,9 @@ test("zawężenie do produktu: tylko pasujące zamówienia, LTV z późniejszych
   const m = monthly(p, [], s2, "2026-01-01", "2026-01-31", true);
   assert.equal(m[0].gross, 797);
 });
+
+import { mergeSettings } from "../src/lib/settings.ts";
+test("zakres Ekonomii w ustawieniach: domyślnie pusty, czyszczony", () => {
+  assert.deepEqual(mergeSettings({}).economicsScope, { campaigns: [], products: [] });
+  assert.deepEqual(mergeSettings({ economicsScope: { campaigns: [" A ", "A", 5, ""], products: "x" } }).economicsScope, { campaigns: ["A"], products: [] });
+});

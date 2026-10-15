@@ -267,3 +267,11 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: ta
 .scope-bar.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .scope-fields { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; }
 @media (max-width: 760px) { .scope-fields { grid-template-columns: 1fr; } }
+.picker { display: grid; gap: 6px; min-width: 0; }
+.picker-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 4px; background: var(--surface); }
+.picker-list label { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.picker-list label:hover { background: var(--surface-2); }
+.picker-list label.on { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.picker-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-bar .scope-fields { grid-template-columns: 1fr 1fr; margin-top: 8px; }
+@media (max-width: 760px) { .scope-bar .scope-fields { grid-template-columns: 1fr; } }

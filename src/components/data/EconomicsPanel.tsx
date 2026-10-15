@@ -11,7 +11,8 @@ interface Econ {
   to: string;
   lastOrder: string | null;
   counts: { orders: number; adRows: number; adRowsAll?: number; customersIdentified: number };
-  scope?: { campaigns: string | null; products: string | null };
+  scope?: { source: string; campaigns: string | string[] | null; products: string | string[] | null };
+  campaignList?: { name: string; platform: string; spend: number }[];
   products?: { name: string; count: number; medianPrice: number | null; gross: number | null; category: string; inScope: boolean | null }[];
   settings: ProjectSettings;
   monthly: MonthRow[];
@@ -82,81 +83,140 @@ function RevenueChart({ rows, categories, cur }: { rows: MonthRow[]; categories:
   );
 }
 
-const SCOPE_KEY = (id: string) => `anl_econ_scope_${id}`;
+interface ScopeLists {
+  campaigns: { name: string; platform: string; spend: number }[];
+  products: { name: string; count: number; medianPrice: number | null }[];
+}
 
-/** Zawężenie Ekonomii do kampanii i produktu (zapamiętywane w tej przeglądarce). */
-function ScopeBar({ value, onApply }: { value: { campaigns: string; products: string }; onApply: (v: { campaigns: string; products: string }) => void }) {
-  const [c, setC] = useState(value.campaigns);
-  const [p, setP] = useState(value.products);
-  useEffect(() => {
-    setC(value.campaigns);
-    setP(value.products);
-  }, [value]);
-  const active = !!(value.campaigns || value.products);
+function Picker({
+  title, hint, items, selected, onChange,
+}: {
+  title: string;
+  hint: string;
+  items: { name: string; meta: string }[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [q, setQ] = useState("");
+  const sel = new Set(selected);
+  const shown = items.filter((i) => !q.trim() || i.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const toggle = (n: string) => onChange(sel.has(n) ? selected.filter((x) => x !== n) : [...selected, n]);
   return (
-    <form
-      className={`card scope-bar ${active ? "on" : ""}`}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onApply({ campaigns: c.trim(), products: p.trim() });
-      }}
-    >
-      <b>Zakres analizy</b>
-      <span className="hint">{active ? "Zawężone – liczby dotyczą tylko wybranych kampanii / produktu." : "Cały projekt: wszystkie kampanie i wszystkie produkty."}</span>
-      <div className="scope-fields">
-        <label className="field">
-          Kampanie (wydatki)
-          <input value={c} onChange={(e) => setC(e.target.value)} placeholder="np. meta:VSL 797 (puste = wszystkie)" />
-        </label>
-        <label className="field">
-          Produkt (przychód, CAC, LTV)
-          <input value={p} onChange={(e) => setP(e.target.value)} placeholder="np. dykcja dla każdego (puste = produkt główny z ustawień)" />
-        </label>
-        <div className="row" style={{ alignSelf: "end" }}>
-          <button className="btn primary small">Zastosuj</button>
-          {active && (
-            <button type="button" className="btn small" onClick={() => onApply({ campaigns: "", products: "" })}>Cały projekt</button>
-          )}
+    <div className="picker">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <b>{title}</b>
+        <span className="hint">{selected.length ? `wybrano ${selected.length}` : "wszystkie"}</span>
+      </div>
+      <span className="hint">{hint}</span>
+      <input placeholder="Szukaj…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="picker-list">
+        {shown.map((i) => (
+          <label key={i.name} className={sel.has(i.name) ? "on" : ""}>
+            <input type="checkbox" checked={sel.has(i.name)} onChange={() => toggle(i.name)} />
+            <span className="picker-name">{i.name}</span>
+            <span className="hint">{i.meta}</span>
+          </label>
+        ))}
+        {!shown.length && <span className="hint">Brak pozycji.</span>}
+      </div>
+      {q.trim() && shown.length > 1 && (
+        <button type="button" className="btn small" onClick={() => onChange([...new Set([...selected, ...shown.map((i) => i.name)])])}>
+          Zaznacz wszystkie pasujące ({shown.length})
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Zakres Ekonomii zapisywany w ustawieniach projektu: wybrane kampanie (wydatki) i produkty (produkt główny). */
+function ScopeBar({
+  projectId, settings, lists, cur, onSaved,
+}: {
+  projectId: string;
+  settings: ProjectSettings;
+  lists: ScopeLists;
+  cur: string;
+  onSaved: () => void;
+}) {
+  const saved = settings.economicsScope ?? { campaigns: [], products: [] };
+  const [edit, setEdit] = useState(false);
+  const [c, setC] = useState<string[]>(saved.campaigns);
+  const [p, setP] = useState<string[]>(saved.products);
+  const [busy, setBusy] = useState(false);
+  const active = saved.campaigns.length > 0 || saved.products.length > 0;
+  const save = async (scope: { campaigns: string[]; products: string[] }) => {
+    setBusy(true);
+    try {
+      await api(`/api/projects/${projectId}/settings`, "PUT", { ...settings, economicsScope: scope });
+      setEdit(false);
+      onSaved();
+    } finally {
+      setBusy(false);
+    }
+  };
+  // Zapisane pozycje, których nie ma w bieżących danych, też muszą być widoczne (żeby dało się je odznaczyć).
+  const campaignItems = [
+    ...lists.campaigns.map((x) => ({ name: x.name, meta: `${x.platform} · ${Math.round(x.spend).toLocaleString("pl-PL")} ${cur}` })),
+    ...c.filter((n) => !lists.campaigns.some((x) => x.name === n)).map((n) => ({ name: n, meta: "brak wydatków w zakresie" })),
+  ];
+  const productItems = [
+    ...lists.products.map((x) => ({ name: x.name, meta: `${x.count} szt.${x.medianPrice != null ? ` · ${Math.round(x.medianPrice)} ${cur}` : ""}` })),
+    ...p.filter((n) => !lists.products.some((x) => x.name === n)).map((n) => ({ name: n, meta: "brak sprzedaży w zakresie" })),
+  ];
+  return (
+    <div className={`card scope-bar ${active ? "on" : ""}`}>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <div>
+          <b>Zakres analizy</b>{" "}
+          <span className="hint">
+            {active
+              ? `Kampanie: ${saved.campaigns.length ? saved.campaigns.length : "wszystkie"} · Produkty: ${saved.products.length ? saved.products.join(", ") : "produkt główny z ustawień"}`
+              : "Cały projekt – wszystkie kampanie i wszystkie produkty."}
+          </span>
+        </div>
+        <div className="row">
+          {active && !edit && <button className="btn small" disabled={busy} onClick={() => save({ campaigns: [], products: [] })}>Cały projekt</button>}
+          <button className="btn small primary" onClick={() => setEdit((v) => !v)}>{edit ? "Zamknij" : active ? "Zmień zakres" : "Zawęź do lejka"}</button>
         </div>
       </div>
-      <span className="hint">
-        Kampanie: fragmenty nazw po przecinku, prefiks <code>meta:</code> / <code>google:</code> zawęża platformę. Produkt: fragmenty nazw – pasujące pozycje
-        liczone są jako produkt główny, przychód tylko z zamówień, które je zawierają (z dodatkami w tym samym zamówieniu). LTV obejmuje późniejsze zakupy klienta.
-      </span>
-    </form>
+      {edit && (
+        <>
+          <div className="scope-fields">
+            <Picker
+              title="Kampanie reklamowe"
+              hint="Wydatki liczone tylko z zaznaczonych kampanii. Nic nie zaznaczone = wszystkie."
+              items={campaignItems}
+              selected={c}
+              onChange={setC}
+            />
+            <Picker
+              title="Produkty (sprzedawane w lejku)"
+              hint="Zaznacz produkt główny lejka (np. kurs). Dodatki kupione w tym samym zamówieniu (order bump) liczą się same – nie zaznaczaj ich."
+              items={productItems}
+              selected={p}
+              onChange={setP}
+            />
+          </div>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <span className="hint">Zapis dotyczy całego projektu (widzą go wszyscy i asystent AI).</span>
+            <button className="btn primary" disabled={busy} onClick={() => save({ campaigns: c, products: p })}>{busy ? "Zapisuję…" : "Zapisz zakres"}</button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
 export function EconomicsPanel({ projectId }: { projectId: string }) {
   const [d, setD] = useState<Econ | null>(null);
   const [err, setErr] = useState("");
-  const [scope, setScope] = useState<{ campaigns: string; products: string }>(() => {
-    try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem(SCOPE_KEY(projectId)) : null;
-      if (raw) return JSON.parse(raw);
-    } catch {
-      /* brak pamięci przeglądarki */
-    }
-    return { campaigns: "", products: "" };
-  });
+  const [reload, setReload] = useState(0);
   const [a, setA] = useState(0);
   const [b, setB] = useState(1);
   const [ltvWindow, setLtvWindow] = useState(90);
   useEffect(() => {
-    const qs = new URLSearchParams();
-    if (scope.campaigns) qs.set("campaigns", scope.campaigns);
-    if (scope.products) qs.set("products", scope.products);
-    setD(null);
-    api<Econ>(`/api/projects/${projectId}/economics?${qs}`).then(setD).catch((e) => setErr(e instanceof Error ? e.message : String(e)));
-  }, [projectId, scope]);
-  const applyScope = (v: { campaigns: string; products: string }) => {
-    try {
-      localStorage.setItem(SCOPE_KEY(projectId), JSON.stringify(v));
-    } catch {
-      /* brak pamięci przeglądarki */
-    }
-    setScope(v);
-  };
+    api<Econ>(`/api/projects/${projectId}/economics`).then(setD).catch((e) => setErr(e instanceof Error ? e.message : String(e)));
+  }, [projectId, reload]);
 
   const categories = useMemo(() => {
     if (!d || d.empty) return [];
@@ -166,12 +226,7 @@ export function EconomicsPanel({ projectId }: { projectId: string }) {
   }, [d]);
 
   if (err) return <p className="error">{err}</p>;
-  if (!d) return (
-    <div>
-      <ScopeBar value={scope} onApply={applyScope} />
-      <p className="hint">Liczę…</p>
-    </div>
-  );
+  if (!d) return <p className="hint">Liczę…</p>;
   if (d.empty)
     return (
       <div className="card">
@@ -224,9 +279,15 @@ export function EconomicsPanel({ projectId }: { projectId: string }) {
         Ostatnie zamówienie: {d.lastOrder ?? "—"}. Ustawienia (VAT, produkt główny, okresy, koszty) zmienisz w zakładce{" "}
         <Link href={`/projects/${projectId}?tab=ustawienia`}>Ustawienia klienta</Link>.
       </p>
-      <ScopeBar value={scope} onApply={applyScope} />
-      {d.scope?.campaigns && (
-        <p className="hint">Wydatki: {num(d.counts.adRows)} z {num(d.counts.adRowsAll)} wierszy reklam pasuje do „{d.scope.campaigns}”.</p>
+      <ScopeBar
+        projectId={projectId}
+        settings={d.settings}
+        lists={{ campaigns: d.campaignList ?? [], products: d.products ?? [] }}
+        cur={cur}
+        onSaved={() => setReload((x) => x + 1)}
+      />
+      {!!d.scope?.campaigns && (
+        <p className="hint">Wydatki: {num(d.counts.adRows)} z {num(d.counts.adRowsAll)} wierszy reklam należy do wybranych kampanii.</p>
       )}
       <p className="hint">
         Oznaczenia: <span className="tag tag-data">dane</span> <span className="tag tag-assumption">założenie</span>{" "}
@@ -355,7 +416,7 @@ export function EconomicsPanel({ projectId }: { projectId: string }) {
               </tbody>
             </table>
           </div>
-          <p className="hint">Reguły kategorii i produkt główny zmienisz w <Link href={`/projects/${projectId}?tab=ustawienia`}>Ustawieniach klienta</Link>. Pokazano do 60 najczęstszych produktów.</p>
+          <p className="hint">Reguły kategorii i produkt główny zmienisz w <Link href={`/projects/${projectId}?tab=ustawienia`}>Ustawieniach klienta</Link>. Pokazano do 200 najczęstszych produktów.</p>
         </details>
       )}
     </div>

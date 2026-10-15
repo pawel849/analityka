@@ -27,6 +27,8 @@ export interface ProjectSettings {
     variableCostRates: Rule[]; // value = % przychodu netto danej kategorii (np. warsztat → 50)
     monthlyFixed: number; // koszty stałe miesięcznie (np. wynagrodzenia)
   };
+  /** Zakres Ekonomii: dokładne nazwy kampanii (wydatki) i produktów (produkt główny). Puste = cały projekt. */
+  economicsScope: { campaigns: string[]; products: string[] };
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = {
@@ -53,6 +55,7 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   angleRules: [],
   periods: [],
   costs: { incomeTaxRate: 19, variableCostRates: [], monthlyFixed: 0 },
+  economicsScope: { campaigns: [], products: [] },
 };
 
 export function mergeSettings(raw: unknown): ProjectSettings {
@@ -65,8 +68,15 @@ export function mergeSettings(raw: unknown): ProjectSettings {
     campaignTypeRules: Array.isArray(r.campaignTypeRules) ? r.campaignTypeRules : DEFAULT_SETTINGS.campaignTypeRules,
     angleRules: Array.isArray(r.angleRules) ? r.angleRules : [],
     periods: Array.isArray(r.periods) ? r.periods : [],
+    economicsScope: {
+      campaigns: strings(r.economicsScope?.campaigns),
+      products: strings(r.economicsScope?.products),
+    },
   };
 }
+
+const strings = (v: unknown): string[] =>
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean))].slice(0, 500) : [];
 
 const cache = new Map<string, RegExp | null>();
 

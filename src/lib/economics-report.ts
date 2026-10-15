@@ -19,13 +19,29 @@ export function productMatcher(v: string | null | undefined): ((name: string) =>
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Ekonomia jednostkowa projektu: miesiące + okresy z ustawień (lub cały zakres danych). */
+/**
+ * Zakres: parametry wywołania (tekst, np. „meta:VSL 797”) mają pierwszeństwo; bez nich – zakres zapisany w ustawieniach projektu
+ * (dokładne nazwy kampanii i produktów wybrane z listy).
+ */
 export async function economicsReport(id: string, fromIn?: string | null, toIn?: string | null, scope: EconScope = {}) {
   const [settings0, orders, allAds] = await Promise.all([loadSettings(id), loadOrders(id), loadAds(id)]);
+  const saved = settings0.economicsScope;
   const campaigns = (scope.campaigns ?? "").trim();
   const tokens = campaigns ? parseAdsMatch(campaigns) : null;
-  const ads = tokens ? allAds.filter((a) => adMatches(tokens, a.source, `${a.campaign} | ${a.adset} | ${a.ad}`)) : allAds;
-  const match = productMatcher(scope.products);
-  const settings = match ? { ...settings0, mainCategory: `produkt: ${(scope.products ?? "").trim()}` } : settings0;
+  const savedCampaigns = new Set(saved.campaigns.map((c) => fold(c)));
+  const ads = tokens
+    ? allAds.filter((a) => adMatches(tokens, a.source, `${a.campaign} | ${a.adset} | ${a.ad}`))
+    : savedCampaigns.size
+      ? allAds.filter((a) => savedCampaigns.has(fold(a.campaign.trim())))
+      : allAds;
+  const savedProducts = new Set(saved.products.map((x) => fold(x)));
+  const match = (scope.products ?? "").trim()
+    ? productMatcher(scope.products)
+    : savedProducts.size
+      ? (name: string) => savedProducts.has(fold(name.trim()))
+      : undefined;
+  const scopeLabel = (scope.products ?? "").trim() || (saved.products.length === 1 ? saved.products[0] : saved.products.length ? `${saved.products.length} produkty` : "");
+  const settings = match ? { ...settings0, mainCategory: `wybrane: ${scopeLabel}` } : settings0;
   const p = prepare(orders, settings, match);
   const dataFrom = [orders[0] ? new Date(orders[0].ts).toISOString().slice(0, 10) : null, ads[0]?.start ?? null].filter(Boolean).sort()[0] ?? null;
   const dataTo = [p.lastDataTs ? new Date(p.lastDataTs).toISOString().slice(0, 10) : null, ...ads.map((a) => a.end)].filter(Boolean).sort().pop() ?? null;
@@ -42,7 +58,12 @@ export async function economicsReport(id: string, fromIn?: string | null, toIn?:
     dataTo,
     lastOrder: p.lastDataTs ? new Date(p.lastDataTs).toISOString().slice(0, 10) : null,
     counts: { orders: orders.length, adRows: ads.length, adRowsAll: allAds.length, customersIdentified: new Set(orders.map((o) => o.customer).filter(Boolean)).size },
-    scope: { campaigns: campaigns || null, products: match ? (scope.products ?? "").trim() : null },
+    scope: {
+      source: campaigns || (scope.products ?? "").trim() ? "parametry" : saved.campaigns.length || saved.products.length ? "zapisany w ustawieniach" : "cały projekt",
+      campaigns: campaigns || (saved.campaigns.length ? saved.campaigns : null),
+      products: (scope.products ?? "").trim() || (saved.products.length ? saved.products : null),
+    },
+    campaignList: campaignSummary(allAds, from, to),
     settings,
     monthly: monthly(p, ads, settings, from, to, !!match),
     periods: periods.map((per) => periodStats(p, ads, settings, per, !!match)),
@@ -74,7 +95,7 @@ function productSummary(orders: Awaited<ReturnType<typeof loadOrders>>, s: Await
   };
   return [...m.values()]
     .sort((a, b) => b.count - a.count)
-    .slice(0, 60)
+    .slice(0, 200)
     .map((x) => ({
       name: x.name,
       count: x.count,
@@ -83,4 +104,17 @@ function productSummary(orders: Awaited<ReturnType<typeof loadOrders>>, s: Await
       category: applyRules(x.name, s.productRules, "inne"),
       inScope: match ? match(x.name) : null,
     }));
+}
+
+/** Kampanie z wydatkami w zakresie dat (do wyboru zakresu). */
+function campaignSummary(ads: Awaited<ReturnType<typeof loadAds>>, from: string, to: string) {
+  const m = new Map<string, { name: string; platform: string; spend: number }>();
+  for (const a of ads) {
+    if (a.end < from || a.start > to) continue;
+    const name = a.campaign.trim() || "(bez nazwy)";
+    const x = m.get(name) ?? { name, platform: a.source === "meta_api" || a.source === "meta" ? "Meta" : a.source === "google_ads" ? "Google" : "inne", spend: 0 };
+    x.spend += a.spend;
+    m.set(name, x);
+  }
+  return [...m.values()].sort((a, b) => b.spend - a.spend).slice(0, 300).map((x) => ({ ...x, spend: Math.round(x.spend * 100) / 100 }));
 }

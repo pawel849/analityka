@@ -459,7 +459,7 @@ export function buildMcpServer(origin: string): McpServer {
     "update_settings",
     {
       title: "Zmień ustawienia klienta",
-      description: "Scalanie z obecnymi ustawieniami (podaj tylko zmieniane pola, np. {\"vat\": 8} albo {\"periods\": [{\"name\":\"Q1\",\"from\":\"2026-01-01\",\"to\":\"2026-03-31\"}]}). Tablice zastępują całe listy.",
+      description: "Scalanie z obecnymi ustawieniami (podaj tylko zmieniane pola, np. {\"vat\": 8} albo {\"periods\": [{\"name\":\"Q1\",\"from\":\"2026-01-01\",\"to\":\"2026-03-31\"}]}). Tablice zastępują całe listy. Zakres Ekonomii: {\"economicsScope\": {\"campaigns\": [dokładne nazwy z campaignList], \"products\": [dokładne nazwy produktu głównego z products]}} – dodatków (order bump) nie dodawaj do products, liczą się same; puste listy = cały projekt.",
       inputSchema: { project_id: z.string(), settings: z.record(z.string(), z.unknown()) },
       annotations: WR,
     },
@@ -508,7 +508,7 @@ export function buildMcpServer(origin: string): McpServer {
     "get_economics",
     {
       title: "Ekonomia projektu",
-      description: "Przychód vs wydatki miesięcznie i okresy: CAC, LTV 30/90/365, LTV/CAC, powroty, order bump, zysk – z zamówień i reklam. Zwraca też listę produktów (nazwa, liczba, mediana ceny, kategoria wg reguł). Opcjonalnie zawężenie do kampanii i produktu.",
+      description: "Przychód vs wydatki miesięcznie i okresy: CAC, LTV 30/90/365, LTV/CAC, powroty, order bump, zysk – z zamówień i reklam. Zwraca też listy produktów i kampanii (dokładne nazwy do economicsScope w update_settings). Domyślnie używa zakresu zapisanego w ustawieniach; parametry campaigns/products nadpisują go jednorazowo.",
       inputSchema: {
         project_id: z.string(),
         from: z.string().optional(),
