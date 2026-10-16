@@ -1077,3 +1077,68 @@ button.sf-card:hover { border-color: var(--accent); }
 .pl2-add .seg { margin: 0; }
 .pl2-f { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
 .pl2-add .btn { display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+
+/* Przegląd od makro do mikro */
+.rp { display: grid; gap: 14px; padding: 18px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); margin-top: 6px; }
+.rp-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rp-title { display: inline-flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; margin-right: auto; }
+.rp-title > svg { color: var(--accent); }
+.rp-last { font-size: 13px; color: var(--text-2); }
+.rp-head .btn { display: inline-flex; align-items: center; gap: 6px; }
+.rp-path { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; }
+@media (max-width: 900px) { .rp-path { grid-template-columns: 1fr 1fr; gap: 10px; } .rp-arrow { display: none; } }
+.rp-cell { display: flex; align-items: center; }
+.rp-tile {
+  position: relative; flex: 1; display: grid; justify-items: start; gap: 6px; padding: 16px; min-height: 150px; border-radius: 16px;
+  background: var(--surface-2); border: 1.5px solid transparent; color: var(--text); transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+a.rp-tile:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(19, 36, 29, 0.12); border-color: var(--accent); text-decoration: none; }
+.rp-tile.cur { border-color: var(--accent); background: #f2f9f5; box-shadow: 0 0 0 4px #e3f2ea; }
+.rp-tile.done { background: #e3f2ea; }
+.rp-tile.locked { opacity: .5; cursor: not-allowed; }
+.rp-n { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--surface); font-size: 12px; font-weight: 800; color: var(--accent); }
+.rp-ic { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: var(--accent); color: #fff; margin-bottom: 8px; }
+.rp-lvl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--copper-ink); }
+.rp-tile b { font-size: 16px; }
+.rp-arrow { flex: none; margin: 0 4px; color: #9fd3b8; }
+.cfg-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 4px; }
+.cfg-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-2); margin-right: 4px; }
+.cfg-tile { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-weight: 600; font-size: 14px; transition: transform .15s, border-color .15s; }
+.cfg-tile svg { color: var(--accent); }
+.cfg-tile:hover { transform: translateY(-2px); border-color: var(--accent); text-decoration: none; }
+.cfg-tile .pulpit-dot { position: static; width: 8px; height: 8px; }
+
+.rv-bar { position: sticky; bottom: 0; z-index: 40; margin: 24px -8px 0; border-radius: 16px 16px 0 0; background: var(--surface); border: 1.5px solid var(--accent); border-bottom: 0; box-shadow: 0 -10px 30px rgba(19, 36, 29, 0.12); }
+.rv-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.rv-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13px; color: #fff; background: var(--accent); padding: 4px 10px; border-radius: 999px; flex: none; }
+.rv-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; flex: 1; overflow-x: auto; }
+.rv-steps li > a, .rv-steps .rv-step-l { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.rv-steps li > a:hover { background: var(--surface-2); text-decoration: none; }
+.rv-steps span > span, .rv-steps a > span { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--surface-2); font-size: 10.5px; }
+.rv-steps li.on > a { background: var(--accent); color: #fff; }
+.rv-steps li.on > a > span { background: #fff; color: var(--accent); }
+.rv-steps li.done a > span { background: #c8e6d6; color: var(--accent); }
+.rv-steps li.lock { opacity: .5; }
+.rv-body { display: grid; gap: 12px; padding: 4px 16px 14px; max-height: 55vh; overflow-y: auto; }
+.rv-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
+@media (max-width: 860px) { .rv-grid { grid-template-columns: 1fr; } }
+.rv-note, .rv-acts { display: grid; gap: 6px; align-content: start; }
+.rv-q { font-weight: 700; font-size: 15px; }
+.rv-q.small { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.rv-q.small svg { color: var(--copper); }
+.rv-note textarea { width: 100%; font: inherit; font-size: 14.5px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); resize: vertical; }
+.rv-ok { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.rv-acts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.rv-acts li { display: flex; align-items: center; gap: 6px; font-size: 13.5px; padding: 5px 8px; border-radius: 8px; background: #e3f2ea; }
+.rv-acts li svg { color: var(--accent); }
+.rv-acts li em { margin-left: auto; font-style: normal; font-size: 12px; color: var(--text-2); }
+.rv-act-form { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; }
+.rv-act-form .btn { display: grid; place-items: center; padding: 0 10px; }
+.rv-nav { display: flex; justify-content: space-between; align-items: center; }
+.rv-nav .btn { display: inline-flex; align-items: center; gap: 6px; }
+.rv-locked { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-weight: 600; }
+.rv-locked .btn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.rv-prev { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--copper-soft); }
+.rv-prev ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 13.5px; }
+.rv-lvl { display: inline-block; min-width: 70px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--copper-ink); }
+.rv-prev-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; font-weight: 600; }

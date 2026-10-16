@@ -2,14 +2,15 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Planner } from "@/components/dashboard/Planner";
+import { ReviewPath } from "@/components/review/ReviewPath";
 import { TOOL_ICONS } from "@/components/shell/tool-icons";
 import { LEGACY_TABS, TOOLS, projectHref } from "@/lib/nav";
 import { loadProject } from "@/lib/project-context";
 
 /** Pulpit projektu: same przyciski do narzędzi (+ przekierowanie starych adresów ?tab=…). */
-export default async function ProjectHome({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
+export default async function ProjectHome({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; przeglad?: string }> }) {
   const { id } = await params;
-  const { tab } = await searchParams;
+  const { tab, przeglad } = await searchParams;
   if (tab && LEGACY_TABS[tab]) redirect(projectHref(id, LEGACY_TABS[tab]) + (tab === "integracje" ? "?s=api" : ""));
   const project = await loadProject(id);
   if (!project) notFound();
@@ -25,13 +26,14 @@ export default async function ProjectHome({ params, searchParams }: { params: Pr
           </div>
         </div>
       </header>
-      <div className="pulpit-grid">
-        {TOOLS.filter((t) => t.key !== "pulpit").map((t) => {
+      <ReviewPath projectId={id} justFinished={przeglad === "zakonczony"} />
+      <div className="cfg-row">
+        <span className="cfg-label">Konfiguracja</span>
+        {TOOLS.filter((t) => t.section === "dane").map((t) => {
           const Icon = TOOL_ICONS[t.key];
           return (
-            <Link key={t.key} href={projectHref(id, t.key)} className={`pulpit-tile ${t.section === "dane" ? "sec" : ""}`} data-tour={`nav-${t.key}`}>
-              <span className="pulpit-ic"><Icon size={28} /></span>
-              <b>{t.label}</b>
+            <Link key={t.key} href={projectHref(id, t.key)} className="cfg-tile" data-tour={`nav-${t.key}`}>
+              <Icon size={18} /> {t.label}
               {t.key === "przewodnik" && guideActive && <span className="pulpit-dot" title="Przewodnik w toku" />}
             </Link>
           );

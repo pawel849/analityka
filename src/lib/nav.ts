@@ -1,6 +1,6 @@
 // Narzędzia aplikacji – te same dla każdego klienta. Dane, które pokazują, zależą od wybranego projektu.
 
-export type ToolKey = "pulpit" | "lejki" | "ekonomia" | "testy" | "os-czasu" | "dane" | "ustawienia" | "przewodnik";
+export type ToolKey = "pulpit" | "lejki" | "ekonomia" | "testy" | "plan" | "os-czasu" | "dane" | "ustawienia" | "przewodnik";
 
 export interface ToolDef {
   key: ToolKey;
@@ -52,6 +52,13 @@ export const TOOLS: ToolDef[] = [
       "Skopiuj wygenerowane nazwy reklam i linki z UTM do Menedżera reklam.",
       "Śledź tabelę wyników – po wydaniu budżetu zatwierdź podpowiedź (zwycięzca idzie do biblioteki).",
     ],
+  },
+  {
+    key: "plan",
+    label: "Kalendarz",
+    section: "narzedzia",
+    what: "Zadania, terminy i okresy do deadline'u.",
+    how: ["Kliknij dzień i dodaj zadanie."],
   },
   {
     key: "os-czasu",

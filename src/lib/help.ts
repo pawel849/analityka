@@ -67,6 +67,17 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
+    id: "przeglad",
+    title: "Przegląd od makro do mikro (SOP)",
+    tags: "przegląd sop proces makro mikro ekonomia kalendarz lejek reklamy wnioski notatki działania",
+    body: [
+      "Na pulpicie: „Rozpocznij przegląd”. Idziesz zawsze w tej samej kolejności: Ekonomia (makro) → Kalendarz → Mapy lejków → Testy reklam → Oś czasu (wnioski).",
+      "Na dole każdego poziomu jest pasek z pytaniem. Zapisz, co zauważyłeś (albo zaznacz „bez uwag”) – bez tego nie przejdziesz dalej. Kolejne poziomy są zablokowane, dopóki nie zamkniesz poprzednich.",
+      "„Działanie do kalendarza” zamienia wniosek w zadanie z terminem – pojawia się w kalendarzu i w telefonie.",
+      "„Zakończ przegląd” zapisuje wnioski i działania na osi czasu. Następny przegląd zaczyna się od pokazania poprzednich wniosków i ile działań zrobiono – widać, czy zmiany na dole poprawiły wynik na górze.",
+    ],
+  },
+  {
     id: "uklad",
     title: "Jak jest zbudowana aplikacja: narzędzia vs dane klienta",
     tags: "układ menu narzędzia dane klienta projekt przełącznik pulpit nawigacja gdzie co jest",
