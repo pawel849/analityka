@@ -3,19 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChartColumnBig, ChevronDown, Compass, Database, FlaskConical, History, LayoutDashboard, Settings2, Workflow, type LucideIcon } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import { TOOL_ICONS } from "./tool-icons";
 import { TOOLS, projectHref, type ToolKey } from "@/lib/nav";
 
-const ICONS: Record<ToolKey, LucideIcon> = {
-  pulpit: LayoutDashboard,
-  lejki: Workflow,
-  ekonomia: ChartColumnBig,
-  testy: FlaskConical,
-  "os-czasu": History,
-  dane: Database,
-  ustawienia: Settings2,
-  przewodnik: Compass,
-};
+const ICONS = TOOL_ICONS;
 
 const SECTIONS: [string, string][] = [
   ["start", ""],
