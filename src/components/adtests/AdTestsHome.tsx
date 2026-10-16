@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ArrowLeft, ArrowRight, BatteryLow, CalendarClock, CircleCheck, FlaskConical, Hourglass, Layers, Play, Plus, Scale, ShoppingBag, SlidersHorizontal,
-  Tag, Target, TrendingUp, TriangleAlert, Trophy, Wallet, X,
+  ArrowLeft, ArrowRight, BatteryLow, BookOpen, CalendarClock, CircleCheck, FlaskConical, GraduationCap, Hourglass, Layers, MessagesSquare, Package, Play, Plus, Scale,
+  ShoppingBag, SlidersHorizontal, Tag, Target, TrendingUp, TriangleAlert, Trophy, Users, UsersRound, Wallet, X,
 } from "lucide-react";
 import { api } from "../forms";
 import { Tip } from "../Tip";
@@ -68,7 +68,22 @@ function useProducts(projectId: string) {
   return products;
 }
 
-/** Wybór produktu: najpierw najczęściej sprzedawane płatne, wyszukiwarka, darmowe ukryte. */
+const productIcon = (n: string) => {
+  const f = n.toLowerCase();
+  if (/e-?book|poradnik|księg|ksiazk|pdf/.test(f)) return BookOpen;
+  if (/warsztat|dni otwarte|stacjonar/.test(f)) return Users;
+  if (/konsultac|mentoring|1:1/.test(f)) return MessagesSquare;
+  if (/społeczno|spolecznosc|abonament|członk/.test(f)) return UsersRound;
+  if (/kurs|program|szkoleni|akademi|trening/.test(f)) return GraduationCap;
+  return Package;
+};
+/** Nazwa produktu: część do pierwszej kropki jako tytuł, reszta jako dopisek. */
+export const splitName = (n: string) => {
+  const i = n.indexOf(". ");
+  return i > 8 && i < 70 ? [n.slice(0, i), n.slice(i + 2)] : [n, ""];
+};
+
+/** Wybór produktu jako kafelki z ikoną: płatne najczęściej kupowane na górze, darmowe ukryte. */
 function ProductPick({ products, selected, onChange }: { products: Product[] | null; selected: string[]; onChange: (v: string[]) => void }) {
   const [q, setQ] = useState("");
   const [more, setMore] = useState(false);
@@ -79,23 +94,28 @@ function ProductPick({ products, selected, onChange }: { products: Product[] | n
   const term = q.trim().toLowerCase();
   const list = [...products, ...selected.filter((n) => !products.some((p) => p.name === n)).map((name) => ({ name, count: 0, paid: 1, gross: 0 }))]
     .filter((p) => (free || p.paid > 0 || sel.has(p.name)) && (!term || p.name.toLowerCase().includes(term)));
-  const shown = term || more ? list : list.slice(0, 8);
+  const shown = term || more ? list : list.slice(0, 9);
   const toggle = (n: string) => onChange(sel.has(n) ? selected.filter((x) => x !== n) : [...selected, n]);
   return (
     <div className="pp">
       <input placeholder="Szukaj produktu…" value={q} onChange={(e) => setQ(e.target.value)} />
-      <div className="pp-list">
-        {shown.map((p) => (
-          <button type="button" key={p.name} className={`pp-item ${sel.has(p.name) ? "on" : ""}`} onClick={() => toggle(p.name)}>
-            <span className="pp-check">{sel.has(p.name) ? <CircleCheck size={18} /> : <span className="pp-dot" />}</span>
-            <span className="pp-name">{p.name}</span>
-            <span className="pp-meta"><ShoppingBag size={13} /> {p.paid || p.count}</span>
-          </button>
-        ))}
+      <div className="pp-grid">
+        {shown.map((p) => {
+          const Icon = productIcon(p.name);
+          const [title, sub] = splitName(p.name);
+          return (
+            <button type="button" key={p.name} className={`pp-tile ${sel.has(p.name) ? "on" : ""}`} onClick={() => toggle(p.name)} title={p.name}>
+              <span className="pp-ic"><Icon size={20} /></span>
+              {sel.has(p.name) && <CircleCheck size={18} className="pp-ok" />}
+              <b>{title}</b>
+              {sub && <span>{sub}</span>}
+            </button>
+          );
+        })}
         {!shown.length && <p>Nic nie pasuje.</p>}
       </div>
       <div className="row">
-        {!term && list.length > 8 && <button type="button" className="btn small" onClick={() => setMore((v) => !v)}>{more ? "Pokaż mniej" : `Pokaż wszystkie (${list.length})`}</button>}
+        {!term && list.length > 9 && <button type="button" className="btn small" onClick={() => setMore((v) => !v)}>{more ? "Pokaż mniej" : `Pokaż wszystkie (${list.length})`}</button>}
         <label className="pp-free"><input type="checkbox" checked={free} onChange={(e) => setFree(e.target.checked)} /> pokaż też darmowe</label>
       </div>
     </div>
@@ -110,12 +130,16 @@ function NewTestWizard({ projectId, onClose }: { projectId: string; onClose: () 
   const [step, setStep] = useState(0);
   const [angle, setAngle] = useState("");
   const [prod, setProd] = useState<string[] | null>(null);
-  const [cac, setCac] = useState<string | null>(null);
+  const [maxIn, setMaxIn] = useState<string | null>(null);
+  const [winIn, setWinIn] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const chosen = prod ?? s.productMatch;
-  const cacVal = cac ?? String(s.cacMax);
-  const next = { ...s, productMatch: chosen, cacMax: Number(cacVal) || s.cacMax };
+  const maxVal = maxIn ?? String(s.loseCac);
+  const winVal = winIn ?? String(Math.min(s.cacMax, Number(maxVal) || s.cacMax));
+  const lose = Number(maxVal) || 0;
+  const win = Math.min(Number(winVal) || 0, lose);
+  const next = { ...s, productMatch: chosen, loseCac: lose || s.loseCac, cacMax: win || s.cacMax };
   const finish = async () => {
     setBusy(true);
     setErr("");
@@ -157,13 +181,15 @@ function NewTestWizard({ projectId, onClose }: { projectId: string; onClose: () 
             </div>
           </div>
         ) : step === 2 ? (
-          <form className="wiz-body" onSubmit={(e) => { e.preventDefault(); if (Number(cacVal) > 0) setStep(3); }}>
-            <label className="wiz-q">Ile maksymalnie zapłacisz za jednego kursanta? <Tip text="Maksymalny koszt pozyskania (CAC). Wariant droższy niż ta kwota nie może wygrać. Z niej liczy się też budżet na wariant (2×) – po jego wydaniu aplikacja podpowie decyzję." /></label>
-            <div className="money-input"><input autoFocus inputMode="decimal" value={cacVal} onChange={(e) => setCac(e.target.value.replace(",", "."))} /><span>zł</span></div>
-            <CacZones s={{ ...s, cacMax: Number(cacVal) || 0 }} />
+          <form className="wiz-body" onSubmit={(e) => { e.preventDefault(); if (lose > 0 && win > 0) setStep(3); }}>
+            <label className="wiz-q">Ile maksymalnie zapłacisz za kursanta? <Tip text="Powyżej tej kwoty wariant przegrywa i wyłączasz go." /></label>
+            <div className="money-input"><input autoFocus inputMode="decimal" value={maxVal} onChange={(e) => setMaxIn(e.target.value.replace(",", "."))} /><span>zł</span></div>
+            <label className="wiz-q small">Przy jakim koszcie wariant wygrywa? <Tip text="Wariant z kosztem kursanta poniżej tej kwoty może zostać zwycięzcą. Między tą kwotą a maksimum – obserwujesz dalej." /></label>
+            <div className="money-input sm"><span>poniżej</span><input inputMode="decimal" value={winVal} onChange={(e) => setWinIn(e.target.value.replace(",", "."))} /><span>zł</span></div>
+            <CacZones s={{ ...s, cacMax: win, loseCac: lose }} />
             <div className="wiz-nav">
               <button type="button" className="btn" onClick={() => setStep(1)}><ArrowLeft size={16} /> Wstecz</button>
-              <button className="btn primary" disabled={!(Number(cacVal) > 0)}>Dalej <ArrowRight size={16} /></button>
+              <button className="btn primary" disabled={!(lose > 0 && win > 0)}>Dalej <ArrowRight size={16} /></button>
             </div>
           </form>
         ) : (
@@ -171,11 +197,10 @@ function NewTestWizard({ projectId, onClose }: { projectId: string; onClose: () 
             <label className="wiz-q">Sprawdź i załóż test</label>
             <div className="wiz-sum">
               <div><Target size={18} /><span>Obietnica</span><b>{angle}</b></div>
-              <div><ShoppingBag size={18} /><span>Produkt</span><b>{chosen.length === 1 ? chosen[0] : `${chosen.length} produkty`}</b></div>
-              <div><Wallet size={18} /><span>Maks. koszt kursanta</span><b>{zl(next.cacMax)}</b></div>
-              <div><Hourglass size={18} /><span>Budżet na wariant</span><b>{zl(budgetPerVariant(next))}</b></div>
+              <div><ShoppingBag size={18} /><span>Produkt</span><b>{chosen.length === 1 ? splitName(chosen[0])[0] : `${chosen.length} produkty`}</b></div>
+              <div><Trophy size={18} /><span>Wygrywa poniżej</span><b>{zl(next.cacMax)}</b></div>
+              <div><X size={18} /><span>Przegrywa powyżej</span><b>{zl(next.loseCac)}</b></div>
             </div>
-            <p className="wiz-next"><Layers size={16} /> Następny krok: pierwsza runda – wybierzesz element do testu i warianty, dostaniesz gotowe nazwy reklam.</p>
             {err && <p className="error">{err}</p>}
             <div className="wiz-nav">
               <button type="button" className="btn" onClick={() => setStep(2)} disabled={busy}><ArrowLeft size={16} /> Wstecz</button>
@@ -188,22 +213,23 @@ function NewTestWizard({ projectId, onClose }: { projectId: string; onClose: () 
   );
 }
 
-/** Strefy CAC: do maks. = może wygrać, powyżej progu przegranej = przegrywa od razu. */
+/** Strefy kosztu kursanta: wygrana poniżej celu, obserwacja do maksimum, przegrana powyżej maksimum. */
 function CacZones({ s }: { s: TestSettings }) {
-  const max = Math.max(s.loseCac, s.cacMax) * 1.25 || 1;
-  const w1 = (Math.min(s.cacMax, max) / max) * 100;
-  const w2 = Math.max(0, ((s.loseCac - s.cacMax) / max) * 100);
+  const lose = Math.max(s.loseCac, s.cacMax);
+  const max = lose * 1.3 || 1;
+  const w1 = (Math.min(s.cacMax, lose) / max) * 100;
+  const w2 = Math.max(0, ((lose - s.cacMax) / max) * 100);
   return (
     <div className="cac-zones" aria-label="Strefy kosztu kursanta">
       <div className="cz-bar">
-        <span className="cz-win" style={{ width: `${w1}%` }}><Trophy size={14} /></span>
-        <span className="cz-mid" style={{ width: `${w2}%` }} />
-        <span className="cz-lose"><X size={14} /></span>
+        <span className="cz-win" style={{ width: `${w1}%` }}><Trophy size={14} /> wygrana</span>
+        <span className="cz-mid" style={{ width: `${w2}%` }}>{w2 > 14 ? "obserwuj" : ""}</span>
+        <span className="cz-lose"><X size={14} /> przegrana</span>
       </div>
       <div className="cz-labels">
         <span style={{ left: 0 }}>0 zł</span>
-        <span style={{ left: `${w1}%` }}>{zl(s.cacMax)}</span>
-        {w2 > 6 && <span style={{ left: `${w1 + w2}%` }}>{zl(s.loseCac)}</span>}
+        {w2 > 8 && <span style={{ left: `${w1}%` }}>{zl(s.cacMax)}</span>}
+        <span style={{ left: `${w1 + w2}%` }}>{zl(lose)}</span>
       </div>
     </div>
   );
@@ -307,9 +333,9 @@ type Kind = "zl" | "pct" | "int" | "num" | "text";
 const UNIT: Record<Kind, string> = { zl: "zł", pct: "%", int: "", num: "×", text: "" };
 const GROUPS: { title: string; icon: typeof Wallet; fields: { key: keyof TestSettings; label: string; help: string; kind: Kind; unit?: string }[] }[] = [
   { title: "Pieniądze", icon: Wallet, fields: [
-    { key: "cacMax", label: "Maks. koszt kursanta", help: "Ile maksymalnie możesz zapłacić za jednego kupującego. Zwycięzca musi być poniżej.", kind: "zl" },
-    { key: "loseCac", label: "Przegrana powyżej", help: "Wariant z kosztem kursanta powyżej tej kwoty przegrywa od razu.", kind: "zl" },
-    { key: "budgetPerVariant", label: "Budżet na wariant", help: "Po wydaniu tej kwoty na wariant aplikacja podpowiada decyzję. Puste = 2 × maks. koszt kursanta.", kind: "zl" },
+    { key: "loseCac", label: "Maksymalnie zapłacę", help: "Ile najwięcej zapłacisz za kursanta. Wariant droższy przegrywa od razu.", kind: "zl" },
+    { key: "cacMax", label: "Wygrywa poniżej", help: "Wariant z kosztem kursanta poniżej tej kwoty może zostać zwycięzcą.", kind: "zl" },
+    { key: "budgetPerVariant", label: "Budżet na wariant", help: "Po wydaniu tej kwoty na wariant aplikacja podpowiada decyzję. Puste = 2 × kwota wygranej.", kind: "zl" },
   ] },
   { title: "Werdykt", icon: Scale, fields: [
     { key: "minWinDiff", label: "Różnica do zwycięstwa", help: "Jeśli koszty kursanta różnią się mniej niż o tyle – remis (wygrywa wariant z wyższym CTR).", kind: "pct" },
@@ -362,7 +388,7 @@ function TestSettingsForm({ projectId }: { projectId: string }) {
       </section>
 
       <section className="ts-card">
-        <div className="ts-head"><span className="ts-icon"><Target size={18} /></span><b>Strefy kosztu kursanta</b><Tip text="Zielone – wariant może wygrać. Środek – nie wygra, ale jeszcze nie przegrywa. Za progiem przegranej – wyłączasz." /></div>
+        <div className="ts-head"><span className="ts-icon"><Target size={18} /></span><b>Strefy kosztu kursanta</b><Tip text="Zielone – wariant może wygrać. Krem – obserwujesz dalej. Miedź – powyżej maksimum, wyłączasz." /></div>
         <CacZones s={s} />
       </section>
 

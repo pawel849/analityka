@@ -13,7 +13,10 @@ export const GREEN = {
 } as const;
 
 /** Serie wykresów i kategorie – kolejne odcienie zieleni, kontrastowe względem siebie. */
-export const GREEN_SERIES = [GREEN[700], GREEN[400], GREEN[900], GREEN[300], GREEN[600], GREEN[200], GREEN[800], GREEN[500]];
+export const GREEN_SERIES = [GREEN[700], "#c2683c", GREEN[400], GREEN[900], "#e3a582", GREEN[300], GREEN[600], "#9a4a24"];
+
+export const COPPER = "#c2683c";
+export const CREAM = "#f5f1e8";
 
 /** Kolory rodzajów elementów mapy. */
-export const CATEGORY_GREEN = { source: GREEN[900], page: GREEN[700], action: GREEN[500], offline: GREEN[400] } as const;
+export const CATEGORY_GREEN = { source: GREEN[900], page: GREEN[700], action: GREEN[500], offline: COPPER } as const;

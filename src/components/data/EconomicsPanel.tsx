@@ -26,7 +26,7 @@ interface Econ {
 // Paleta kategorii (zwalidowana, stała kolejność – kolor idzie za kategorią, nie za pozycją).
 export const SERIES = GREEN_SERIES;
 const REVENUE = GREEN[700];
-const SPEND = GREEN[300];
+const SPEND = "#c2683c";
 
 const money = (v: number | null | undefined, cur: string) =>
   v == null || !Number.isFinite(v) ? "—" : `${v.toLocaleString("pl-PL", { maximumFractionDigits: 0 })} ${cur}`;
@@ -382,7 +382,7 @@ export function EconomicsPanel({ projectId, from: fromQ, to: toQ, cmp: cmpQ }: {
                 <div><span>Przychód</span><b style={{ color: REVENUE }}>{money(current.gross, cur)}</b></div>
                 <div><span>Wydatki na reklamy</span><b>− {money(current.spend, cur)}</b></div>
                 <div className="em-bar" aria-hidden>
-                  <i style={{ width: `${Math.min(100, current.gross ? (current.spend / current.gross) * 100 : 100)}%`, background: GREEN[400] }} />
+                  <i style={{ width: `${Math.min(100, current.gross ? (current.spend / current.gross) * 100 : 100)}%`, background: SPEND }} />
                 </div>
                 <div className="em-total"><span>Zostaje po reklamach</span><b>{money(current.gross - current.spend, cur)}</b></div>
                 <div className="em-note">{current.gross ? `Reklamy zjadają ${pct(current.spend / current.gross)} przychodu` : ""}</div>
