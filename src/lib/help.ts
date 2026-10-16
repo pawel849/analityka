@@ -68,13 +68,14 @@ export const HELP_ARTICLES: HelpArticle[] = [
   },
   {
     id: "przeglad",
-    title: "Przegląd od makro do mikro (SOP)",
-    tags: "przegląd sop proces makro mikro ekonomia kalendarz lejek reklamy wnioski notatki działania",
+    title: "Analiza SOP: poprawa reklam pod cel zysku",
+    tags: "analiza sop pętla cel profit luka lejek test kalendarz checklista rozstrzygnięcie wnioski",
     body: [
-      "Na pulpicie: „Rozpocznij przegląd”. Idziesz zawsze w tej samej kolejności: Ekonomia (makro) → Kalendarz → Mapy lejków → Testy reklam → Oś czasu (wnioski).",
-      "Na dole każdego poziomu jest pasek z pytaniem. Zapisz, co zauważyłeś (albo zaznacz „bez uwag”) – bez tego nie przejdziesz dalej. Kolejne poziomy są zablokowane, dopóki nie zamkniesz poprzednich.",
-      "„Działanie do kalendarza” zamienia wniosek w zadanie z terminem – pojawia się w kalendarzu i w telefonie.",
-      "„Zakończ przegląd” zapisuje wnioski i działania na osi czasu. Następny przegląd zaczyna się od pokazania poprzednich wniosków i ile działań zrobiono – widać, czy zmiany na dole poprawiły wynik na górze.",
+      "Na pulpicie: „Rozpocznij analizę”. Zawsze te same kroki, zawsze od 1 do 9: Cel → Rzeczywistość → Luka → Lejek → Test → Kalendarz testu → Checklista → Rozstrzygnięcie → Wnioski. Nie da się wejść w środek – następny krok otwiera się po zapisie poprzedniego.",
+      "Profit = przychód netto − koszt reklam − koszty zmienne i stałe − podatek (koszty i podatek z Ustawień klienta). Wszystkie liczby z prawdziwych danych; brak danych = widoczna luka. Prognoza w pasku celu to tylko prosta ekstrapolacja tempa (szara).",
+      "Krok 2 wymaga potwierdzenia, że dane są wiarygodne – inaczej SOP stoi. Krok 7: test startuje dopiero, gdy cała checklista (z punktem „Sprawdzić, czy pomiar etapu działa”) jest odhaczona.",
+      "Krok 8 rozstrzyga testy, których termin minął: wygrywa wyższy profit (przychód − koszt wariantu). Krok 9: wniosek „Na etapie X, zmiana Y dała Z zł” do rejestru + działania do kalendarza.",
+      "Następna pętla zaczyna się od rozliczenia poprzednich działań (zrobione? pomogło?) i porównania profitu z poprzedniej analizy z obecnym.",
     ],
   },
   {
@@ -315,9 +316,9 @@ export const TOURS: Tour[] = [
     path: "^/projects/[^/]+$",
     hint: "Otwórz dowolny projekt klienta.",
     steps: [
-      { target: "#kalendarz", title: "Kalendarz", text: "Dziś, najbliższe terminy i miesiąc z paskami okresów do deadline'u. Kliknij dzień, żeby dodać zadanie (z godziną albo z okresem)." },
+      { target: ".ls", title: "Analiza", text: "Jedna droga: analiza od celu do wniosków, zawsze w tej samej kolejności." },
+      { target: "#kalendarz", title: "Kalendarz", text: "Dziś, najbliższe terminy i miesiąc z paskami okresów do deadline'u." },
       { target: "[data-tour=nav-lejki]", title: "Mapy lejków", text: "Droga klienta od reklamy do zakupu – ile osób przechodzi przez każdy krok." },
-      { target: "[data-tour=nav-ekonomia]", title: "Ekonomia", text: "Czy reklamy się opłacają: CAC, LTV, zysk." },
       { target: "[data-tour=nav-testy]", title: "Testy reklam", text: "Rundy wariantów reklam, koszt kursanta na wariant, podpowiedź zwycięzcy." },
       { target: "[data-tour=nav-dane]", title: "Źródła danych", text: "Skrypt na stronach, połączenia API (Meta, WooCommerce), import plików i webhook." },
       { target: "[data-tour=nav-ustawienia]", title: "Ustawienia klienta", text: "Jak liczyć dane tego klienta: VAT, produkt główny, kategorie." },

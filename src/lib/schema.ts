@@ -248,5 +248,61 @@ CREATE TABLE IF NOT EXISTS reviews (
   notes JSONB NOT NULL DEFAULT '{}',
   started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   finished_at TIMESTAMPTZ
-)
+);
+CREATE TABLE IF NOT EXISTS goals (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  date_from DATE NOT NULL,
+  date_to DATE NOT NULL,
+  profit_target DOUBLE PRECISION NOT NULL,
+  diag JSONB NOT NULL DEFAULT '{}',
+  approved_by TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS loops (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  step INTEGER NOT NULL DEFAULT 0,
+  data JSONB NOT NULL DEFAULT '{}',
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS sop_tests (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  loop_id TEXT,
+  status TEXT NOT NULL DEFAULT 'zaplanowany',
+  hypothesis TEXT NOT NULL,
+  element TEXT NOT NULL DEFAULT 'reklama',
+  stage TEXT NOT NULL DEFAULT '',
+  metric TEXT NOT NULL DEFAULT '',
+  gain_estimate DOUBLE PRECISION,
+  cost_budget DOUBLE PRECISION,
+  cost_hours DOUBLE PRECISION,
+  override_reason TEXT NOT NULL DEFAULT '',
+  variants JSONB NOT NULL DEFAULT '[]',
+  start_date DATE,
+  end_date DATE,
+  budget DOUBLE PRECISION,
+  end_condition TEXT NOT NULL DEFAULT '',
+  ad_test_id TEXT,
+  result JSONB NOT NULL DEFAULT '{}',
+  decided_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS learnings (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  loop_id TEXT,
+  test_id TEXT,
+  stage TEXT NOT NULL DEFAULT '',
+  element TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL,
+  profit_delta DOUBLE PRECISION,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS test_id TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS who TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS required BOOLEAN NOT NULL DEFAULT false
 `;

@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { ReviewBar } from "@/components/review/ReviewBar";
 import { loadProject } from "@/lib/project-context";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +11,6 @@ export default async function ProjectLayout({ children, params }: { children: Re
   return (
     <main className="proj-main solo">
       {children}
-      <ReviewBar projectId={id} />
     </main>
   );
 }

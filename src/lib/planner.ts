@@ -20,7 +20,7 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export async function planItems(projectId: string, from: string, to: string): Promise<PlanItem[]> {
   if (!DAY.test(from) || !DAY.test(to)) throw new Error("Daty w formacie RRRR-MM-DD");
-  const [tasks, rounds] = await Promise.all([
+  const [tasks, rounds, sopTests] = await Promise.all([
     q<{ id: string; title: string; due: string; start: string | null; time: string | null; done: boolean }>(
       `SELECT id, title, to_char(due, 'YYYY-MM-DD') AS due, to_char(start, 'YYYY-MM-DD') AS start, time, done FROM tasks
        WHERE project_id = $1 AND due >= $2::date AND coalesce(start, due) <= $3::date ORDER BY due, time NULLS FIRST, created_at`,
@@ -32,6 +32,11 @@ export async function planItems(projectId: string, from: string, to: string): Pr
        WHERE t.project_id = $1 AND r.start_date <= $3::date AND coalesce(r.verdict_date, r.start_date) >= $2::date`,
       [projectId, from, to],
     ),
+    q<{ id: string; hypothesis: string; start_date: string; end_date: string; decided_at: string | null }>(
+      `SELECT id, hypothesis, to_char(start_date, 'YYYY-MM-DD') AS start_date, to_char(end_date, 'YYYY-MM-DD') AS end_date, decided_at FROM sop_tests
+       WHERE project_id = $1 AND start_date IS NOT NULL AND end_date IS NOT NULL AND start_date <= $3::date AND end_date >= $2::date`,
+      [projectId, from, to],
+    ).catch(() => []),
   ]);
   const items: PlanItem[] = tasks.map((t) => ({
     id: t.id, kind: "task", title: t.title, date: t.due, start: t.start && t.start < t.due ? t.start : undefined, time: t.time, done: t.done,
@@ -43,6 +48,11 @@ export async function planItems(projectId: string, from: string, to: string): Pr
       start: r.start_date < due ? r.start_date : undefined, done: r.status !== "w toku", link: `/projects/${projectId}/testy/${r.test_id}`,
     });
   }
+  for (const t of sopTests)
+    items.push({
+      id: `t-${t.id}`, kind: "round", title: `Test: ${t.hypothesis} (koniec)`, date: t.end_date,
+      start: t.start_date < t.end_date ? t.start_date : undefined, done: !!t.decided_at, link: `/projects/${projectId}/analiza`,
+    });
   return items.sort((a, b) => a.date.localeCompare(b.date));
 }
 
