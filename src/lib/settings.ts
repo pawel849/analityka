@@ -29,6 +29,8 @@ export interface ProjectSettings {
   };
   /** Zakres Ekonomii: dokładne nazwy kampanii (wydatki) i produktów (produkt główny). Puste = cały projekt. */
   economicsScope: { campaigns: string[]; products: string[] };
+  /** Ustawienia modułu „Testy reklam” (patrz lib/ad-tests.ts → mergeTestSettings). */
+  adTests?: unknown;
 }
 
 export const DEFAULT_SETTINGS: ProjectSettings = {

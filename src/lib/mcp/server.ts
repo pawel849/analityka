@@ -21,6 +21,10 @@ import { runSync } from "../sync/run";
 import { upsertAdRows, upsertOrders } from "../import-store";
 import { hashEmailSync } from "../sync/woo";
 import type { AdRow } from "../importing";
+import { DECISIONS, ELEMENTS, META_URL_PARAMS, budgetPerVariant, mergeTestSettings, variantLink } from "../ad-tests";
+import {
+  addManual, createRound, createTest, getTestSettings, loadTests, projectOfTest, setDecision, winningElements, type RoundResult, type VariantResult,
+} from "../ad-tests-data";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const parse = <T,>(v: unknown, fallback: T): T => (typeof v === "string" ? JSON.parse(v) : (v as T) ?? fallback);
@@ -61,6 +65,7 @@ Zasady:
 - Adresy stron wpisuj prawdziwe, podane przez użytkownika – nie wymyślaj ich.
 - Rzeczy poza aplikacją (wklejenie skryptu na stronę, token Meta, klucze WooCommerce) robi użytkownik – podaj mu dokładne instrukcje (są w get_project / check_setup).
 - Jeśli użytkownik ma otwartą mapę w przeglądarce podczas edit_funnel, poproś o odświeżenie strony – inaczej jego edytor może nadpisać zmiany.
+- Testy reklam: list_ad_tests → get_test_round; nowe rundy create_test_round; decyzje (set_variant_decision) zapisuj dopiero po potwierdzeniu przez użytkownika.
 - Kwoty w złotych; daty RRRR-MM-DD.`;
 
 export function buildMcpServer(origin: string): McpServer {
@@ -641,6 +646,166 @@ export function buildMcpServer(origin: string): McpServer {
       );
       await q("UPDATE imports SET rows = (SELECT count(*) FROM orders WHERE import_id = $1) WHERE id = $1", [importId]);
       return ok({ import_id: importId, rows: rows.length });
+    }),
+  );
+
+  /* ---------- Testy reklam ---------- */
+  const variantOut = (v: VariantResult) => ({
+    id: v.id, letter: v.letter, change_to: v.change_to, idea_source: v.idea_source, hypothesis: v.hypothesis, ad_name: v.meta_ad_name,
+    daily_budget: v.daily_budget, spend: Math.round(v.totals.spend * 100) / 100, ctr: v.d.ctr, hook: v.d.hook, retention: v.d.retention,
+    visits: v.totals.visits, main_orders: v.totals.mainOrders, revenue: v.totals.revenue, cac: v.d.cac, revenue_per_spend: v.d.revPerSpend,
+    progress: v.d.progress, meta_cpa: v.d.metaCpa, suggestion: v.suggestion.label, suggested_decision: v.suggestion.decision,
+    diff_to_best: v.suggestion.diffToBest, decision: v.decision, sources: v.sources,
+  });
+  const roundOut = (r: RoundResult) => ({
+    id: r.id, number: r.number, element: r.element, status: r.status, start: r.start_date, verdict: r.verdict_date, days_to_verdict: r.daysToVerdict,
+    best_cac: r.bestCac, hints: r.hints, page_url: r.page_url, variants: r.variants.map(variantOut),
+  });
+
+  server.registerTool(
+    "get_test_settings",
+    { title: "Ustawienia testów reklam", description: "Progi testów projektu: maks. CAC, budżet na wariant, produkt główny, okno atrybucji, zmęczenie, skalowanie, wzór nazwy.", inputSchema: { project_id: z.string() }, annotations: RO },
+    safe(async ({ project_id }) => {
+      const s = await getTestSettings(project_id);
+      return ok({ ...s, budget_per_variant_effective: budgetPerVariant(s) });
+    }),
+  );
+
+  server.registerTool(
+    "update_test_settings",
+    {
+      title: "Zmień ustawienia testów",
+      description: "Pola (podaj tylko zmieniane): goal, productMatch (pełne nazwy produktów z get_economics.products), cacMax, budgetPerVariant (null = 2×cacMax), variantsPerRound, minWinDiff (0–1), loseCac, fatigueCtrDrop (0–1), fatigueCostMult, scaleStep (0–1), scaleDays, attributionDays, namingPattern.",
+      inputSchema: { project_id: z.string(), settings: z.record(z.string(), z.unknown()) },
+      annotations: WR,
+    },
+    safe(async ({ project_id, settings }) => {
+      await project(project_id);
+      const all = await loadSettings(project_id);
+      const next = mergeTestSettings({ ...mergeTestSettings(all.adTests), ...settings });
+      await one(
+        `INSERT INTO project_settings (project_id, settings, updated_at) VALUES ($1, $2::jsonb, now())
+         ON CONFLICT (project_id) DO UPDATE SET settings = EXCLUDED.settings, updated_at = now() RETURNING project_id`,
+        [project_id, JSON.stringify({ ...all, adTests: next })],
+      );
+      return ok(next);
+    }),
+  );
+
+  server.registerTool(
+    "list_ad_tests",
+    { title: "Testy reklam projektu", description: "Testy (kąty) ze statusem, aktualną rundą, najlepszym CAC, dniami do werdyktu i alarmami.", inputSchema: { project_id: z.string() }, annotations: RO },
+    safe(async ({ project_id }) => {
+      const { tests } = await loadTests(project_id);
+      return ok(
+        tests.map((t) => ({
+          id: t.id, angle: t.angle, status: t.status, rounds: t.rounds.length,
+          current: t.current ? { number: t.current.number, element: t.current.element, best_cac: t.current.bestCac, days_to_verdict: t.current.daysToVerdict } : null,
+          alarms: t.alarms, app_url: `${origin}/projects/${project_id}/testy/${t.id}`,
+        })),
+      );
+    }),
+  );
+
+  server.registerTool(
+    "create_ad_test",
+    { title: "Nowy test reklam", description: "Zakłada test dla kąta reklamy (obietnicy). Potem create_test_round.", inputSchema: { project_id: z.string(), angle: z.string().min(1), notes: z.string().optional() }, annotations: WR },
+    safe(async ({ project_id, angle, notes }) => {
+      await project(project_id);
+      const id = await createTest(project_id, angle, notes ?? "");
+      return ok({ test_id: id, app_url: `${origin}/projects/${project_id}/testy/${id}` });
+    }),
+  );
+
+  server.registerTool(
+    "create_test_round",
+    {
+      title: "Nowa runda testu",
+      description: `Runda z 2–4 wariantami różniącymi się jednym elementem (${ELEMENTS.join(", ")}). Bazą jest zwycięzca poprzedniej rundy. Zwraca nazwy reklam do Meta i linki z UTM.`,
+      inputSchema: {
+        test_id: z.string(),
+        element: z.string(),
+        start_date: z.string().optional(),
+        page_url: z.string().optional().describe("Strona docelowa reklam – do linków z UTM"),
+        variants: z.array(z.object({ change_to: z.string(), idea_source: z.string().optional(), hypothesis: z.string().optional(), daily_budget: z.number().optional() })).min(1).max(4),
+      },
+      annotations: WR,
+    },
+    safe(async (a) => {
+      const r = await createRound(a.test_id, {
+        element: a.element, startDate: a.start_date, pageUrl: a.page_url,
+        variants: a.variants.map((v) => ({ changeTo: v.change_to, ideaSource: v.idea_source, hypothesis: v.hypothesis, dailyBudget: v.daily_budget })),
+      });
+      return ok({
+        ...r,
+        meta_url_parameters: META_URL_PARAMS,
+        links: a.page_url ? r.variants.map((v) => ({ letter: v.letter, link: variantLink(a.page_url!, v.name) })) : [],
+        instructions: "W Menedżerze reklam nazwij reklamy dokładnie jak ad name i wklej parametry URL – po nazwie aplikacja łączy wydatki, wejścia i zamówienia.",
+      });
+    }),
+  );
+
+  server.registerTool(
+    "get_test_round",
+    {
+      title: "Wyniki testu / rundy",
+      description: "Tabela wyników (wydatki, CTR, hook, utrzymanie, kursy, CAC, przychód/1 zł, różnica do najlepszego), podpowiedzi decyzji i ostrzeżenia. Bez round_number – wszystkie rundy.",
+      inputSchema: { test_id: z.string(), round_number: z.number().optional() },
+      annotations: RO,
+    },
+    safe(async ({ test_id, round_number }) => {
+      const pid = await projectOfTest(test_id);
+      if (!pid) return fail("Nie znaleziono testu");
+      const { tests, settings } = await loadTests(pid, test_id);
+      const t = tests[0];
+      const rounds = round_number ? t.rounds.filter((r) => r.number === round_number) : t.rounds;
+      return ok({ angle: t.angle, status: t.status, budget_per_variant: budgetPerVariant(settings), cac_max: settings.cacMax, rounds: rounds.map(roundOut) });
+    }),
+  );
+
+  server.registerTool(
+    "set_variant_decision",
+    {
+      title: "Decyzja dla wariantu",
+      description: "Zapisuje decyzję (wygrał / przegrał / remis / wyłączony / w toku). „wygrał” = zwycięzca rundy, baza następnej, wpis do biblioteki. Zapisz dopiero po potwierdzeniu przez użytkownika.",
+      inputSchema: { variant_id: z.string(), decision: z.enum(DECISIONS), note: z.string().optional() },
+      annotations: WR,
+    },
+    safe(async ({ variant_id, decision, note }) => {
+      await setDecision(variant_id, decision, note ?? "");
+      return ok({ ok: true });
+    }),
+  );
+
+  server.registerTool(
+    "add_variant_metrics",
+    {
+      title: "Ręczne liczby wariantu",
+      description: "Dzień ręcznych danych (gdy integracja nie działa). Dane automatyczne z Meta / sklepu zastępują ręczne, gdy spłyną.",
+      inputSchema: {
+        variant_id: z.string(), day: z.string(), spend: z.number().optional(), impressions: z.number().optional(), link_clicks: z.number().optional(),
+        video_3s: z.number().optional(), thruplay: z.number().optional(), orders: z.number().optional(), revenue: z.number().optional(),
+      },
+      annotations: WR,
+    },
+    safe(async (a) => {
+      await addManual(a.variant_id, { day: a.day, spend: a.spend, impressions: a.impressions, linkClicks: a.link_clicks, video3s: a.video_3s, thruplay: a.thruplay, orders: a.orders, revenue: a.revenue });
+      return ok({ ok: true });
+    }),
+  );
+
+  server.registerTool(
+    "get_winning_elements",
+    { title: "Biblioteka zwycięzców", description: "Zwycięskie elementy reklam (kąt, element, na co zmieniono, źródło pomysłu, CAC, CTR, różnica do bazy).", inputSchema: { project_id: z.string() }, annotations: RO },
+    safe(async ({ project_id }) => ok(await winningElements(project_id))),
+  );
+
+  server.registerTool(
+    "get_fatigue",
+    { title: "Zmęczenie zwycięzców", description: "Tygodniowy CTR i CAC zwycięzców w skalowaniu, alarm zmęczenia i podpowiedź zwiększenia budżetu.", inputSchema: { project_id: z.string() }, annotations: RO },
+    safe(async ({ project_id }) => {
+      const { tests } = await loadTests(project_id);
+      return ok(tests.flatMap((t) => t.watch.map((w) => ({ test: t.angle, ...w }))));
     }),
   );
 

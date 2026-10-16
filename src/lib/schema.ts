@@ -163,5 +163,68 @@ CREATE TABLE IF NOT EXISTS ai_keys (
   hint TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_used_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS ad_tests (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  angle TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'planowany',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ad_test_rounds (
+  id TEXT PRIMARY KEY,
+  test_id TEXT NOT NULL REFERENCES ad_tests(id) ON DELETE CASCADE,
+  number INTEGER NOT NULL,
+  element TEXT NOT NULL,
+  base_variant_id TEXT,
+  start_date DATE NOT NULL,
+  verdict_date DATE,
+  status TEXT NOT NULL DEFAULT 'w toku',
+  winner_variant_id TEXT,
+  page_url TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ad_test_variants (
+  id TEXT PRIMARY KEY,
+  round_id TEXT NOT NULL REFERENCES ad_test_rounds(id) ON DELETE CASCADE,
+  letter TEXT NOT NULL,
+  change_to TEXT NOT NULL DEFAULT '',
+  idea_source TEXT NOT NULL DEFAULT '',
+  hypothesis TEXT NOT NULL DEFAULT '',
+  meta_ad_name TEXT NOT NULL,
+  daily_budget DOUBLE PRECISION NOT NULL DEFAULT 0,
+  decision TEXT NOT NULL DEFAULT 'w toku',
+  decision_note TEXT NOT NULL DEFAULT '',
+  decided_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ad_test_manual (
+  id TEXT PRIMARY KEY,
+  variant_id TEXT NOT NULL REFERENCES ad_test_variants(id) ON DELETE CASCADE,
+  day DATE NOT NULL,
+  spend DOUBLE PRECISION NOT NULL DEFAULT 0,
+  impressions DOUBLE PRECISION NOT NULL DEFAULT 0,
+  link_clicks DOUBLE PRECISION NOT NULL DEFAULT 0,
+  video_3s DOUBLE PRECISION NOT NULL DEFAULT 0,
+  thruplay DOUBLE PRECISION NOT NULL DEFAULT 0,
+  orders DOUBLE PRECISION NOT NULL DEFAULT 0,
+  revenue DOUBLE PRECISION NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS winning_elements (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  angle TEXT NOT NULL DEFAULT '',
+  element TEXT NOT NULL DEFAULT '',
+  change_to TEXT NOT NULL DEFAULT '',
+  idea_source TEXT NOT NULL DEFAULT '',
+  variant_id TEXT,
+  round_id TEXT,
+  test_id TEXT,
+  cac DOUBLE PRECISION,
+  ctr DOUBLE PRECISION,
+  diff_vs_base DOUBLE PRECISION,
+  won_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )
 `;

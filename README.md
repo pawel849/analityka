@@ -67,6 +67,25 @@ mapy (`get_catalog`, `create_funnel`, `get_funnel`, `edit_funnel`), analiza i me
 synchronizacja integracji, import reklam i zamówień. Bez usuwania klientów/projektów i bez odczytu kluczy API.
 Przetestowane klientem MCP z SDK na lokalnej instancji; z claude.ai nie testowane (brak dostępu z tego środowiska).
 
+### Układ aplikacji
+
+- Menu narzędzi po lewej (to samo dla każdego klienta): **Pulpit · Mapy lejków · Ekonomia · Testy reklam · Oś czasu**, niżej
+  **Źródła danych · Ustawienia klienta · Przewodnik**. Na górze menu przełącznik „Dane klienta” (klient → projekt).
+- Adresy: `/projects/{id}` (pulpit), `/projects/{id}/lejki|ekonomia|testy|os-czasu|dane|ustawienia|przewodnik`. Stare `?tab=` przekierowują.
+- Każde narzędzie: nagłówek „do czego służy” + „Jak używać” + czyje dane pokazuje.
+
+### Testy reklam
+
+Test (kąt) → rundy (2–4 warianty, jeden zmieniany element) → warianty (reklamy w Meta).
+- Nazwy reklam z wzoru (`{KAT}_R{n}_{WARIANT}`), parametry URL `utm_content={{ad.name}}`, linki z UTM.
+- Wyniki: Meta (`ad_rows` po nazwie reklamy), wejścia (`events.utm_content`), kursy = zakupy produktu głównego przypisane
+  po `utm_content` (ostatnie wejście w oknie atrybucji). Tryb ręczny (`ad_test_manual`), zastępowany danymi automatycznymi.
+- Podpowiedzi 6.1 (w toku / wyłącz / przegrywa / zwycięzca / remis wg CTR), ostrzeżenia rundy 6.2, zmęczenie (tygodnie), skalowanie.
+- Decyzje zatwierdza człowiek; „wygrał” → baza następnej rundy, biblioteka zwycięzców, wpis na osi czasu.
+- Odświeżanie tabeli co 30 s (polling – nie push/websocket).
+- MCP: `get_test_settings`, `update_test_settings`, `list_ad_tests`, `create_ad_test`, `create_test_round`, `get_test_round`,
+  `set_variant_decision`, `add_variant_metrics`, `get_winning_elements`, `get_fatigue`.
+
 ### Pomoc w aplikacji
 
 - Przycisk **?** w prawym górnym rogu: samouczki interaktywne (podświetlanie elementów krok po kroku – strona główna, projekt, edytor),

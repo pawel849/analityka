@@ -67,6 +67,32 @@ export const HELP_ARTICLES: HelpArticle[] = [
     ],
   },
   {
+    id: "uklad",
+    title: "Jak jest zbudowana aplikacja: narzędzia vs dane klienta",
+    tags: "układ menu narzędzia dane klienta projekt przełącznik pulpit nawigacja gdzie co jest",
+    body: [
+      "Po lewej masz menu narzędzi – takie samo dla każdego klienta: Pulpit, Mapy lejków, Ekonomia, Testy reklam, Oś czasu. Niżej: Źródła danych, Ustawienia klienta, Przewodnik konfiguracji.",
+      "Na górze menu („Dane klienta”) wybierasz, czyje dane oglądasz. Zmiana projektu zostawia Cię w tym samym narzędziu.",
+      "Każde narzędzie ma u góry „do czego służy” i rozwijane „Jak używać” (3 kroki) oraz informację, czyje dane pokazuje.",
+      "Pulpit pokazuje stan źródeł danych (zielone = działa) i liczby z 30 dni dla całego projektu.",
+    ],
+  },
+  {
+    id: "testy-reklam",
+    title: "Testy reklam – rundy wariantów i koszt kursanta",
+    tags: "testy reklam ab test warianty runda kąt cac koszt kursanta zwycięzca zmęczenie skalowanie biblioteka utm nazwa reklamy",
+    body: [
+      "Test = kąt (obietnica) reklamy. Runda = 2–4 warianty różniące się jednym elementem (pierwsze zdanie, środek, obietnica, wezwanie, format, odbiorcy). Bazą kolejnej rundy jest zwycięzca poprzedniej.",
+      "Kreator rundy generuje nazwy reklam (np. AMERYKANSKI_COACH_R2_B). W Menedżerze reklam nazwij reklamy dokładnie tak i w polu „Parametry URL” wklej: utm_source=ads_meta&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}.",
+      "Wydatki, kliknięcia, wideo – z połączenia Meta (po nazwie reklamy). Wejścia – ze skryptu (utm_content). Kursy – zakupy produktu głównego przypisane do wariantu po utm_content w oknie atrybucji (domyślnie 7 dni).",
+      "Koszt kursanta (CAC) = wydatki ÷ kursy. Po wydaniu budżetu na wariant (domyślnie 2 × maks. CAC) aplikacja podpowiada: zwycięzca / przegrywa / wyłącz / remis. Decyzję zatwierdzasz Ty – zwycięzca trafia do biblioteki i na oś czasu.",
+      "Zmęczenie: tygodniowy CTR i CAC zwycięzcy względem 1. tygodnia – alarm, gdy CTR spadnie o próg albo CAC wzrośnie. Skalowanie: CAC ≤ maksymalnego przez N dni → podpowiedź zwiększenia budżetu (aplikacja nie zmienia budżetu w Meta sama).",
+      "Tryb ręczny: kliknij wiersz wariantu → „Wpisz ręcznie”, gdy integracja nie działa. Dane automatyczne zastępują ręczne, gdy zaczną spływać.",
+      "Tabela odświeża się co 30 sekund (i przyciskiem „Odśwież”).",
+      "Ograniczenie: zamówienia z WooCommerce przypisują się do wariantu tylko, gdy da się je połączyć z wejściem osoby (e-mail złapany przez skrypt albo zakup wysłany ze strony z UTM).",
+    ],
+  },
+  {
     id: "skrypt",
     title: "Skrypt śledzący – instalacja",
     tags: "skrypt śledzący t.js instalacja kod head wordpress tracking",

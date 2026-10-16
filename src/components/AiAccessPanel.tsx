@@ -92,7 +92,8 @@ export function AiAccessPanel({ origin }: { origin: string }) {
           <li>uzupełniać przewodnik „Zbuduj ze mną” (model, strony z adresami, źródła, płatności) i sprawdzać na żywo, co działa,</li>
           <li>budować i zmieniać mapy: węzły, adresy, dopasowania źródeł, cele, notatki, strzałki,</li>
           <li>czytać liczby z analizy i ekonomii, dodawać metryki, dane ręczne, wpisy na osi czasu, zmieniać ustawienia klienta,</li>
-          <li>importować dane reklam i zamówień z plików, które mu wyślesz, i uruchamiać synchronizację Meta / WooCommerce.</li>
+          <li>importować dane reklam i zamówień z plików, które mu wyślesz, i uruchamiać synchronizację Meta / WooCommerce,</li>
+          <li>prowadzić testy reklam: zakładać testy i rundy (nazwy reklam, linki z UTM), czytać wyniki, zapisywać decyzje po Twojej zgodzie.</li>
         </ul>
         <p className="hint">Nie może: wkleić skryptu na Twoją stronę, wygenerować tokenu Meta ani kluczy WooCommerce, usuwać klientów i projektów.</p>
       </div>
