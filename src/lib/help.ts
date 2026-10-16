@@ -101,7 +101,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "Zbiera automatycznie: odsłony, źródło (UTM, odsyłacz, fbclid, gclid), kliknięcia, przewinięcie 25/50/75/100%, wysłanie formularzy, odtwarzanie wideo HTML5.",
       "Ręczne zdarzenia: anl(\"lead\"), anl(\"purchase\", 297), anl(\"event\", \"nazwa\"), anl(\"identify\", email).",
       "data-domains=\"a.pl,b.pl\" przenosi identyfikator osoby między domenami. data-identify=\"forms\" łączy osobę z e-mailem z formularza.",
-      "Sprawdzenie: Źródła danych → Skrypt na stronach → „Ostatnie zdarzenia” (pojawiają się w ciągu kilku sekund po otwarciu strony). Mapy lejków mają pod listą Monitor (liczby, wykres dzienny, strony, źródła, kraje). W edytorze lewy panel „Eksploruj” pokazuje strony i źródła widziane przez skrypt.",
+      "Sprawdzenie: Źródła danych → Skrypt na stronach → „Ostatnie zdarzenia” (pojawiają się w ciągu kilku sekund po otwarciu strony). W edytorze lewy panel „Eksploruj” pokazuje strony i źródła widziane przez skrypt.",
     ],
   },
   {
@@ -278,7 +278,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     tags: "brak danych zero puste nie działa problem liczby",
     body: [
       "1. Czy jesteś w trybie Analiza i zakres dat obejmuje okres z ruchem?",
-      "2. Czy skrypt jest na stronach? Źródła danych → „Ostatnie zdarzenia”, Monitor w Mapach lejków lub panel Eksploruj w edytorze pokażą, czy przychodzą zdarzenia.",
+      "2. Czy skrypt jest na stronach? Źródła danych → „Ostatnie zdarzenia” lub panel Eksploruj w edytorze pokażą, czy przychodzą zdarzenia.",
       "3. Czy adres strony w węźle pasuje do ścieżek z Eksploruj (np. „/zapis” vs „/zapis/”)? Użyj „/zapis*” lub fragmentu adresu.",
       "4. Czy filtry (pasek analizy lub węzła) nie wykluczają wszystkich osób?",
       "5. Tryb „Dane: lejek” liczy tylko osoby, które przeszły wcześniejsze kroki – sprawdź „Dane: ruch”.",
