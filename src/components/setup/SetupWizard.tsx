@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../forms";
 import { ApiConnections } from "../ApiConnections";
 import { openHelp } from "../help/HelpCenter";
+import { LEGACY_TABS, projectHref } from "@/lib/nav";
 import { matchesPage } from "@/lib/analysis";
 import { TOTAL_LABELS } from "@/lib/analysis";
 import {
@@ -158,10 +159,10 @@ export function SetupWizard({ projectId, origin, trackingKey, initial }: { proje
           <button className="btn small" onClick={() => openHelp("ask")}>Mam pytanie</button>
           <button
             className="btn small"
-            title="Przewodnik zniknie z zakładek – wrócisz do niego z zakładki „Lejki i monitor”"
+            title="Wrócisz do niego z menu po lewej: „Przewodnik konfiguracji”"
             onClick={async () => {
               await save({ hidden: true });
-              router.push(`/projects/${projectId}?tab=lejki`);
+              router.push(`/projects/${projectId}`);
               router.refresh();
             }}
           >
@@ -212,7 +213,7 @@ export function SetupWizard({ projectId, origin, trackingKey, initial }: { proje
             utmSeen={utmSeen}
             onFinish={async (hide) => {
               await save({ done: true, hidden: hide });
-              router.push(`/projects/${projectId}?tab=${hide ? "lejki" : "start"}`);
+              router.push(`/projects/${projectId}${hide ? "" : "/przewodnik"}`);
               router.refresh();
             }}
           />
@@ -622,7 +623,7 @@ function StepConversions({
           </div>
           <div className="wz-box">
             <b>C. Import CSV</b>
-            <p className="hint">Eksport zamówień z platformy → <Link href={`/projects/${projectId}?tab=dane`}>zakładka Dane</Link>. Zasila Ekonomię (LTV, CAC), ale nie mapę.</p>
+            <p className="hint">Eksport zamówień z platformy → <Link href={`/projects/${projectId}/dane?s=import`}>Źródła danych → Import plików</Link>. Zasila Ekonomię (LTV, CAC), ale nie mapę.</p>
           </div>
           <Status ok={purchases > 0}>{purchases ? `Docierają zakupy (${purchases}).` : "Czekam na pierwszy zakup."}</Status>
         </>
@@ -659,7 +660,7 @@ function StepCosts({ s, save, sources, projectId, check }: { s: SetupState; save
           <b>Google Ads / YouTube – import CSV</b>
           <p className="hint">
             Automatycznego połączenia z Google Ads jeszcze nie ma. W Google Ads pobierz raport kampanii z kolumnami: dzień, kampania, koszt, wyświetlenia,
-            kliknięcia → <Link href={`/projects/${projectId}?tab=dane`}>zakładka Dane</Link> → „Google Ads (raport)”. Powtarzaj np. raz w tygodniu.
+            kliknięcia → <Link href={`/projects/${projectId}/dane?s=import`}>Źródła danych → Import plików</Link> → „Google Ads (raport)”. Powtarzaj np. raz w tygodniu.
           </p>
           <Status ok={googleRows > 0}>{googleRows ? `Są dane z Google Ads (${googleRows} wierszy).` : "Brak danych z Google Ads."}</Status>
         </div>
@@ -668,7 +669,7 @@ function StepCosts({ s, save, sources, projectId, check }: { s: SetupState; save
         <div key={x.id} className="wz-box">
           <b>{x.label}</b>
           <p className="hint">
-            Brak połączenia API. Dwie opcje: eksport CSV → <Link href={`/projects/${projectId}?tab=dane`}>zakładka Dane</Link> → „Inna platforma reklamowa”
+            Brak połączenia API. Dwie opcje: eksport CSV → <Link href={`/projects/${projectId}/dane?s=import`}>Źródła danych → Import plików</Link> → „Inna platforma reklamowa”
             albo wpisanie kwoty ręcznie w węźle źródła na mapie (tryb Analiza → kliknij węzeł → „Dane ręczne”).
           </p>
         </div>
@@ -818,7 +819,7 @@ function StepDone({
     ["Mapa lejka", !!s.funnelId, s.funnelId ? "zbudowana" : "brak"],
     ["Własne metryki", s.metrics?.length ? true : null, s.metrics?.length ? `${s.metrics.length}` : "tylko wbudowane"],
   ];
-  const tab = (t: string) => `/projects/${projectId}?tab=${t}`;
+  const tab = (t: string) => projectHref(projectId, LEGACY_TABS[t] ?? "pulpit") + (t === "integracje" ? "?s=webhook" : t === "dane" ? "?s=import" : "");
   const next: [string, string, string | (() => void), boolean?][] = [
     ["Zobacz liczby na mapie", "Mapa → przełącznik Analiza, wybierz zakres dat.", s.funnelId ? `/funnels/${s.funnelId}` : tab("lejki")],
     ["Ustawienia klienta", "Waluta, VAT, produkt główny, kategorie produktów i kampanii.", tab("ustawienia")],
@@ -829,8 +830,8 @@ function StepDone({
     ["Cele i ich wartość", "Oznacz ważne kroki jako cele (kliknij węzeł → Śledzenie → Cel).", s.funnelId ? `/funnels/${s.funnelId}` : tab("lejki")],
     ["Prognozy i checklisty", "Zaplanuj liczby i zadania na węzłach (kliknij węzeł → Plan).", s.funnelId ? `/funnels/${s.funnelId}` : tab("lejki")],
     ["Porównanie okresów", "Analiza → „Porównaj z poprzednim okresem”.", s.funnelId ? `/funnels/${s.funnelId}` : tab("lejki")],
-    ["Kolejny lejek", "Inna oferta tego klienta – dodaj w zakładce Lejki.", tab("lejki")],
-    ["Zapisy z newslettera", "MailerLite / GetResponse → webhook (zakładka Skrypt i integracje).", tab("integracje")],
+    ["Kolejny lejek", "Inna oferta tego klienta – dodaj w Mapach lejków.", tab("lejki")],
+    ["Zapisy z newslettera", "MailerLite / GetResponse → webhook (Źródła danych → Webhook).", tab("integracje")],
     ["Dane testowe do nauki", "Symulowany ruch po mapie, żeby poćwiczyć analizę.", tab("integracje")],
     ["Samouczek edytora mapy", "Interaktywne oprowadzenie po mapie.", () => openHelp("tours")],
     ["Zapytaj asystenta", "Pytanie o dowolną funkcję aplikacji.", () => openHelp("ask")],
@@ -872,7 +873,7 @@ function StepDone({
       </div>
       <div className="row" style={{ marginTop: 16 }}>
         <button className="btn primary" onClick={() => onFinish(true)}>Zakończ i ukryj przewodnik</button>
-        <button className="btn" onClick={() => onFinish(false)}>Zakończ, ale zostaw przewodnik w zakładkach</button>
+        <button className="btn" onClick={() => onFinish(false)}>Zakończ, ale zostaw przewodnik otwarty</button>
       </div>
     </div>
   );
@@ -883,7 +884,7 @@ export function SetupChoice({ projectId, compact }: { projectId: string; compact
   const router = useRouter();
   const pick = async (mode: "guided" | "self") => {
     await api(`/api/projects/${projectId}/setup`, "PUT", mode === "guided" ? { mode, hidden: false, step: "biznes" } : { mode });
-    router.push(`/projects/${projectId}?tab=${mode === "guided" ? "start" : "lejki"}`);
+    router.push(`/projects/${projectId}${mode === "guided" ? "/przewodnik" : ""}`);
     router.refresh();
   };
   return (
@@ -908,7 +909,7 @@ export function ReopenSetup({ projectId }: { projectId: string }) {
       className="btn small"
       onClick={async () => {
         await api(`/api/projects/${projectId}/setup`, "PUT", { mode: "guided", hidden: false });
-        router.push(`/projects/${projectId}?tab=start`);
+        router.push(`/projects/${projectId}/przewodnik`);
         router.refresh();
       }}
     >

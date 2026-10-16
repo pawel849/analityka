@@ -36,7 +36,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "Klient to firma, dla której pracujesz. Klient ma projekty.",
       "Projekt = jedno miejsce zbierania danych: ma własny skrypt śledzący, import danych, ustawienia i ekonomię. Zwykle jeden projekt na domenę lub ofertę.",
       "Lejek to mapa w projekcie. Wszystkie lejki projektu korzystają z tych samych danych ze skryptu.",
-      "Kolejność startu: dodaj klienta → dodaj projekt → zakładka Integracje: wklej skrypt na strony → utwórz lejek → ułóż mapę → przełącz na Analizę.",
+      "Kolejność startu: dodaj klienta → dodaj projekt → menu po lewej „Źródła danych”: wklej skrypt na strony → utwórz lejek → ułóż mapę → przełącz na Analizę.",
     ],
   },
   {
@@ -48,7 +48,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       "Kroki: 1) Biznes – pytania o model sprzedaży, narzędzie do stron, płatności i źródła ruchu. 2) Strony – układasz strony lejka i wpisujesz ich adresy. 3) Skrypt – gotowy kod z instrukcją dla Twojego narzędzia i sprawdzaniem na żywo każdej strony. 4) Źródła – gotowe linki i parametry do reklam, postów i e-maili, ze sprawdzeniem. 5) Zapisy i zakupy – test formularza i podłączenie płatności (WooCommerce API, Stripe, kod na stronie podziękowania, Zapier/Make). 6) Koszty reklam – połączenie Meta API, import CSV z Google Ads. 7) Mapa – budowana automatycznie z odpowiedzi. 8) Metryki – wbudowane + do wyboru + własny wzór. 9) Gotowe – stan wszystkiego i kilkanaście opcji „co dalej”.",
       "Znaczki kroków u góry: ✓ = działa, ! = do dokończenia. Każdy krok można pominąć i wrócić później.",
       "Stan sprawdza się sam co 5 sekund – wystarczy otworzyć stronę lub kliknąć link, żeby zobaczyć zielony znak.",
-      "„Ukryj przewodnik” chowa zakładkę; wrócisz przyciskiem „Otwórz przewodnik „Zbuduj ze mną”” w zakładce Lejki i monitor.",
+      "„Ukryj przewodnik” chowa zakładkę; wrócisz przyciskiem „Otwórz przewodnik „Zbuduj ze mną”” w menu po lewej: „Przewodnik konfiguracji”.",
       "Linki z przewodnika używają oznaczeń: ads_meta, ads_google, ads_youtube, ads_tiktok, ads_linkedin (reklamy), facebook.com, instagram.com, youtube.com, tiktok.com, linkedin.com (posty) i newsletter (e-maile) – dzięki temu płatne i bezpłatne wejścia się nie mieszają.",
     ],
   },
@@ -71,11 +71,11 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Skrypt śledzący – instalacja",
     tags: "skrypt śledzący t.js instalacja kod head wordpress tracking",
     body: [
-      "Skrypt jest w projekcie, zakładka Integracje (blok „Skrypt śledzący”). Wklej go w <head> każdej strony lejka (WordPress, GetResponse, MailerLite, własny HTML).",
+      "Skrypt jest w projekcie: menu po lewej → Źródła danych → Skrypt na stronach. Wklej go w <head> każdej strony lejka (WordPress, GetResponse, MailerLite, własny HTML).",
       "Zbiera automatycznie: odsłony, źródło (UTM, odsyłacz, fbclid, gclid), kliknięcia, przewinięcie 25/50/75/100%, wysłanie formularzy, odtwarzanie wideo HTML5.",
       "Ręczne zdarzenia: anl(\"lead\"), anl(\"purchase\", 297), anl(\"event\", \"nazwa\"), anl(\"identify\", email).",
       "data-domains=\"a.pl,b.pl\" przenosi identyfikator osoby między domenami. data-identify=\"forms\" łączy osobę z e-mailem z formularza.",
-      "Sprawdzenie: zakładka Integracje → „Ostatnie zdarzenia” (pojawiają się w ciągu kilku sekund po otwarciu strony). Zakładka Lejki ma Monitor (liczby, wykres dzienny, strony, źródła, kraje). W edytorze lewy panel „Eksploruj” pokazuje strony i źródła widziane przez skrypt.",
+      "Sprawdzenie: Źródła danych → Skrypt na stronach → „Ostatnie zdarzenia” (pojawiają się w ciągu kilku sekund po otwarciu strony). Mapy lejków mają pod listą Monitor (liczby, wykres dzienny, strony, źródła, kraje). W edytorze lewy panel „Eksploruj” pokazuje strony i źródła widziane przez skrypt.",
     ],
   },
   {
@@ -178,7 +178,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Automatyczny import: Meta Ads i WooCommerce (API)",
     tags: "api meta facebook woocommerce sklep automatycznie synchronizacja token klucz połączenie import koszty zamówienia cron",
     body: [
-      "Projekt → Integracje → „Połączenia API” (góra zakładki) → „+ Meta Ads” lub „+ WooCommerce”.",
+      "Projekt → Źródła danych → Połączenia API → „+ Meta Ads” lub „+ WooCommerce”.",
       "Meta Ads: ID konta reklamowego (same cyfry) i token z uprawnieniem ads_read (Business Manager → Użytkownicy systemowi). Pobiera dziennie na poziomie reklamy: wydatki, wyświetlenia, zasięg, kliknięcia linku, odtworzenia 3 s, ThruPlay, wyświetlenia strony docelowej, rejestracje/leady, koszyki, płatności, zakupy i ich wartość wg Meta.",
       "WooCommerce: adres sklepu (https) i klucze REST API z uprawnieniem Odczyt (WooCommerce → Ustawienia → Zaawansowane → REST API). Pobiera zamówienia ze statusami z listy „opłacone” (domyślnie processing, completed); zamówienia, które zmieniły status (np. zwrot), są usuwane z danych.",
       "Opcja „Dodawaj opłacone zamówienia jako zakupy na mapie” tworzy zdarzenia zakupu na mapie (bez duplikatów). Wyłącz ją, jeśli strona podziękowania wysyła już anl(\"purchase\").",
@@ -193,7 +193,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Import danych CSV (reklamy i zamówienia)",
     tags: "import csv meta google ads woocommerce publigo zamówienia reklamy dane",
     body: [
-      "Projekt → zakładka Dane. Wybierz typ pliku (Meta Ads, Google Ads, inne reklamy, WooCommerce, Publigo, inne zamówienia).",
+      "Projekt → Źródła danych → Import plików. Wybierz typ pliku (Meta Ads, Google Ads, inne reklamy, WooCommerce, Publigo, inne zamówienia).",
       "Kolumny dopasowują się same; możesz je poprawić i zobaczyć podgląd. Obsługiwane kodowanie UTF-8 i Windows-1250.",
       "E-maile są zamieniane na skrót SHA-256 w przeglądarce – nie trafiają na serwer.",
       "Ponowny import tego samego okresu nadpisuje dane bez duplikatów.",
@@ -206,7 +206,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     body: [
       "Projekt → Ekonomia. Liczone z importu zamówień i reklam: przychód vs wydatki miesięcznie, CAC, LTV 30/90/365 (tylko dojrzałe okna), LTV/CAC, powroty, back-end, order bump, wynik na 10 000 zł reklam, zysk szacunkowy.",
       "Rozkład zmiany (Shapley) pokazuje, ile zmiany wyniku wynika z CAC, a ile z LTV.",
-      "Okresy, kategorie produktów i koszty ustawiasz w zakładce Ustawienia.",
+      "Okresy, kategorie produktów i koszty ustawiasz w „Ustawieniach klienta” (menu po lewej).",
     ],
   },
   {
@@ -250,7 +250,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     tags: "brak danych zero puste nie działa problem liczby",
     body: [
       "1. Czy jesteś w trybie Analiza i zakres dat obejmuje okres z ruchem?",
-      "2. Czy skrypt jest na stronach? Integracje → „Ostatnie zdarzenia”, Monitor w zakładce Lejki lub panel Eksploruj w edytorze pokażą, czy przychodzą zdarzenia.",
+      "2. Czy skrypt jest na stronach? Źródła danych → „Ostatnie zdarzenia”, Monitor w Mapach lejków lub panel Eksploruj w edytorze pokażą, czy przychodzą zdarzenia.",
       "3. Czy adres strony w węźle pasuje do ścieżek z Eksploruj (np. „/zapis” vs „/zapis/”)? Użyj „/zapis*” lub fragmentu adresu.",
       "4. Czy filtry (pasek analizy lub węzła) nie wykluczają wszystkich osób?",
       "5. Tryb „Dane: lejek” liczy tylko osoby, które przeszły wcześniejsze kroki – sprawdź „Dane: ruch”.",
@@ -272,16 +272,17 @@ export const TOURS: Tour[] = [
   },
   {
     id: "projekt",
-    title: "Projekt: zakładki i skrypt",
+    title: "Projekt: menu narzędzi",
     path: "^/projects/",
     hint: "Otwórz dowolny projekt klienta.",
     steps: [
-      { target: "[data-tour=tab-lejki]", title: "Lejki", text: "Mapy lejków tego projektu i Monitor (liczby, wykres dzienny, strony, źródła). Wszystkie lejki korzystają z tych samych danych ze skryptu." },
-      { target: "[data-tour=tab-integracje]", title: "Integracje", text: "Połączenia API (Meta Ads, WooCommerce), skrypt śledzący do wklejenia w <head> stron, ostatnie zdarzenia, dane testowe i webhook." },
-      { target: "[data-tour=tab-dane]", title: "Dane", text: "Import CSV z reklam (Meta, Google) i zamówień (WooCommerce, Publigo, inne)." },
-      { target: "[data-tour=tab-ekonomia]", title: "Ekonomia", text: "CAC, LTV, powroty, zysk – liczone z zaimportowanych danych." },
-      { target: "[data-tour=tab-os]", title: "Oś czasu", text: "Zmiany cen, starty kampanii i Twoje notatki na wykresie przychodu." },
-      { target: "[data-tour=tab-ustawienia]", title: "Ustawienia", text: "Waluta, VAT, reguły kategorii i koszty – osobno dla każdego klienta." },
+      { target: ".switcher", title: "Czyje dane", text: "Tu wybierasz klienta i projekt. Narzędzia po lewej są zawsze te same – zmieniają się tylko dane." },
+      { target: "[data-tour=nav-pulpit]", title: "Pulpit", text: "Stan podłączonych danych i najważniejsze liczby z 30 dni." },
+      { target: "[data-tour=nav-lejki]", title: "Mapy lejków", text: "Droga klienta od reklamy do zakupu – ile osób przechodzi przez każdy krok." },
+      { target: "[data-tour=nav-ekonomia]", title: "Ekonomia", text: "Czy reklamy się opłacają: CAC, LTV, zysk." },
+      { target: "[data-tour=nav-testy]", title: "Testy reklam", text: "Rundy wariantów reklam, koszt kursanta na wariant, podpowiedź zwycięzcy." },
+      { target: "[data-tour=nav-dane]", title: "Źródła danych", text: "Skrypt na stronach, połączenia API (Meta, WooCommerce), import plików i webhook." },
+      { target: "[data-tour=nav-ustawienia]", title: "Ustawienia klienta", text: "Jak liczyć dane tego klienta: VAT, produkt główny, kategorie." },
     ],
   },
   {

@@ -275,3 +275,84 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: ta
 .picker-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scope-bar .scope-fields { grid-template-columns: 1fr 1fr; margin-top: 8px; }
 @media (max-width: 760px) { .scope-bar .scope-fields { grid-template-columns: 1fr; } }
+
+/* ===== Układ projektu: menu narzędzi po lewej, dane po prawej ===== */
+.proj-shell { display: grid; grid-template-columns: 236px 1fr; min-height: calc(100vh - 49px); }
+.proj-nav {
+  border-right: 1px solid var(--border); background: var(--surface); padding: 14px 10px; display: flex; flex-direction: column; gap: 14px;
+  position: sticky; top: 49px; height: calc(100vh - 49px); overflow-y: auto;
+}
+.proj-main { padding: 22px 28px 60px; max-width: 1180px; width: 100%; min-width: 0; }
+.proj-nav-sec { display: grid; gap: 2px; }
+.proj-nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 10px 4px; font-weight: 600; }
+.proj-nav-sec a {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--text-2); font-weight: 500; font-size: 14px;
+}
+.proj-nav-sec a:hover { background: var(--surface-2); text-decoration: none; color: var(--text); }
+.proj-nav-sec a.on { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+.proj-nav-sec a .dot { width: 7px; height: 7px; border-radius: 50%; background: #e0a36b; margin-left: auto; }
+.switcher { position: relative; }
+.switcher-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 4px 4px; font-weight: 600; }
+.switcher-btn {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 6px; text-align: left; cursor: pointer; font: inherit;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); padding: 8px 10px; color: var(--text);
+}
+.switcher-btn > span { display: grid; min-width: 0; }
+.switcher-btn b, .switcher-btn .hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switcher-menu {
+  position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; width: 280px; max-height: 70vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 30px rgba(20, 30, 60, .15); padding: 6px;
+}
+.switcher-client { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 8px 8px 2px; font-weight: 600; }
+.switcher-menu button { display: block; width: 100%; text-align: left; font: inherit; border: 0; background: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--text); }
+.switcher-menu button:hover { background: var(--surface-2); }
+.switcher-menu button.on { color: var(--accent); font-weight: 600; }
+.switcher-empty { display: block; padding: 2px 10px; }
+.switcher-all { display: block; border-top: 1px solid var(--border); margin-top: 6px; padding: 8px 10px 4px; font-size: 13px; }
+
+/* Nagłówek narzędzia */
+.tool-head { margin-bottom: 18px; }
+.tool-head h1 { margin-bottom: 2px; }
+.tool-what { color: var(--text-2); margin: 0 0 6px; max-width: 760px; }
+.tool-how { font-size: 13px; color: var(--text-2); }
+.tool-how summary { cursor: pointer; color: var(--accent); width: fit-content; }
+.tool-how ol { margin: 6px 0 0; padding-left: 20px; }
+.tool-context { margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+/* Pulpit */
+.kpi-delta { font-size: 11px; color: var(--muted); }
+.kpi-delta.up { color: var(--ok); }
+.kpi-delta.down { color: var(--danger); }
+.src-list { display: grid; gap: 6px; }
+.src-item { display: grid; grid-template-columns: 12px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.src-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+.src-item.s-ok .src-dot { background: var(--ok); }
+.src-item.s-warn .src-dot { background: #e0a36b; }
+.src-item.s-off .src-dot { background: #c9ced6; }
+.tool-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.tool-card { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); align-content: start; }
+.tool-card:hover { border-color: var(--accent); text-decoration: none; }
+.tool-card span { color: var(--text-2); font-size: 13px; }
+.tool-card .tool-card-meta { color: var(--accent); font-size: 12px; font-weight: 600; }
+.sub-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-bottom: 18px; }
+.sub-tabs a { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.sub-tabs a:hover { text-decoration: none; border-color: var(--text-2); }
+.sub-tabs a.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.danger-zone { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+
+@media (max-width: 860px) {
+  .proj-shell { grid-template-columns: 1fr; }
+  .proj-nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .proj-nav-sec { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; }
+  .proj-nav-title { display: none; }
+  .proj-main { padding: 16px; }
+}
+
+/* Strona startowa */
+.how-it-works { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.how-it-works > div { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); align-content: start; }
+.how-it-works span:not(.step-n) { color: var(--text-2); font-size: 13px; }
+.step-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12px; }
+.client-card { display: grid; gap: 6px; align-content: start; }
+.client-proj { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 8px; background: var(--surface-2); color: var(--text); }
+.client-proj:hover { text-decoration: none; outline: 1px solid var(--accent); }

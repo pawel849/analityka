@@ -41,7 +41,7 @@ export async function loadIntegration(id: string): Promise<IntegrationRow | null
   return r ? { ...r, config: parse(r.config), state: parse(r.state) } : null;
 }
 
-/** Wpis importu, do którego trafiają dane z tej integracji (widoczny w zakładce Dane). */
+/** Wpis importu, do którego trafiają dane z tej integracji (widoczny w Źródła danych → Import plików). */
 async function ensureImport(it: IntegrationRow, kind: "ads" | "orders"): Promise<string> {
   const importId = `api-${it.id}`;
   await q(
@@ -125,7 +125,7 @@ async function syncMeta(it: IntegrationRow, startedAt: string, budgetMs: number)
     [it.project_id, from, today],
   );
   if (Number(overlap?.n ?? 0) > 0)
-    warnings.push(`W tym okresie są też dane Meta z importu CSV (${overlap!.n} wierszy) – wydatki policzą się podwójnie. Usuń stary import CSV Meta w zakładce Dane.`);
+    warnings.push(`W tym okresie są też dane Meta z importu CSV (${overlap!.n} wierszy) – wydatki policzą się podwójnie. Usuń stary import CSV Meta w Źródła danych → Import plików.`);
   if (!complete) warnings.push(`Pobrano dane do ${addDays(cursor, -1)}. Reszta pobierze się przy kolejnej synchronizacji (kliknij ponownie lub poczekaj na automat).`);
   return { complete, range: { from, to: complete ? today : addDays(cursor, -1) }, rows, warnings, actionTypes: [...types].sort() };
 }

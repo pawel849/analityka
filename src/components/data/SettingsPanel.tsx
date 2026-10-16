@@ -38,7 +38,7 @@ function RulesEditor({ rules, onChange, patternLabel, valueLabel }: { rules: Rul
 }
 
 function Preview({ items, rules, fallback, metric }: { items: { name: string; v: number }[]; rules: Rule[]; fallback: string; metric: string }) {
-  if (!items.length) return <p className="hint">Brak danych do podglądu – zaimportuj pliki w zakładce „Dane”.</p>;
+  if (!items.length) return <p className="hint">Brak danych do podglądu – podłącz dane w „Źródłach danych”.</p>;
   return (
     <div className="tbl-wrap" style={{ maxHeight: 260, overflowY: "auto" }}>
       <table className="tbl">

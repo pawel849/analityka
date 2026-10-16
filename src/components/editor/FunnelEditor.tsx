@@ -489,7 +489,7 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
               <>{client.name} / {project.name} /</>
             ) : (
               <>
-                <Link href={`/clients/${client.id}`}>{client.name}</Link> / <Link href={`/projects/${project.id}`}>{project.name}</Link> /
+                <Link href={`/clients/${client.id}`}>{client.name}</Link> / <Link href={`/projects/${project.id}/lejki`}>{project.name}</Link> /
               </>
             )}
           </div>

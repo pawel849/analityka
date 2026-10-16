@@ -91,7 +91,7 @@ export function ApiConnections({ projectId }: { projectId: string }) {
               <button
                 className="btn small danger"
                 onClick={async () => {
-                  if (!confirm("Usunąć połączenie? Pobrane dane zostaną (wpis „API: …” w zakładce Dane).")) return;
+                  if (!confirm("Usunąć połączenie? Pobrane dane zostaną (wpis „API: …” w Źródła danych → Import plików).")) return;
                   await api(`/api/projects/${projectId}/integrations/${c.id}`, "DELETE");
                   load();
                 }}

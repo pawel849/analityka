@@ -139,7 +139,7 @@ export function buildMcpServer(origin: string): McpServer {
         domain: p.domain,
         app_url: `${origin}/projects/${p.id}`,
         script: scriptTag(origin, p.tracking_key, hosts),
-        webhook_url: p.webhook_secret ? `${origin}/api/hooks/${p.webhook_secret}` : "nie wygenerowano – zakładka „Skrypt i integracje” w aplikacji",
+        webhook_url: p.webhook_secret ? `${origin}/api/hooks/${p.webhook_secret}` : "nie wygenerowano – w aplikacji: Źródła danych → Webhook",
         guide: p.setup,
         funnels,
         integrations,
@@ -211,7 +211,7 @@ export function buildMcpServer(origin: string): McpServer {
       if (a.pages !== undefined)
         patch.pages = a.pages.map((p) => ({ id: Math.random().toString(36).slice(2, 9), name: p.name, url: p.url, role: p.role as PageRole }));
       const row = await one<{ setup: unknown }>("UPDATE projects SET setup = setup || $2::jsonb WHERE id = $1 RETURNING setup", [a.project_id, JSON.stringify(patch)]);
-      return ok({ saved: parse<SetupState>(row!.setup, {}), open_in_app: `${origin}/projects/${a.project_id}?tab=start` });
+      return ok({ saved: parse<SetupState>(row!.setup, {}), open_in_app: `${origin}/projects/${a.project_id}/przewodnik` });
     }),
   );
 
@@ -536,7 +536,7 @@ export function buildMcpServer(origin: string): McpServer {
         `SELECT id, name FROM integrations WHERE project_id = $1 ${integration_id ? "AND id = $2" : ""} ORDER BY created_at`,
         integration_id ? [project_id, integration_id] : [project_id],
       );
-      if (!list.length) return fail("Brak połączeń – użytkownik dodaje je w aplikacji: projekt → Skrypt i integracje → Połączenia API.");
+      if (!list.length) return fail("Brak połączeń – użytkownik dodaje je w aplikacji: projekt → Źródła danych → Połączenia API.");
       const out = [];
       for (const it of list) {
         try {
@@ -557,7 +557,7 @@ export function buildMcpServer(origin: string): McpServer {
       inputSchema: {
         project_id: z.string(),
         source: z.enum(["meta", "google_ads", "ads_other"]),
-        label: z.string().optional().describe("Nazwa importu widoczna w zakładce Dane"),
+        label: z.string().optional().describe("Nazwa importu widoczna w Źródła danych → Import plików"),
         rows: z
           .array(
             z.object({

@@ -27,7 +27,7 @@ export const PATCH = guarded(async (req, { params }: Params<"id" | "iid">) => {
   return json({ ok: true });
 });
 
-/** Usuwa połączenie. Pobrane dane zostają (wpis „API: …” w zakładce Dane – tam można je usunąć). */
+/** Usuwa połączenie. Pobrane dane zostają (wpis „API: …” w Źródła danych → Import plików – tam można je usunąć). */
 export const DELETE = guarded(async (_req, { params }: Params<"id" | "iid">) => {
   const { id, iid } = await params;
   const row = await one("DELETE FROM integrations WHERE id = $1 AND project_id = $2 RETURNING id", [iid, id]);

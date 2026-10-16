@@ -231,7 +231,7 @@ export function EconomicsPanel({ projectId }: { projectId: string }) {
     return (
       <div className="card">
         <h2>Ekonomia jednostkowa</h2>
-        <p className="hint">Brak danych. Zaimportuj zamówienia i wydatki reklamowe w zakładce <Link href={`/projects/${projectId}?tab=dane`}>Dane</Link>.</p>
+        <p className="hint">Brak danych. Zaimportuj zamówienia i wydatki reklamowe w <Link href={`/projects/${projectId}/dane`}>Źródłach danych</Link>.</p>
       </div>
     );
   const cur = d.settings.currency;
@@ -276,8 +276,8 @@ export function EconomicsPanel({ projectId }: { projectId: string }) {
       <h2>Ekonomia jednostkowa</h2>
       <p className="sub">
         Dane: {num(d.counts.orders)} zamówień, {num(d.counts.adRows)} wierszy reklam, {num(d.counts.customersIdentified)} klientów rozpoznanych po e-mailu.
-        Ostatnie zamówienie: {d.lastOrder ?? "—"}. Ustawienia (VAT, produkt główny, okresy, koszty) zmienisz w zakładce{" "}
-        <Link href={`/projects/${projectId}?tab=ustawienia`}>Ustawienia klienta</Link>.
+        Ostatnie zamówienie: {d.lastOrder ?? "—"}. Ustawienia (VAT, produkt główny, okresy, koszty) zmienisz w{" "}
+        <Link href={`/projects/${projectId}/ustawienia`}>Ustawienia klienta</Link>.
       </p>
       <ScopeBar
         projectId={projectId}
@@ -416,7 +416,7 @@ export function EconomicsPanel({ projectId }: { projectId: string }) {
               </tbody>
             </table>
           </div>
-          <p className="hint">Reguły kategorii i produkt główny zmienisz w <Link href={`/projects/${projectId}?tab=ustawienia`}>Ustawieniach klienta</Link>. Pokazano do 200 najczęstszych produktów.</p>
+          <p className="hint">Reguły kategorii i produkt główny zmienisz w <Link href={`/projects/${projectId}/ustawienia`}>Ustawieniach klienta</Link>. Pokazano do 200 najczęstszych produktów.</p>
         </details>
       )}
     </div>
