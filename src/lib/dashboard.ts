@@ -14,12 +14,22 @@ export interface SourceStatus {
   fix?: string; // ścieżka podstrony z instrukcją
 }
 
-export async function dashboard(projectId: string) {
-  const now = Date.now();
-  const to = iso(now);
-  const from = iso(now - 29 * DAY);
-  const pFrom = iso(now - 59 * DAY);
-  const pTo = iso(now - 30 * DAY);
+const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Zakres pulpitu: wybrany przez użytkownika (domyślnie ostatnie 30 dni) + poprzedni okres tej samej długości. */
+export function dashboardRange(fromIn?: string, toIn?: string) {
+  const today = iso(Date.now());
+  let to = toIn && ISO_RE.test(toIn) ? toIn : today;
+  let from = fromIn && ISO_RE.test(fromIn) ? fromIn : iso(Date.parse(to) - 29 * DAY);
+  if (from > to) [from, to] = [to, from];
+  const days = Math.round((Date.parse(to) - Date.parse(from)) / DAY) + 1;
+  const pTo = iso(Date.parse(from) - DAY);
+  const pFrom = iso(Date.parse(from) - days * DAY);
+  return { from, to, pFrom, pTo, days };
+}
+
+export async function dashboard(projectId: string, fromIn?: string, toIn?: string) {
+  const { from, to, pFrom, pTo, days } = dashboardRange(fromIn, toIn);
 
   const [ev7, lastEv, integrations, orders, ads, funnels, tests, visitors, prevVisitors, ordersNow, ordersPrev] = await Promise.all([
     one<{ n: string }>("SELECT count(*) AS n FROM events WHERE project_id = $1 AND NOT is_test AND ts >= now() - interval '7 days'", [projectId]),
@@ -93,7 +103,7 @@ export async function dashboard(projectId: string) {
   const gross = Number(ordersNow?.gross ?? 0);
   const prevGross = Number(ordersPrev?.gross ?? 0);
   return {
-    range: { from, to },
+    range: { from, to, pFrom, pTo, days },
     sources,
     counts: { funnels: Number(funnels?.n ?? 0), activeTests: Number(tests?.n ?? 0) },
     kpis: {

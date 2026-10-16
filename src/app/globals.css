@@ -469,3 +469,13 @@ code.wrap { white-space: normal; word-break: break-all; }
   .kpi2-value { font-size: 21px; }
   .src-tile, .tool-tile { padding: 12px; }
 }
+.dash-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.range-picker { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.range-presets { display: inline-flex; background: var(--surface-2); border-radius: 999px; padding: 3px; }
+.range-presets button { border: 0; background: none; font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; color: var(--text-2); cursor: pointer; }
+.range-presets button.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.1); }
+.range-dates { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; color: var(--muted); }
+.range-dates input { border: 0; background: none; font: inherit; font-size: 13px; color: var(--text); padding: 0; width: auto; }
+.src-tile { align-content: center; }
+.tool-tile { align-content: start; }
+.proj-main > .section:first-child { margin-top: 0; }
