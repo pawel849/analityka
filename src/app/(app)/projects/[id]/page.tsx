@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { Planner } from "@/components/dashboard/Planner";
 import { TOOL_ICONS } from "@/components/shell/tool-icons";
 import { LEGACY_TABS, TOOLS, projectHref } from "@/lib/nav";
 import { loadProject } from "@/lib/project-context";
@@ -36,6 +37,10 @@ export default async function ProjectHome({ params, searchParams }: { params: Pr
           );
         })}
       </div>
+      <section className="section" id="kalendarz">
+        <h2>Kalendarz</h2>
+        <Planner projectId={id} />
+      </section>
     </>
   );
 }

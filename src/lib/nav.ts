@@ -1,6 +1,6 @@
 // Narzędzia aplikacji – te same dla każdego klienta. Dane, które pokazują, zależą od wybranego projektu.
 
-export type ToolKey = "pulpit" | "lejki" | "ekonomia" | "testy" | "plan" | "os-czasu" | "dane" | "ustawienia" | "przewodnik";
+export type ToolKey = "pulpit" | "lejki" | "ekonomia" | "testy" | "os-czasu" | "dane" | "ustawienia" | "przewodnik";
 
 export interface ToolDef {
   key: ToolKey;
@@ -54,13 +54,6 @@ export const TOOLS: ToolDef[] = [
     ],
   },
   {
-    key: "plan",
-    label: "Kalendarz",
-    section: "narzedzia",
-    what: "Co i kiedy zrobić: własne zadania i terminy rund testów (start, werdykt). Można dodać do kalendarza w telefonie.",
-    how: ["Kliknij dzień i dopisz zadanie.", "Terminy testów pojawiają się same.", "„Dodaj do kalendarza w telefonie” – subskrypcja w Google / iPhone."],
-  },
-  {
     key: "os-czasu",
     label: "Oś czasu",
     section: "narzedzia",
@@ -106,5 +99,4 @@ export const LEGACY_TABS: Record<string, ToolKey> = {
   integracje: "dane",
   start: "przewodnik",
   testy: "testy",
-  plan: "plan",
 };

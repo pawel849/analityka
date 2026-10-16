@@ -72,7 +72,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     tags: "układ menu narzędzia dane klienta projekt przełącznik pulpit nawigacja gdzie co jest",
     body: [
       "Strona główna = klienci i ich lejki (projekty). Kliknij lejek, żeby wejść na jego pulpit.",
-      "Pulpit to same przyciski: Mapy lejków, Ekonomia, Testy reklam, Kalendarz, Oś czasu, Źródła danych, Ustawienia klienta, Przewodnik konfiguracji.",
+      "Pulpit to przyciski do narzędzi (Mapy lejków, Ekonomia, Testy reklam, Oś czasu, Źródła danych, Ustawienia klienta, Przewodnik konfiguracji) i kalendarz pracy.",
       "W każdym narzędziu strzałka obok nazwy wraca do pulpitu, a strzałka na pulpicie – do listy klientów.",
       "Stan danych (skrypt, Meta, sklep, zamówienia, koszty) widzisz na górze „Źródeł danych”.",
     ],
@@ -304,7 +304,7 @@ export const TOURS: Tour[] = [
     path: "^/projects/[^/]+$",
     hint: "Otwórz dowolny projekt klienta.",
     steps: [
-      { target: "[data-tour=nav-plan]", title: "Kalendarz", text: "Zadania i terminy testów – także w kalendarzu telefonu." },
+      { target: "#kalendarz", title: "Kalendarz", text: "Dziś, najbliższe terminy i miesiąc z paskami okresów do deadline'u. Kliknij dzień, żeby dodać zadanie (z godziną albo z okresem)." },
       { target: "[data-tour=nav-lejki]", title: "Mapy lejków", text: "Droga klienta od reklamy do zakupu – ile osób przechodzi przez każdy krok." },
       { target: "[data-tour=nav-ekonomia]", title: "Ekonomia", text: "Czy reklamy się opłacają: CAC, LTV, zysk." },
       { target: "[data-tour=nav-testy]", title: "Testy reklam", text: "Rundy wariantów reklam, koszt kursanta na wariant, podpowiedź zwycięzcy." },

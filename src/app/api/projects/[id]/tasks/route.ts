@@ -16,9 +16,9 @@ export const GET = guarded(async (req, { params }: Params<"id">) => {
 
 export const POST = guarded(async (req, { params }: Params<"id">) => {
   const { id } = await params;
-  const b = await body<{ title?: string; due?: string }>(req);
+  const b = await body<{ title?: string; due?: string; start?: string | null; time?: string | null }>(req);
   try {
-    return json(await addTask(id, b.title ?? "", b.due ?? ""), 201);
+    return json(await addTask(id, b.title ?? "", b.due ?? "", b.start, b.time), 201);
   } catch (e) {
     return json({ error: (e as Error).message }, 400);
   }

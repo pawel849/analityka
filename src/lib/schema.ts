@@ -236,5 +236,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS tasks_project_due ON tasks (project_id, due);
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS calendar_token TEXT
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS calendar_token TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start DATE;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS time TEXT
 `;
