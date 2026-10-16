@@ -596,3 +596,80 @@ button.sf-card:hover { border-color: var(--accent); }
 .canvas-new b { font-size: 16px; }
 .canvas-new.open { cursor: default; padding: 20px; place-items: stretch; transform: none !important; }
 .canvas-new.open input { width: 100%; }
+
+/* Strona startowa – klienci */
+.home-head { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+.home-head h1 { margin: 0; }
+.tip { position: relative; display: inline-flex; color: var(--muted); cursor: help; vertical-align: middle; }
+.tip:hover, .tip:focus { color: var(--accent); outline: none; }
+.tip-box {
+  position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); z-index: 50; width: max-content; max-width: 300px;
+  padding: 10px 12px; border-radius: 10px; background: var(--text); color: var(--surface); font-size: 13px; font-weight: 400; line-height: 1.45;
+  text-transform: none; letter-spacing: 0; white-space: normal; text-align: left; opacity: 0; pointer-events: none; transition: opacity .15s;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.2);
+}
+.tip:hover .tip-box, .tip:focus .tip-box { opacity: 1; }
+.client-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 18px; align-items: start; }
+.client-card {
+  display: grid; gap: 12px; padding: 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06); transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+.client-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(16, 24, 40, 0.1); }
+.cc-head { display: flex; align-items: center; gap: 10px; }
+.cc-name { flex: 1; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avatar { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; color: #fff; font-weight: 700; font-size: 15px; }
+.avatar.sm { width: 26px; height: 26px; border-radius: 8px; font-size: 11px; }
+.cc-projects { display: grid; gap: 6px; }
+.cc-proj { display: flex; align-items: center; gap: 2px; border-radius: 10px; background: var(--surface-2); padding-right: 4px; }
+.cc-proj a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 10px 12px; color: var(--text); font-weight: 500; }
+.cc-proj a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.cc-proj a svg:first-child { color: var(--accent); flex: none; }
+.cc-proj:hover { background: #e9eefd; }
+.cc-proj a:hover { text-decoration: none; }
+.cc-go { color: var(--muted); flex: none; }
+.cc-proj:hover .cc-go { color: var(--accent); }
+.cc-proj .icon-btn, .cc-head .icon-btn { opacity: 0; }
+.cc-proj:hover .icon-btn, .client-card:hover .cc-head .icon-btn, .icon-btn:focus-visible { opacity: 1; }
+@media (hover: none) { .cc-proj .icon-btn, .cc-head .icon-btn { opacity: 1; } }
+.cc-add { justify-content: center; display: inline-flex; align-items: center; gap: 6px; width: 100%; }
+.icon-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; transition: background-color .15s, color .15s, opacity .15s; }
+.icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.icon-btn.danger:hover { background: #fbeceb; color: var(--danger); }
+.client-add { place-items: center; align-content: center; min-height: 180px; background: #eef3ff; border: 1.5px dashed #b9c8f5; color: var(--text); font: inherit; cursor: pointer; }
+.client-add svg { color: var(--accent); }
+.client-add b { font-size: 16px; }
+.client-add.open { place-items: stretch; cursor: default; transform: none !important; }
+.client-add.open input { width: 100%; }
+.pulse { animation: pulse 1.8s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(47, 91, 234, 0.35); } 50% { box-shadow: 0 0 0 8px rgba(47, 91, 234, 0); } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+/* Kreator nowego lejka */
+.modal-back { position: fixed; inset: 0; z-index: 100; background: rgba(15, 20, 30, 0.45); display: grid; place-items: center; padding: 16px; }
+.modal { width: min(520px, 100%); background: var(--surface); border-radius: 16px; padding: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25); }
+.wiz { display: grid; gap: 16px; }
+.wiz-client { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.wiz-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
+.wiz-steps li { flex: 1; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding-top: 8px; border-top: 3px solid var(--surface-2); }
+.wiz-steps li span { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-2); font-weight: 700; font-size: 11px; }
+.wiz-steps li.on { color: var(--text); font-weight: 600; border-top-color: var(--accent); }
+.wiz-steps li.on span { background: var(--accent); color: #fff; }
+.wiz-steps li.done { border-top-color: #b9c8f5; }
+.wiz-steps li.done span { background: #e9eefd; color: var(--accent); }
+.wiz-body { display: grid; gap: 12px; }
+.wiz-q { display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: 700; }
+.wiz-body input { font-size: 16px; padding: 10px 12px; }
+.wiz-nav { display: flex; justify-content: space-between; align-items: center; }
+.wiz-nav .btn { display: inline-flex; align-items: center; gap: 6px; }
+.wiz-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wiz-opt { position: relative; display: grid; justify-items: center; gap: 8px; padding: 22px 12px; border-radius: 14px; border: 1.5px solid var(--border); background: var(--surface); font: inherit; color: var(--text); cursor: pointer; transition: transform .15s, box-shadow .15s, border-color .15s; }
+.wiz-opt:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(16, 24, 40, 0.12); border-color: var(--accent); }
+.wiz-opt.primary { border-color: var(--accent); background: #f4f7ff; }
+.wiz-opt svg { color: var(--accent); }
+.wiz-opt .badge { position: absolute; top: 8px; right: 8px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: #fff; }
+
+/* Usuwanie mapy z kafelka */
+.canvas-item { position: relative; display: grid; }
+.canvas-del { position: absolute; top: 10px; right: 10px; background: var(--surface); box-shadow: 0 1px 3px rgba(16, 24, 40, 0.15); opacity: 0; }
+.canvas-item:hover .canvas-del, .canvas-del:focus-visible { opacity: 1; }
+@media (hover: none) { .canvas-del { opacity: 1; } }

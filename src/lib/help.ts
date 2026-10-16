@@ -293,8 +293,8 @@ export const TOURS: Tour[] = [
     path: "^/$",
     steps: [
       { title: "Witaj w Analityce", text: "Krótki przegląd: klient → projekt → lejek. Przejdziesz go strzałkami lub przyciskiem Dalej." },
-      { target: "[data-tour=create-client]", title: "1. Dodaj klienta", text: "Wpisz nazwę firmy klienta i kliknij „Dodaj klienta”. Każdy klient ma własne projekty i dane." },
-      { target: "[data-tour=client-list]", title: "2. Lista klientów", text: "Kliknij klienta, aby dodać projekt (jedno miejsce zbierania danych, np. domena)." },
+      { target: "[data-tour=create-client]", title: "1. Dodaj klienta", text: "Kliknij kafelek „Dodaj klienta” i wpisz nazwę firmy. Od razu otworzy się kreator pierwszego lejka." },
+      { target: "[data-tour=client-list]", title: "2. Klienci i lejki", text: "Kliknij lejek, żeby otworzyć jego pulpit. „Dodaj nowy lejek” prowadzi krok po kroku. Ołówek zmienia nazwę, kosz usuwa (pojawiają się po najechaniu)." },
       { target: "[data-tour=help]", title: "Pomoc zawsze tutaj", text: "Przycisk „?” w prawym górnym rogu: samouczki, wyszukiwarka pomocy i pytania do asystenta." },
     ],
   },

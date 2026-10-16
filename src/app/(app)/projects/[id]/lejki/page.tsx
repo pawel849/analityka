@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Workflow } from "lucide-react";
 import { q } from "@/lib/db";
+import { DeleteIcon } from "@/components/DeleteIcon";
 import { FunnelThumb } from "@/components/FunnelThumb";
 import { NewFunnelCard } from "@/components/NewFunnelCard";
 import { ToolHeader } from "@/components/shell/ToolHeader";
@@ -26,7 +27,8 @@ export default async function FunnelsPage({ params }: { params: Promise<{ id: st
       <div className="canvas-grid">
         <NewFunnelCard projectId={id} />
         {funnels.map((f) => (
-          <Link key={f.id} href={`/funnels/${f.id}`} className="canvas-card">
+          <div key={f.id} className="canvas-item">
+          <Link href={`/funnels/${f.id}`} className="canvas-card">
             <div className="canvas-thumb">
               <FunnelThumb graph={f.graph} />
             </div>
@@ -38,6 +40,8 @@ export default async function FunnelsPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           </Link>
+          <DeleteIcon className="canvas-del" url={`/api/funnels/${f.id}`} label={`Usuń mapę ${f.name}`} confirmText={`Usunąć mapę „${f.name}”? Nie da się tego cofnąć.`} />
+          </div>
         ))}
       </div>
     </>
