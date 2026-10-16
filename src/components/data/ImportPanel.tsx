@@ -120,10 +120,6 @@ export function ImportPanel({ projectId }: { projectId: string }) {
   return (
     <div>
       <h2>Import danych</h2>
-      <p className="sub">
-        Reklamy (Meta, Google i inne) oraz zamówienia (WooCommerce, Publigo, dowolny sklep) z plików CSV. Każda kolumna jest dopasowywana
-        do pola – sprawdź podgląd przed importem. E-maile klientów są zamieniane w przeglądarce na skrót (SHA-256) i nie trafiają na serwer.
-      </p>
 
       <div className="card">
         <div className="map-grid">

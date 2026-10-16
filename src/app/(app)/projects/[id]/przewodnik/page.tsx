@@ -11,7 +11,6 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
     return (
       <>
         <h1>Przewodnik konfiguracji</h1>
-        <p className="tool-what">Krok po kroku od zera do działającej analityki – z pytaniami i sprawdzaniem na żywo.</p>
         <SetupChoice projectId={id} />
       </>
     );

@@ -65,9 +65,8 @@ export default async function ProjectHome({ params, searchParams }: { params: Pr
       <section className="section">
         <div className="dash-head">
           <h2 style={{ margin: 0 }}>Wyniki</h2>
-          <RangePicker from={r.from} to={r.to} days={r.days} />
+          <RangePicker from={r.from} to={r.to} />
         </div>
-        <p className="hint" style={{ margin: "6px 0 0" }}>Strzałka = zmiana {vs} (poprzedni okres tej samej długości).</p>
         <div className="kpi2-row">
           <Kpi icon={Banknote} tone="green" label="Przychód" value={money(k.revenue.now)}><Change now={k.revenue.now} prev={k.revenue.prev} vs={vs} /></Kpi>
           <Kpi icon={Wallet} tone="orange" label="Wydatki na reklamy" value={money(k.spend.now)}><Change now={k.spend.now} prev={k.spend.prev} invert vs={vs} /></Kpi>

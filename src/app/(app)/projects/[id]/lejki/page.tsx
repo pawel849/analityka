@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Workflow } from "lucide-react";
 import { notFound } from "next/navigation";
 import { q } from "@/lib/db";
 import { CreateForm } from "@/components/forms";
@@ -22,13 +23,13 @@ export default async function FunnelsPage({ params }: { params: Promise<{ id: st
       </div>
       <div className="grid">
         {funnels.map((f) => (
-          <Link key={f.id} href={`/funnels/${f.id}`} className="card link">
+          <Link key={f.id} href={`/funnels/${f.id}`} className="card link funnel-card">
+            <span className="tool-tile-icon"><Workflow size={20} /></span>
             <h3>{f.name}</h3>
-            <div className="meta">Elementów: {f.nodes} · Zmieniono: {new Date(f.updated_at).toLocaleString("pl-PL")}</div>
           </Link>
         ))}
       </div>
-      {!funnels.length && <p className="hint">Brak lejków – utwórz pierwszy powyżej (po utworzeniu wybierzesz szablon albo pustą mapę).</p>}
+      {!funnels.length && <p>Brak lejków – utwórz pierwszy powyżej.</p>}
       <div className="section">
         <h2>Ruch na stronach (wszystkie strony projektu)</h2>
         <MonitorPanel projectId={id} />

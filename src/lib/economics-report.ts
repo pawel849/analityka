@@ -23,7 +23,14 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  * Zakres: parametry wywołania (tekst, np. „meta:VSL 797”) mają pierwszeństwo; bez nich – zakres zapisany w ustawieniach projektu
  * (dokładne nazwy kampanii i produktów wybrane z listy).
  */
-export async function economicsReport(id: string, fromIn?: string | null, toIn?: string | null, scope: EconScope = {}) {
+export async function economicsReport(
+  id: string,
+  fromIn?: string | null,
+  toIn?: string | null,
+  scope: EconScope = {},
+  /** "poprzedni" = porównanie wybranego okresu z poprzednim tej samej długości; "ustawienia" = okresy z ustawień; brak = jak dawniej. */
+  compare?: "poprzedni" | "ustawienia" | null,
+) {
   const [settings0, orders, allAds] = await Promise.all([loadSettings(id), loadOrders(id), loadAds(id)]);
   const saved = settings0.economicsScope;
   const campaigns = (scope.campaigns ?? "").trim();
@@ -47,9 +54,14 @@ export async function economicsReport(id: string, fromIn?: string | null, toIn?:
   const dataTo = [p.lastDataTs ? new Date(p.lastDataTs).toISOString().slice(0, 10) : null, ...ads.map((a) => a.end)].filter(Boolean).sort().pop() ?? null;
   const from = fromIn ?? dataFrom;
   const to = toIn ?? dataTo;
-  if (!from || !to) return { empty: true as const, settings };
+  if (!dataFrom || !from || !to) return { empty: true as const, settings };
   if (!DAY.test(from) || !DAY.test(to)) throw new Error("Daty w formacie RRRR-MM-DD");
-  const periods = settings.periods.length ? settings.periods : [{ name: "Cały zakres", from, to }];
+  const periods =
+    compare === "poprzedni"
+      ? [{ name: "Poprzedni okres", ...previousRange(from, to) }, { name: "Wybrany okres", from, to }]
+      : settings.periods.length
+        ? settings.periods
+        : [{ name: "Cały zakres", from, to }];
   return {
     empty: false as const,
     from,
@@ -69,6 +81,15 @@ export async function economicsReport(id: string, fromIn?: string | null, toIn?:
     periods: periods.map((per) => periodStats(p, ads, settings, per, !!match)),
     products: productSummary(orders, settings0, from, to, match),
   };
+}
+
+/** Poprzedni okres tej samej długości (kończy się dzień przed `from`). */
+export function previousRange(from: string, to: string) {
+  const D = 86400_000;
+  const f = Date.parse(`${from}T00:00:00Z`);
+  const days = Math.round((Date.parse(`${to}T00:00:00Z`) - f) / D) + 1;
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  return { from: iso(f - days * D), to: iso(f - D) };
 }
 
 /** Produkty w zamówieniach okresu: liczba, mediana ceny, kategoria wg reguł – do ustawiania reguł i zawężenia. */

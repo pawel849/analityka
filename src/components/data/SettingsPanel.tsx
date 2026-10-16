@@ -92,7 +92,6 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           </button>
         </div>
       </div>
-      <p className="sub">Wszystkie analizy liczą się według tych ustawień. Zmiana reguł nie wymaga ponownego importu.</p>
 
       <div className="card">
         <h3>Podstawy</h3>

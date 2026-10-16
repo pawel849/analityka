@@ -135,7 +135,6 @@ export function TimelinePanel({ projectId }: { projectId: string }) {
           <button className="btn small" onClick={exportMd} disabled={!items.length}>Eksport dziennika (.md)</button>
         </div>
       </div>
-      <p className="sub">Co się działo i co z tego wynikło. Zmiany cen i start/koniec kampanii są wykrywane z zaimportowanych danych.</p>
 
       <div className="card">
         <Chart series={d.series} events={items} cur={d.currency} selected={selected} />

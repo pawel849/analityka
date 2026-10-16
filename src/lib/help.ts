@@ -230,9 +230,11 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Ekonomia: CAC, LTV, zysk",
     tags: "ekonomia cac ltv zysk powroty backend order bump shapley okresy",
     body: [
-      "Projekt → Ekonomia. Liczone z importu zamówień i reklam: przychód vs wydatki miesięcznie, CAC, LTV 30/90/365 (tylko dojrzałe okna), LTV/CAC, powroty, back-end, order bump, wynik na 10 000 zł reklam, zysk szacunkowy.",
-      "Rozkład zmiany (Shapley) pokazuje, ile zmiany wyniku wynika z CAC, a ile z LTV.",
-      "Okresy, kategorie produktów i koszty ustawiasz w „Ustawieniach klienta” (menu po lewej).",
+      "Projekt → Ekonomia. Na górze wybierasz okres (30 dni, 90 dni, 12 mies., wszystko albo własne daty). Wskaźniki porównują go z poprzednim okresem tej samej długości; jeśli masz okresy w Ustawieniach klienta, przycisk „Okresy z ustawień” pokaże je obok siebie.",
+      "Zakres to równanie: wydatki z wybranych kampanii ÷ nowi klienci wybranego produktu = CAC. Kliknij kartę kampanii albo produktu, żeby zmienić wybór. Zaznaczaj tylko produkt główny – dodatki z tego samego zamówienia (order bump) liczą się same.",
+      "Wykres „Z czego” (koło) pokazuje udział kategorii produktów w przychodzie i ile zostaje po reklamach. „Miesiące + reklamy” pokazuje przychód i wydatki obok siebie w każdym miesiącu.",
+      "CAC to górna granica – reklamy sprzedają też inne produkty niż główny. LTV liczone tylko dla klientów, od których zakupu minęło pełne okno (np. 90 dni); wcześniej widać „za wcześnie”. Klienci bez e-maila liczeni są jako osobne osoby.",
+      "„Co zmieniło wynik” (metoda Shapleya) rozkłada zmianę wyniku z 10 000 zł reklam na wpływ CAC i LTV. To nie test A/B – na wynik wpływa też rynek.",
     ],
   },
   {

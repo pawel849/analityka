@@ -102,7 +102,6 @@ function Library({ projectId }: { projectId: string }) {
   const shown = rows.filter((r) => (!angle || r.angle === angle) && (!element || r.element === element));
   return (
     <div>
-      <p className="hint">Każdy wariant zatwierdzony jako „wygrał” trafia tu automatycznie – z tej listy bierzesz pomysły na kolejne rundy.</p>
       <div className="row" style={{ marginBottom: 10 }}>
         <select value={angle} onChange={(e) => setAngle(e.target.value)}>
           <option value="">Wszystkie kąty</option>

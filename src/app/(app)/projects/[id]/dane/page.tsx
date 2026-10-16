@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Code2, Plug, Upload, Webhook, type LucideIcon } from "lucide-react";
 import { q } from "@/lib/db";
 import { ApiConnections } from "@/components/ApiConnections";
 import { TrackingPanel } from "@/components/TrackingPanel";
@@ -15,20 +16,20 @@ export default async function DataPage({ params, searchParams }: { params: Promi
   const origin = await requestOrigin();
   const funnels = await q<{ id: string; name: string }>("SELECT id, name FROM funnels WHERE project_id = $1 ORDER BY created_at", [id]);
   const sec = ["skrypt", "api", "import", "webhook"].includes(s ?? "") ? s : "skrypt";
-  const tabs: [string, string, string][] = [
-    ["skrypt", "Skrypt na stronach", "wejścia, źródła, kliknięcia, formularze"],
-    ["api", "Połączenia API", "Meta Ads, WooCommerce – automatycznie"],
-    ["import", "Import plików", "CSV z reklam i zamówień"],
-    ["webhook", "Webhook i inne narzędzia", "Zapier, Make, Stripe, MailerLite…"],
+  const tabs: [string, string, LucideIcon][] = [
+    ["skrypt", "Skrypt na stronach", Code2],
+    ["api", "Meta i WooCommerce", Plug],
+    ["import", "Import plików", Upload],
+    ["webhook", "Webhook", Webhook],
   ];
   return (
     <>
       <ToolHeader tool="dane" context={`${project.client_name} · ${project.name}`} />
       <nav className="sub-tabs">
-        {tabs.map(([k, label, hint]) => (
+        {tabs.map(([k, label, Icon]) => (
           <a key={k} href={`?s=${k}`} className={sec === k ? "on" : ""}>
+            <Icon size={18} />
             <b>{label}</b>
-            <span className="hint">{hint}</span>
           </a>
         ))}
       </nav>

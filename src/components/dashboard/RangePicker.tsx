@@ -4,22 +4,38 @@ import { usePathname, useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 
 const DAY = 86400_000;
-const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
-const PRESETS = [7, 14, 30, 90];
+export const isoDay = (t: number) => new Date(t).toISOString().slice(0, 10);
 
-/** Wybór okresu pulpitu; porównanie liczy się z poprzednim okresem tej samej długości. */
-export function RangePicker({ from, to, days }: { from: string; to: string; days: number }) {
+export interface RangePreset {
+  label: string;
+  from: string;
+  to: string;
+}
+
+export const lastDays = (n: number): RangePreset => ({ label: `${n} dni`, from: isoDay(Date.now() - (n - 1) * DAY), to: isoDay(Date.now()) });
+
+/** Wybór okresu: szybkie przyciski + dwa pola daty. Bez `onPick` zmienia ?from=&to= w adresie strony. */
+export function RangePicker({
+  from, to, presets = [7, 14, 30, 90].map(lastDays), onPick, active,
+}: {
+  from: string;
+  to: string;
+  presets?: RangePreset[];
+  onPick?: (from: string, to: string) => void;
+  /** Wymuszenie podświetlenia (np. przycisk spoza listy dat). */
+  active?: string | null;
+}) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
-  const today = iso(Date.now());
-  const go = (f: string, t: string) => router.push(`${pathname}?from=${f}&to=${t}`);
-  const preset = to === today ? days : null;
+  const go = onPick ?? ((f: string, t: string) => router.push(`${pathname}?from=${f}&to=${t}`));
+  const today = isoDay(Date.now());
+  const on = active !== undefined ? active : presets.find((p) => p.from === from && p.to === to)?.label;
   return (
     <div className="range-picker">
       <div className="range-presets" role="group" aria-label="Szybki wybór okresu">
-        {PRESETS.map((n) => (
-          <button key={n} className={preset === n ? "on" : ""} onClick={() => go(iso(Date.now() - (n - 1) * DAY), today)}>
-            {n} dni
+        {presets.map((p) => (
+          <button key={p.label} className={on === p.label ? "on" : ""} onClick={() => go(p.from, p.to)}>
+            {p.label}
           </button>
         ))}
       </div>
