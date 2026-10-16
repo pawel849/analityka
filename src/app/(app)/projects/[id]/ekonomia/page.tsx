@@ -11,7 +11,7 @@ export default async function EconomicsPage({ params, searchParams }: { params: 
   if (!project) notFound();
   return (
     <>
-      <ToolHeader tool="ekonomia" context={`${project.client_name} · ${project.name}`} />
+      <ToolHeader tool="ekonomia" projectId={id} />
       <EconomicsPanel projectId={id} from={day(sp.from)} to={day(sp.to)} cmp={sp.cmp} />
     </>
   );

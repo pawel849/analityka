@@ -9,7 +9,7 @@ export default async function AdTestsPage({ params }: { params: Promise<{ id: st
   if (!project) notFound();
   return (
     <>
-      <ToolHeader tool="testy" context={`${project.client_name} · ${project.name}`} />
+      <ToolHeader tool="testy" projectId={id} />
       <AdTestsHome projectId={id} />
     </>
   );

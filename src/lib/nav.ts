@@ -1,6 +1,6 @@
 // Narzędzia aplikacji – te same dla każdego klienta. Dane, które pokazują, zależą od wybranego projektu.
 
-export type ToolKey = "pulpit" | "lejki" | "ekonomia" | "testy" | "os-czasu" | "dane" | "ustawienia" | "przewodnik";
+export type ToolKey = "pulpit" | "lejki" | "ekonomia" | "testy" | "plan" | "os-czasu" | "dane" | "ustawienia" | "przewodnik";
 
 export interface ToolDef {
   key: ToolKey;
@@ -17,8 +17,8 @@ export const TOOLS: ToolDef[] = [
     key: "pulpit",
     label: "Pulpit",
     section: "start",
-    what: "Najważniejsze liczby wybranego projektu i stan podłączonych danych w jednym miejscu.",
-    how: ["Sprawdź, czy wszystkie źródła danych są zielone.", "Zobacz liczby z ostatnich 30 dni.", "Przejdź do narzędzia, którego potrzebujesz."],
+    what: "Start projektu: przyciski do wszystkich narzędzi.",
+    how: ["Kliknij narzędzie.", "Strzałka „Pulpit” u góry każdego narzędzia wraca tutaj."],
   },
   {
     key: "lejki",
@@ -52,6 +52,13 @@ export const TOOLS: ToolDef[] = [
       "Skopiuj wygenerowane nazwy reklam i linki z UTM do Menedżera reklam.",
       "Śledź tabelę wyników – po wydaniu budżetu zatwierdź podpowiedź (zwycięzca idzie do biblioteki).",
     ],
+  },
+  {
+    key: "plan",
+    label: "Kalendarz",
+    section: "narzedzia",
+    what: "Co i kiedy zrobić: własne zadania i terminy rund testów (start, werdykt). Można dodać do kalendarza w telefonie.",
+    how: ["Kliknij dzień i dopisz zadanie.", "Terminy testów pojawiają się same.", "„Dodaj do kalendarza w telefonie” – subskrypcja w Google / iPhone."],
   },
   {
     key: "os-czasu",
@@ -99,4 +106,5 @@ export const LEGACY_TABS: Record<string, ToolKey> = {
   integracje: "dane",
   start: "przewodnik",
   testy: "testy",
+  plan: "plan",
 };

@@ -10,7 +10,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
   if (!project) notFound();
   return (
     <>
-      <ToolHeader tool="ustawienia" context={`${project.client_name} · ${project.name}`} />
+      <ToolHeader tool="ustawienia" projectId={id} />
       <SettingsPanel projectId={id} />
       <div className="card section danger-zone">
         <h3>Usuń projekt</h3>

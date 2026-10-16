@@ -23,7 +23,7 @@ export default async function FunnelsPage({ params }: { params: Promise<{ id: st
   );
   return (
     <>
-      <ToolHeader tool="lejki" />
+      <ToolHeader tool="lejki" projectId={id} />
       <div className="canvas-grid">
         <NewFunnelCard projectId={id} />
         {funnels.map((f) => (

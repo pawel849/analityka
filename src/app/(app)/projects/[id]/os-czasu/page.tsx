@@ -9,7 +9,7 @@ export default async function TimelinePage({ params }: { params: Promise<{ id: s
   if (!project) notFound();
   return (
     <>
-      <ToolHeader tool="os-czasu" context={`${project.client_name} · ${project.name}`} />
+      <ToolHeader tool="os-czasu" projectId={id} />
       <TimelinePanel projectId={id} />
     </>
   );

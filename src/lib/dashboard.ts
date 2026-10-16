@@ -1,10 +1,5 @@
-// Pulpit projektu: stan źródeł danych i najważniejsze liczby (cały projekt, bez zawężeń).
+// Stan źródeł danych projektu (Źródła danych).
 import { one, q } from "./db";
-import { loadAds } from "./project-data";
-import { spendBetween } from "./economics";
-
-const DAY = 86400_000;
-const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 export interface SourceStatus {
   key: string;
@@ -14,24 +9,8 @@ export interface SourceStatus {
   fix?: string; // ścieżka podstrony z instrukcją
 }
 
-const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Zakres pulpitu: wybrany przez użytkownika (domyślnie ostatnie 30 dni) + poprzedni okres tej samej długości. */
-export function dashboardRange(fromIn?: string, toIn?: string) {
-  const today = iso(Date.now());
-  let to = toIn && ISO_RE.test(toIn) ? toIn : today;
-  let from = fromIn && ISO_RE.test(fromIn) ? fromIn : iso(Date.parse(to) - 29 * DAY);
-  if (from > to) [from, to] = [to, from];
-  const days = Math.round((Date.parse(to) - Date.parse(from)) / DAY) + 1;
-  const pTo = iso(Date.parse(from) - DAY);
-  const pFrom = iso(Date.parse(from) - days * DAY);
-  return { from, to, pFrom, pTo, days };
-}
-
-export async function dashboard(projectId: string, fromIn?: string, toIn?: string) {
-  const { from, to, pFrom, pTo, days } = dashboardRange(fromIn, toIn);
-
-  const [ev7, lastEv, integrations, orders, ads, funnels, tests, visitors, prevVisitors, ordersNow, ordersPrev] = await Promise.all([
+export async function dataSources(projectId: string): Promise<SourceStatus[]> {
+  const [ev7, lastEv, integrations, orders, ads] = await Promise.all([
     one<{ n: string }>("SELECT count(*) AS n FROM events WHERE project_id = $1 AND NOT is_test AND ts >= now() - interval '7 days'", [projectId]),
     one<{ last: string | null }>("SELECT max(ts) AS last FROM events WHERE project_id = $1 AND NOT is_test AND origin = 'script'", [projectId]),
     q<{ provider: string; name: string; status: string; last_sync_at: string | null; last_error: string }>(
@@ -40,23 +19,7 @@ export async function dashboard(projectId: string, fromIn?: string, toIn?: strin
     ),
     one<{ n: string; last: string | null }>("SELECT count(*) AS n, max(ts) AS last FROM orders WHERE project_id = $1", [projectId]),
     one<{ n: string; last: string | null }>("SELECT count(*) AS n, to_char(max(period_end), 'YYYY-MM-DD') AS last FROM ad_rows WHERE project_id = $1", [projectId]),
-    one<{ n: string }>("SELECT count(*) AS n FROM funnels WHERE project_id = $1", [projectId]),
-    one<{ n: string }>("SELECT count(*) AS n FROM ad_tests WHERE project_id = $1 AND status <> 'zakończony'", [projectId]).catch(() => ({ n: "0" })),
-    one<{ n: string }>(
-      "SELECT count(DISTINCT visitor_id) AS n FROM events WHERE project_id = $1 AND NOT is_test AND type = 'pageview' AND ts >= $2::date AND ts < ($3::date + 1)",
-      [projectId, from, to],
-    ),
-    one<{ n: string }>(
-      "SELECT count(DISTINCT visitor_id) AS n FROM events WHERE project_id = $1 AND NOT is_test AND type = 'pageview' AND ts >= $2::date AND ts < ($3::date + 1)",
-      [projectId, pFrom, pTo],
-    ),
-    one<{ n: string; gross: string | null }>("SELECT count(*) AS n, sum(gross) AS gross FROM orders WHERE project_id = $1 AND ts >= $2::date AND ts < ($3::date + 1)", [projectId, from, to]),
-    one<{ n: string; gross: string | null }>("SELECT count(*) AS n, sum(gross) AS gross FROM orders WHERE project_id = $1 AND ts >= $2::date AND ts < ($3::date + 1)", [projectId, pFrom, pTo]),
   ]);
-  const adRows = await loadAds(projectId, pFrom, to);
-  const spend = spendBetween(adRows, from, to);
-  const prevSpend = spendBetween(adRows, pFrom, pTo);
-
   const sources: SourceStatus[] = [];
   const e7 = Number(ev7?.n ?? 0);
   sources.push({
@@ -100,18 +63,5 @@ export async function dashboard(projectId: string, fromIn?: string, toIn?: strin
     fix: "dane?s=api",
   });
 
-  const gross = Number(ordersNow?.gross ?? 0);
-  const prevGross = Number(ordersPrev?.gross ?? 0);
-  return {
-    range: { from, to, pFrom, pTo, days },
-    sources,
-    counts: { funnels: Number(funnels?.n ?? 0), activeTests: Number(tests?.n ?? 0) },
-    kpis: {
-      visitors: { now: Number(visitors?.n ?? 0), prev: Number(prevVisitors?.n ?? 0) },
-      orders: { now: Number(ordersNow?.n ?? 0), prev: Number(ordersPrev?.n ?? 0) },
-      revenue: { now: gross, prev: prevGross },
-      spend: { now: spend, prev: prevSpend },
-      roas: { now: spend ? gross / spend : null, prev: prevSpend ? prevGross / prevSpend : null },
-    },
-  };
+  return sources;
 }

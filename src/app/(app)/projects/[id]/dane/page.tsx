@@ -6,6 +6,8 @@ import { TrackingPanel } from "@/components/TrackingPanel";
 import { IntegrationsPanel } from "@/components/IntegrationsPanel";
 import { ImportPanel } from "@/components/data/ImportPanel";
 import { ToolHeader } from "@/components/shell/ToolHeader";
+import { SourceStatus } from "@/components/data/SourceStatus";
+import { dataSources } from "@/lib/dashboard";
 import { loadProject, requestOrigin } from "@/lib/project-context";
 
 export default async function DataPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ s?: string }> }) {
@@ -14,6 +16,7 @@ export default async function DataPage({ params, searchParams }: { params: Promi
   const project = await loadProject(id);
   if (!project) notFound();
   const origin = await requestOrigin();
+  const sources = await dataSources(id);
   const funnels = await q<{ id: string; name: string }>("SELECT id, name FROM funnels WHERE project_id = $1 ORDER BY created_at", [id]);
   const sec = ["skrypt", "api", "import", "webhook"].includes(s ?? "") ? s : "skrypt";
   const tabs: [string, string, LucideIcon][] = [
@@ -24,7 +27,8 @@ export default async function DataPage({ params, searchParams }: { params: Promi
   ];
   return (
     <>
-      <ToolHeader tool="dane" context={`${project.client_name} · ${project.name}`} />
+      <ToolHeader tool="dane" projectId={id} />
+      <SourceStatus projectId={id} sources={sources} />
       <nav className="sub-tabs">
         {tabs.map(([k, label, Icon]) => (
           <a key={k} href={`?s=${k}`} className={sec === k ? "on" : ""}>

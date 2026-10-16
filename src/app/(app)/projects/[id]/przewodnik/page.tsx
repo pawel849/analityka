@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { SetupChoice, SetupWizard } from "@/components/setup/SetupWizard";
+import { ToolHeader } from "@/components/shell/ToolHeader";
 import { loadProject, requestOrigin } from "@/lib/project-context";
 
 export default async function GuidePage({ params }: { params: Promise<{ id: string }> }) {
@@ -10,10 +11,15 @@ export default async function GuidePage({ params }: { params: Promise<{ id: stri
   if (project.setup.mode !== "guided" || project.setup.hidden) {
     return (
       <>
-        <h1>Przewodnik konfiguracji</h1>
+        <ToolHeader tool="przewodnik" projectId={id} />
         <SetupChoice projectId={id} />
       </>
     );
   }
-  return <SetupWizard projectId={id} origin={origin} trackingKey={project.tracking_key} initial={project.setup} />;
+  return (
+    <>
+      <ToolHeader tool="przewodnik" projectId={id} />
+      <SetupWizard projectId={id} origin={origin} trackingKey={project.tracking_key} initial={project.setup} />
+    </>
+  );
 }
