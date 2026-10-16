@@ -267,7 +267,7 @@ export interface RoundInput {
 export async function createRound(testId: string, input: RoundInput) {
   const t = await one<{ id: string; project_id: string; angle: string }>("SELECT id, project_id, angle FROM ad_tests WHERE id = $1", [testId]);
   if (!t) throw new Error("Nie znaleziono testu");
-  if (input.variants.length < 1 || input.variants.length > 4) throw new Error("Runda ma 1–4 warianty (zwykle 2–4).");
+  if (input.variants.length < 1 || input.variants.length > LETTERS.length) throw new Error(`Runda ma 1–${LETTERS.length} wariantów (zwykle 2–4).`);
   const s = await getTestSettings(t.project_id);
   const prev = await one<{ number: number; winner_variant_id: string | null }>(
     "SELECT number, winner_variant_id FROM ad_test_rounds WHERE test_id = $1 ORDER BY number DESC LIMIT 1",

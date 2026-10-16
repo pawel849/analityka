@@ -226,5 +226,15 @@ CREATE TABLE IF NOT EXISTS winning_elements (
   ctr DOUBLE PRECISION,
   diff_vs_base DOUBLE PRECISION,
   won_at TIMESTAMPTZ NOT NULL DEFAULT now()
-)
+);
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  due DATE NOT NULL,
+  done BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS tasks_project_due ON tasks (project_id, due);
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS calendar_token TEXT
 `;

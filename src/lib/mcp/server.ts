@@ -721,13 +721,13 @@ export function buildMcpServer(origin: string): McpServer {
     "create_test_round",
     {
       title: "Nowa runda testu",
-      description: `Runda z 2–4 wariantami różniącymi się jednym elementem (${ELEMENTS.join(", ")}). Bazą jest zwycięzca poprzedniej rundy. Zwraca nazwy reklam do Meta i linki z UTM.`,
+      description: `Runda z 2–8 wariantami różniącymi się jednym elementem (${ELEMENTS.join(", ")}). Bazą jest zwycięzca poprzedniej rundy. Zwraca nazwy reklam do Meta i linki z UTM.`,
       inputSchema: {
         test_id: z.string(),
         element: z.string(),
         start_date: z.string().optional(),
         page_url: z.string().optional().describe("Strona docelowa reklam – do linków z UTM"),
-        variants: z.array(z.object({ change_to: z.string(), idea_source: z.string().optional(), hypothesis: z.string().optional(), daily_budget: z.number().optional() })).min(1).max(4),
+        variants: z.array(z.object({ change_to: z.string(), idea_source: z.string().optional(), hypothesis: z.string().optional(), daily_budget: z.number().optional() })).min(1).max(8),
       },
       annotations: WR,
     },

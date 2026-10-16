@@ -82,7 +82,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     title: "Testy reklam – rundy wariantów i koszt kursanta",
     tags: "testy reklam ab test warianty runda kąt cac koszt kursanta zwycięzca zmęczenie skalowanie biblioteka utm nazwa reklamy",
     body: [
-      "Test = kąt (obietnica) reklamy. Runda = 2–4 warianty różniące się jednym elementem (pierwsze zdanie, środek, obietnica, wezwanie, format, odbiorcy). Bazą kolejnej rundy jest zwycięzca poprzedniej.",
+      "Test = kąt (obietnica) reklamy. Runda = 2–8 wariantów różniących się jednym elementem (hook, body, close, kąt, CTA, format, odbiorcy, styl graficzno-wizualny). Bazą kolejnej rundy jest zwycięzca poprzedniej.",
       "Kreator rundy generuje nazwy reklam (np. AMERYKANSKI_COACH_R2_B). W Menedżerze reklam nazwij reklamy dokładnie tak i w polu „Parametry URL” wklej: utm_source=ads_meta&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}.",
       "Wydatki, kliknięcia, wideo – z połączenia Meta (po nazwie reklamy). Wejścia – ze skryptu (utm_content). Kursy – zakupy produktu głównego przypisane do wariantu po utm_content w oknie atrybucji (domyślnie 7 dni).",
       "Koszt kursanta (CAC) = wydatki ÷ kursy. Po wydaniu budżetu na wariant (domyślnie 2 × maks. CAC) aplikacja podpowiada: zwycięzca / przegrywa / wyłącz / remis. Decyzję zatwierdzasz Ty – zwycięzca trafia do biblioteki i na oś czasu.",

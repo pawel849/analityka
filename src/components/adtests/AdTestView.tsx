@@ -5,8 +5,8 @@ import { api } from "../forms";
 import { Tip } from "../Tip";
 import Link from "next/link";
 import {
-  AlignLeft, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, CircleCheck, CircleX, Clapperboard, Flag, Hourglass, Megaphone, MousePointerClick, Pencil, Plus, Quote,
-  RefreshCw, ShoppingBag, Sparkles, TriangleAlert, Trophy, Users, X,
+  AlignLeft, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, CircleCheck, CircleX, Clapperboard, Compass, Flag, Hourglass, Layers, Link as LinkIcon, Lock, Megaphone,
+  MousePointerClick, Palette, Pencil, Plus, Quote, RefreshCw, ShoppingBag, Sparkles, TriangleAlert, Trophy, Users, X, Zap,
 } from "lucide-react";
 import { STATUS_ICON, pct, splitName, zl } from "./AdTestsHome";
 import {
@@ -97,11 +97,35 @@ export function AdTestView({ projectId, testId, openCreator }: { projectId: stri
 }
 
 const ELEMENT_ICON: Record<string, typeof Flag> = {
-  "pierwsze zdanie": Quote, "środek": AlignLeft, obietnica: Sparkles, wezwanie: MousePointerClick, format: Clapperboard, odbiorcy: Users,
+  hook: Zap, body: AlignLeft, close: Lock, "kąt": Compass, CTA: MousePointerClick, format: Clapperboard, odbiorcy: Users, "styl graficzno-wizualny": Palette,
+  // nazwy z wcześniejszych rund
+  "pierwsze zdanie": Quote, "środek": AlignLeft, obietnica: Sparkles, wezwanie: MousePointerClick,
 };
+
+/** Nazwy reklam do Meta + linki z UTM dla rundy (po utworzeniu i później, z widoku rundy). */
+function RoundLinks({ variants, pageUrl, verdictDate }: { variants: { letter: string; name: string }[]; pageUrl: string; verdictDate: string | null }) {
+  return (
+    <div className="round-links">
+      <p>W Menedżerze reklam nazwij reklamy <b>dokładnie tak</b> i wklej parametry URL – po nazwie aplikacja połączy wydatki, wejścia i zamówienia.</p>
+      <div className="row" style={{ marginBottom: 8 }}><code className="wrap">{META_URL_PARAMS}</code><Copy text={META_URL_PARAMS} label="Kopiuj parametry URL" /></div>
+      <div className="ad-grid">
+        {variants.map((v) => (
+          <div key={v.letter} className="ad-card run">
+            <div className="ad-mock static"><span className="ad-mock-top"><span className="ad-dot" /><span className="ad-line" /></span><span className="ad-mock-img"><Megaphone size={26} /></span><span className="ad-letter">{v.letter}</span></div>
+            <code className="wrap">{v.name}</code>
+            <Copy text={v.name} label="Kopiuj nazwę" />
+            {pageUrl && <Copy text={variantLink(pageUrl, v.name)} label="Kopiuj link z UTM" />}
+          </div>
+        ))}
+      </div>
+      {verdictDate && <div className="tt-chips big"><span><Flag size={15} /> werdykt: <b>{verdictDate}</b></span></div>}
+    </div>
+  );
+}
 
 function RoundTable({ r, s, onChanged }: { r: RoundResult; s: TestSettings; onChanged: () => void }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [links, setLinks] = useState(false);
   const EI = ELEMENT_ICON[r.element] ?? Flag;
   const sel = r.variants.find((v) => v.id === open);
   return (
@@ -116,7 +140,9 @@ function RoundTable({ r, s, onChanged }: { r: RoundResult; s: TestSettings; onCh
           {r.daysToVerdict != null && <span title="Do werdyktu"><Hourglass size={14} /> {r.daysToVerdict > 0 ? `${r.daysToVerdict} dn.` : "teraz"}</span>}
           {r.status !== "w toku" && <span><CircleCheck size={14} /> {r.status}</span>}
         </div>
+        <button className={`btn small ${links ? "primary" : ""}`} style={{ marginLeft: "auto" }} onClick={() => setLinks((v) => !v)}><LinkIcon size={14} /> Nazwy i linki</button>
       </div>
+      {links && <RoundLinks variants={r.variants.map((v) => ({ letter: v.letter, name: v.meta_ad_name }))} pageUrl={r.page_url ?? ""} verdictDate={r.verdict_date} />}
       {r.hints.map((h, i) => (
         <div key={i} className="round-hint"><TriangleAlert size={14} /> {h}</div>
       ))}
@@ -150,7 +176,6 @@ function AdCard({ v, open, onToggle, onChanged }: { v: VariantResult; open: bool
         <span className="ad-letter">{v.letter}</span>
         {tone === "win" && <Trophy size={18} className="ad-badge" />}
       </button>
-      <b className="ad-title" title={v.hypothesis}>{v.change_to || "—"}</b>
       <div className="ad-spend">
         <div className="row" style={{ justifyContent: "space-between" }}><span>Wydano</span><b>{zl(v.totals.spend)}</b></div>
         <div className="bar wide" title={`${progress}% budżetu do werdyktu`}><span style={{ width: `${progress}%` }} /></div>
@@ -188,8 +213,17 @@ function VariantDetail({ v, s, onChanged }: { v: VariantResult; s: TestSettings;
   const max = Math.max(1, ...v.daily.map((d) => d.spend));
   return (
     <div className="vd card">
+      <div className="vd-change">
+        <span className="ad-letter big">{v.letter}</span>
+        <div>
+          <span className="vd-label">Co zmieniono</span>
+          <p className="vd-text">{v.change_to || "—"}</p>
+          {v.idea_source && <><span className="vd-label">Skąd pomysł</span><p>{v.idea_source}</p></>}
+          {v.hypothesis && <><span className="vd-label">Hipoteza</span><p>{v.hypothesis}</p></>}
+        </div>
+      </div>
       <div>
-        <b>Wariant {v.letter} – dzień po dniu</b>
+        <b>Dzień po dniu</b>
         {v.daily.length ? (
           <div className="daybars" title="Słupek = wydatki, liczba = kursy">
             {v.daily.map((d) => (
@@ -213,7 +247,6 @@ function VariantDetail({ v, s, onChanged }: { v: VariantResult; s: TestSettings;
           <span title="CPA raportowane przez Meta – tylko do porównania"><b>{zl(v.d.metaCpa)}</b> CPA Meta</span>
           <span title="Skąd dane"><b>{v.sources.meta ? SRC_LABEL[v.sources.meta] : "brak"}</b> wydatki</span>
         </div>
-        {v.hypothesis && <p><b>Hipoteza:</b> {v.hypothesis}</p>}
       </div>
       <div>
         <b>Do Menedżera reklam</b>
@@ -281,181 +314,188 @@ function Watch({ watch }: { watch: TestResult["watch"] }) {
   );
 }
 
-interface VarDraft { changeTo: string; ideaSource: string; hypothesis: string }
+interface VarDraft { changeTo: string; ideas: string[]; own: string; hypothesis: string }
 
-/** Kreator rundy krok po kroku: element → ustawienia → wariant A, B, C… (każdy zatwierdzany osobno) → podsumowanie. */
+const ideaText = (v: VarDraft) => [...v.ideas, ...(v.own.trim() ? [v.own.trim()] : [])].join(", ");
+
+/** Kreator rundy w oknie: element → ustawienia → wariant A, B, C… (każdy osobno, zatwierdzany) → podsumowanie. */
 function RoundCreator({ testId, settings: s, rounds, onDone }: { testId: string; angle: string; settings: TestSettings; rounds: RoundResult[]; onDone: () => void }) {
   const last = rounds[rounds.length - 1];
-  const base = last?.variants.find((v) => v.id === last.winner_variant_id);
   const number = (last?.number ?? 0) + 1;
   const [element, setElement] = useState<string>("");
   const [start, setStart] = useState(new Date().toISOString().slice(0, 10));
   const [pageUrl, setPageUrl] = useState(last?.page_url ?? "");
-  const [count, setCount] = useState(Math.min(4, Math.max(2, s.variantsPerRound)));
+  const [count, setCount] = useState(Math.min(LETTERS.length, Math.max(2, s.variantsPerRound)));
+  const [custom, setCustom] = useState(false);
   const [daily, setDaily] = useState(String(Math.round(budgetPerVariant(s) / 7)));
-  const [vars, setVars] = useState<VarDraft[]>(() => LETTERS.map(() => ({ changeTo: "", ideaSource: "", hypothesis: "" })));
-  const [step, setStep] = useState(0); // 0 element, 1 ustawienia, 2..(2+count-1) warianty, potem podsumowanie
-  const [library, setLibrary] = useState<string[]>([]);
+  const [vars, setVars] = useState<VarDraft[]>(() => LETTERS.map(() => ({ changeTo: "", ideas: [], own: "", hypothesis: "" })));
+  const [step, setStep] = useState(0); // 0 element, 1 ustawienia, 2..(2+count-1) warianty, 2+count podsumowanie
+  const [fromSummary, setFromSummary] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ number: number; verdictDate: string | null; variants: { letter: string; name: string }[] } | null>(null);
-  useEffect(() => {
-    const pid = location.pathname.split("/")[2];
-    api<{ change_to: string; element: string }[]>(`/api/projects/${pid}/winning-elements`).then((r) => setLibrary(r.map((x) => `${x.element}: ${x.change_to}`))).catch(() => {});
-  }, []);
   const vd = Number(daily) > 0 ? verdictDate(start, Number(daily), s) : null;
   const summary = 2 + count;
-  const vi = step - 2; // indeks edytowanego wariantu
+  const vi = step - 2;
   const setVar = (i: number, patch: Partial<VarDraft>) => setVars(vars.map((x, k) => (k === i ? { ...x, ...patch } : x)));
   const labels = ["Element", "Ustawienia", ...LETTERS.slice(0, count), "Gotowe"];
-
-  if (result)
-    return (
-      <section className="card creator">
-        <h3 style={{ marginTop: 0 }}><CircleCheck size={18} /> Runda {result.number} gotowa</h3>
-        <p>W Menedżerze reklam nazwij reklamy <b>dokładnie tak</b> i wklej parametry URL – po nazwie aplikacja połączy wydatki, wejścia i zamówienia.</p>
-        <div className="row" style={{ marginBottom: 8 }}><code className="wrap">{META_URL_PARAMS}</code><Copy text={META_URL_PARAMS} label="Kopiuj parametry URL" /></div>
-        <div className="ad-grid">
-          {result.variants.map((v) => (
-            <div key={v.letter} className="ad-card run">
-              <div className="ad-mock static"><span className="ad-mock-top"><span className="ad-dot" /><span className="ad-line" /></span><span className="ad-mock-img"><Megaphone size={26} /></span><span className="ad-letter">{v.letter}</span></div>
-              <code className="wrap">{v.name}</code>
-              <Copy text={v.name} label="Kopiuj nazwę" />
-              {pageUrl && <Copy text={variantLink(pageUrl, v.name)} label="Kopiuj link z UTM" />}
-            </div>
-          ))}
-        </div>
-        <div className="tt-chips big"><span><Flag size={15} /> werdykt: <b>{result.verdictDate ?? "—"}</b></span></div>
-        <button className="btn primary" onClick={onDone}>Gotowe</button>
-      </section>
-    );
+  const close = () => (result ? onDone() : window.confirm("Zamknąć kreator? Wpisane warianty nie zostaną zapisane.") && onDone());
 
   return (
-    <section className="card creator rc">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <h3 style={{ margin: 0 }}>Nowa runda {number}</h3>
-        {base && <span className="tt-chips"><span title="Wygrany z poprzedniej rundy – punkt odniesienia"><Trophy size={14} /> baza: {base.letter} – {base.change_to}</span></span>}
+    <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div className="modal wiz wide rc" role="dialog" aria-modal="true" aria-label={`Nowa runda ${number}`}>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <b className="wiz-title"><Layers size={18} /> {result ? `Runda ${result.number} gotowa` : `Nowa runda ${number}`}</b>
+          <button className="icon-btn" onClick={close} aria-label="Zamknij"><X size={18} /></button>
+        </div>
+        {result ? (
+          <>
+            <RoundLinks variants={result.variants} pageUrl={pageUrl} verdictDate={result.verdictDate} />
+            <div className="wiz-nav"><span /><button className="btn primary" onClick={onDone}>Gotowe</button></div>
+          </>
+        ) : (
+          <>
+            <ol className="wiz-steps">
+              {labels.map((x, i) => (
+                <li key={x} className={i === step ? "on" : i < step ? "done" : ""}><span>{i < step ? <Check size={11} /> : i + 1}</span>{x}</li>
+              ))}
+            </ol>
+
+            {step === 0 && (
+              <div className="wiz-body">
+                <label className="wiz-q">Co zmieniasz w tej rundzie? <Tip text="W jednej rundzie zmieniasz tylko jeden element reklamy – wtedy wiadomo, co dało wynik." /></label>
+                <div className="el-grid">
+                  {ELEMENTS.map((x) => {
+                    const EI = ELEMENT_ICON[x] ?? Flag;
+                    return (
+                      <button type="button" key={x} className={`el-tile ${element === x ? "on" : ""}`} onClick={() => { setElement(x); setStep(1); }}>
+                        <EI size={22} />
+                        <b>{x}</b>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {step === 1 && (
+              <form className="wiz-body" onSubmit={(e) => { e.preventDefault(); setStep(2); }}>
+                <div className="rc-grid">
+                  <label className="rc-field"><span><CalendarDays size={15} /> Start</span><input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+                  <label className="rc-field"><span><Megaphone size={15} /> Budżet dzienny na wariant <Tip text="Z niego liczy się data werdyktu: start + budżet na wariant ÷ budżet dzienny." /></span>
+                    <span className="money-input sm"><input inputMode="decimal" value={daily} onChange={(e) => setDaily(e.target.value.replace(",", "."))} /><span>zł</span></span>
+                  </label>
+                  <label className="rc-field wide"><span><Flag size={15} /> Strona, na którą prowadzi reklama <Tip text="Potrzebna do gotowych linków z UTM. Możesz zostawić puste i użyć parametrów URL." /></span><input value={pageUrl} onChange={(e) => setPageUrl(e.target.value)} /></label>
+                </div>
+                <label className="wiz-q small">Ile wariantów?</label>
+                <div className="count-tiles">
+                  {[2, 3, 4].map((n) => (
+                    <button type="button" key={n} className={!custom && count === n ? "on" : ""} onClick={() => { setCustom(false); setCount(n); }}>{n}</button>
+                  ))}
+                  <button type="button" className={custom ? "on" : ""} onClick={() => setCustom(true)}>inna</button>
+                  {custom && (
+                    <input className="count-input" type="number" min={2} max={LETTERS.length} value={count} onChange={(e) => setCount(Math.min(LETTERS.length, Math.max(2, Number(e.target.value) || 2)))} aria-label="Liczba wariantów" />
+                  )}
+                </div>
+                {vd && <div className="tt-chips big"><span><Flag size={15} /> werdykt: <b>{vd}</b></span></div>}
+                <div className="wiz-nav">
+                  <button type="button" className="btn" onClick={() => setStep(0)}><ArrowLeft size={16} /> Wstecz</button>
+                  <button className="btn primary">Dalej <ArrowRight size={16} /></button>
+                </div>
+              </form>
+            )}
+
+            {step >= 2 && step < summary && (
+              <form
+                className="wiz-body"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!vars[vi].changeTo.trim()) return;
+                  setStep(fromSummary ? summary : step + 1);
+                  setFromSummary(false);
+                }}
+              >
+                <div className="rc-var">
+                  <span className="ad-letter big">{LETTERS[vi]}</span>
+                  <div className="rc-var-fields">
+                    <label className="wiz-q small">Co zmieniasz w wariancie {LETTERS[vi]}? <span className="el-chip">{element}</span></label>
+                    <textarea key={`c${vi}`} autoFocus rows={4} value={vars[vi].changeTo} onChange={(e) => setVar(vi, { changeTo: e.target.value })} />
+                    <label className="wiz-q small">Skąd pomysł? <Tip text="Możesz zaznaczyć kilka." /></label>
+                    <div className="idea-grid">
+                      {IDEA_SOURCES.map((x) => {
+                        const on = vars[vi].ideas.includes(x);
+                        return (
+                          <button type="button" key={x} className={`idea-tile ${on ? "on" : ""}`} onClick={() => setVar(vi, { ideas: on ? vars[vi].ideas.filter((y) => y !== x) : [...vars[vi].ideas, x] })}>
+                            {on ? <CircleCheck size={16} /> : <span className="pp-dot" />} {x}
+                          </button>
+                        );
+                      })}
+                      <label className={`idea-tile own ${vars[vi].own.trim() ? "on" : ""}`}>
+                        <Pencil size={15} />
+                        <input value={vars[vi].own} onChange={(e) => setVar(vi, { own: e.target.value })} aria-label="Własne źródło pomysłu" placeholder="własne" />
+                      </label>
+                    </div>
+                    <label className="wiz-q small">Hipoteza <Tip text="Dlaczego ten wariant ma wygrać – pomaga potem zrozumieć, czego uczy wynik." /></label>
+                    <textarea key={`h${vi}`} rows={3} value={vars[vi].hypothesis} onChange={(e) => setVar(vi, { hypothesis: e.target.value })} />
+                  </div>
+                </div>
+                <div className="wiz-nav">
+                  <button type="button" className="btn" onClick={() => { setFromSummary(false); setStep(fromSummary ? summary : step - 1); }}><ArrowLeft size={16} /> Wstecz</button>
+                  <button className="btn primary" disabled={!vars[vi].changeTo.trim()}><Check size={16} /> Zatwierdź {LETTERS[vi]}</button>
+                </div>
+              </form>
+            )}
+
+            {step === summary && (
+              <div className="wiz-body">
+                <label className="wiz-q">Sprawdź warianty <Tip text="Kliknij wariant, żeby go poprawić." /></label>
+                <div className="sum-grid">
+                  {vars.slice(0, count).map((v, i) => (
+                    <button type="button" key={i} className="sum-tile" onClick={() => { setFromSummary(true); setStep(2 + i); }} title="Edytuj">
+                      <span className="ad-mock-img sm"><Megaphone size={22} /></span>
+                      <span className="ad-letter">{LETTERS[i]}</span>
+                      <CircleCheck size={18} className="sum-ok" />
+                      <Pencil size={14} className="sum-edit" />
+                    </button>
+                  ))}
+                </div>
+                <div className="tt-chips big">
+                  <span>{(() => { const EI = ELEMENT_ICON[element] ?? Flag; return <EI size={15} />; })()} {element}</span>
+                  <span><CalendarDays size={15} /> {start}</span>
+                  <span><Flag size={15} /> werdykt: <b>{vd ?? "—"}</b></span>
+                </div>
+                {err && <p className="error">{err}</p>}
+                <div className="wiz-nav">
+                  <button type="button" className="btn" onClick={() => setStep(summary - 1)} disabled={busy}><ArrowLeft size={16} /> Wstecz</button>
+                  <button
+                    className="btn primary"
+                    disabled={busy}
+                    onClick={async () => {
+                      setErr("");
+                      setBusy(true);
+                      try {
+                        const r = await api<{ number: number; verdictDate: string | null; variants: { letter: string; name: string }[] }>(`/api/ad-tests/${testId}/rounds`, "POST", {
+                          element,
+                          startDate: start,
+                          pageUrl,
+                          variants: vars.slice(0, count).map((v) => ({ changeTo: v.changeTo, ideaSource: ideaText(v), hypothesis: v.hypothesis, dailyBudget: Number(daily) || 0 })),
+                        });
+                        setResult(r);
+                      } catch (e) {
+                        setErr((e as Error).message);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    {busy ? "Tworzę…" : "Utwórz rundę"} <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
-      <ol className="wiz-steps">
-        {labels.map((x, i) => (
-          <li key={x} className={i === step ? "on" : i < step ? "done" : ""}><span>{i < step ? <Check size={11} /> : i + 1}</span>{x}</li>
-        ))}
-      </ol>
-
-      {step === 0 && (
-        <div className="wiz-body">
-          <label className="wiz-q">Co zmieniasz w tej rundzie? <Tip text="W jednej rundzie zmieniasz tylko jeden element reklamy – wtedy wiadomo, co dało wynik." /></label>
-          <div className="el-grid">
-            {ELEMENTS.map((x) => {
-              const EI = ELEMENT_ICON[x] ?? Flag;
-              return (
-                <button type="button" key={x} className={`el-tile ${element === x ? "on" : ""}`} onClick={() => { setElement(x); setStep(1); }}>
-                  <EI size={22} />
-                  <b>{x}</b>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {step === 1 && (
-        <form className="wiz-body" onSubmit={(e) => { e.preventDefault(); setStep(2); }}>
-          <div className="rc-grid">
-            <label className="rc-field"><span><CalendarDays size={15} /> Start</span><input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-            <label className="rc-field"><span><Megaphone size={15} /> Budżet dzienny na wariant <Tip text="Z niego liczy się data werdyktu: start + budżet na wariant ÷ budżet dzienny." /></span>
-              <span className="money-input sm"><input inputMode="decimal" value={daily} onChange={(e) => setDaily(e.target.value.replace(",", "."))} /><span>zł</span></span>
-            </label>
-            <label className="rc-field wide"><span><Flag size={15} /> Strona, na którą prowadzi reklama <Tip text="Potrzebna do gotowych linków z UTM. Możesz zostawić puste i użyć parametrów URL." /></span><input value={pageUrl} onChange={(e) => setPageUrl(e.target.value)} placeholder="https://…" /></label>
-          </div>
-          <label className="wiz-q small">Ile wariantów?</label>
-          <div className="count-tiles">
-            {[2, 3, 4].map((n) => (
-              <button type="button" key={n} className={count === n ? "on" : ""} onClick={() => setCount(n)}>{LETTERS.slice(0, n).join(" ")}</button>
-            ))}
-          </div>
-          {vd && <div className="tt-chips big"><span><Flag size={15} /> werdykt: <b>{vd}</b></span></div>}
-          <div className="wiz-nav">
-            <button type="button" className="btn" onClick={() => setStep(0)}><ArrowLeft size={16} /> Wstecz</button>
-            <button className="btn primary">Dalej <ArrowRight size={16} /></button>
-          </div>
-        </form>
-      )}
-
-      {step >= 2 && step < summary && (
-        <form className="wiz-body" onSubmit={(e) => { e.preventDefault(); if (vars[vi].changeTo.trim()) setStep(step + 1); }}>
-          <div className="rc-done">
-            {vars.slice(0, vi).map((v, i) => (
-              <div key={i} className="rc-done-item"><span className="v-letter win">{LETTERS[i]}</span><span>{v.changeTo}</span><button type="button" className="icon-btn" onClick={() => setStep(2 + i)} title="Edytuj"><Pencil size={14} /></button></div>
-            ))}
-          </div>
-          <div className="rc-var">
-            <span className="ad-letter big">{LETTERS[vi]}</span>
-            <div className="rc-var-fields">
-              <label className="wiz-q small">Co zmieniasz w wariancie {LETTERS[vi]}? <span className="el-chip">{element}</span></label>
-              <textarea autoFocus rows={3} value={vars[vi].changeTo} onChange={(e) => setVar(vi, { changeTo: e.target.value })} placeholder="np. Zdobędziesz więcej odpowiedzialności w pracy" />
-              <label className="wiz-q small">Skąd pomysł?</label>
-              <div className="chips">
-                {[...IDEA_SOURCES, ...library.slice(0, 4)].map((x) => (
-                  <button type="button" key={x} className={`chip ${vars[vi].ideaSource === x ? "on" : ""}`} onClick={() => setVar(vi, { ideaSource: vars[vi].ideaSource === x ? "" : x })}>{x}</button>
-                ))}
-              </div>
-              <label className="wiz-q small">Dlaczego ma wygrać? <Tip text="Hipoteza – pomaga potem zrozumieć, czego uczy wynik." /></label>
-              <textarea rows={2} value={vars[vi].hypothesis} onChange={(e) => setVar(vi, { hypothesis: e.target.value })} placeholder="np. Klienci w ankietach pisali o awansie" />
-            </div>
-          </div>
-          <div className="wiz-nav">
-            <button type="button" className="btn" onClick={() => setStep(step - 1)}><ArrowLeft size={16} /> Wstecz</button>
-            <button className="btn primary" disabled={!vars[vi].changeTo.trim()}><Check size={16} /> Zatwierdź {LETTERS[vi]}</button>
-          </div>
-        </form>
-      )}
-
-      {step === summary && (
-        <div className="wiz-body">
-          <div className="ad-grid">
-            {vars.slice(0, count).map((v, i) => (
-              <div key={i} className="ad-card run">
-                <div className="ad-mock static"><span className="ad-mock-top"><span className="ad-dot" /><span className="ad-line" /></span><span className="ad-mock-img"><Megaphone size={26} /></span><span className="ad-letter">{LETTERS[i]}</span></div>
-                <b className="ad-title">{v.changeTo}</b>
-                <button type="button" className="btn small" onClick={() => setStep(2 + i)}><Pencil size={14} /> Edytuj</button>
-              </div>
-            ))}
-          </div>
-          <div className="tt-chips big">
-            <span>{(() => { const EI = ELEMENT_ICON[element] ?? Flag; return <EI size={15} />; })()} {element}</span>
-            <span><CalendarDays size={15} /> {start}</span>
-            <span><Flag size={15} /> werdykt: <b>{vd ?? "—"}</b></span>
-          </div>
-          {err && <p className="error">{err}</p>}
-          <div className="wiz-nav">
-            <button type="button" className="btn" onClick={() => setStep(summary - 1)} disabled={busy}><ArrowLeft size={16} /> Wstecz</button>
-            <button
-              className="btn primary"
-              disabled={busy}
-              onClick={async () => {
-                setErr("");
-                setBusy(true);
-                try {
-                  const r = await api<{ number: number; verdictDate: string | null; variants: { letter: string; name: string }[] }>(`/api/ad-tests/${testId}/rounds`, "POST", {
-                    element,
-                    startDate: start,
-                    pageUrl,
-                    variants: vars.slice(0, count).map((v) => ({ ...v, dailyBudget: Number(daily) || 0 })),
-                  });
-                  setResult(r);
-                } catch (e) {
-                  setErr((e as Error).message);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {busy ? "Tworzę…" : "Utwórz rundę"} <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-    </section>
+    </div>
   );
 }

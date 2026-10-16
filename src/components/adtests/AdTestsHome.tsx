@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft, ArrowRight, BatteryLow, BookOpen, CalendarClock, CircleCheck, FlaskConical, GraduationCap, Hourglass, Layers, MessagesSquare, Package, Play, Plus, Scale,
-  ShoppingBag, SlidersHorizontal, Tag, Target, TrendingUp, TriangleAlert, Trophy, Users, UsersRound, Wallet, X,
+  ShoppingBag, SlidersHorizontal, Tag, Target, TrendingUp, TriangleAlert, Trophy, Users, Trash2, UsersRound, Wallet, X,
 } from "lucide-react";
 import { api } from "../forms";
 import { Tip } from "../Tip";
@@ -102,13 +102,12 @@ function ProductPick({ products, selected, onChange }: { products: Product[] | n
       <div className="pp-grid">
         {shown.map((p) => {
           const Icon = productIcon(p.name);
-          const [title, sub] = splitName(p.name);
+          const [title] = splitName(p.name);
           return (
             <button type="button" key={p.name} className={`pp-tile ${sel.has(p.name) ? "on" : ""}`} onClick={() => toggle(p.name)} title={p.name}>
               <span className="pp-ic"><Icon size={20} /></span>
               {sel.has(p.name) && <CircleCheck size={18} className="pp-ok" />}
               <b>{title}</b>
-              {sub && <span>{sub}</span>}
             </button>
           );
         })}
@@ -168,7 +167,7 @@ function NewTestWizard({ projectId, onClose }: { projectId: string; onClose: () 
         ) : step === 0 ? (
           <form className="wiz-body" onSubmit={(e) => { e.preventDefault(); if (angle.trim()) setStep(1); }}>
             <label className="wiz-q">Jaką obietnicę (kąt) testujesz? <Tip text="Główna myśl reklamy, np. „Amerykański coach” albo „Mów pewnie w 15 minut dziennie”. W jednym teście zmieniasz po jednym elemencie tej reklamy (hook, tekst, wideo…) w kolejnych rundach." /></label>
-            <input autoFocus value={angle} onChange={(e) => setAngle(e.target.value)} placeholder="np. Amerykański coach" />
+            <input autoFocus value={angle} onChange={(e) => setAngle(e.target.value)} />
             <div className="wiz-nav"><span /><button className="btn primary" disabled={!angle.trim()}>Dalej <ArrowRight size={16} /></button></div>
           </form>
         ) : step === 1 ? (
@@ -261,7 +260,8 @@ function TestList({ projectId, goSettings }: { projectId: string; goSettings: ()
           const SI = STATUS_ICON[t.status as keyof typeof STATUS_ICON] ?? Play;
           const c = t.current;
           return (
-            <Link key={t.id} href={`/projects/${projectId}/testy/${t.id}`} className="test-tile">
+            <div key={t.id} className="test-item">
+            <Link href={`/projects/${projectId}/testy/${t.id}`} className="test-tile">
               <div className="tt-head">
                 <span className={`tt-status st-${t.status.replace(" ", "-")}`} title={t.status}><SI size={16} /></span>
                 <b>{t.angle}</b>
@@ -273,6 +273,19 @@ function TestList({ projectId, goSettings }: { projectId: string; goSettings: ()
               </div>
               {t.alarms.length > 0 && <div className="tt-alarm" title={t.alarms.join("\n")}><TriangleAlert size={14} /> {t.alarms.length} {t.alarms.length === 1 ? "alarm" : "alarmy"}</div>}
             </Link>
+            <button
+              className="icon-btn danger test-del"
+              title="Usuń test"
+              aria-label={`Usuń test ${t.angle}`}
+              onClick={async () => {
+                if (!window.confirm(`Usunąć test „${t.angle}” razem z rundami i wynikami? Nie da się tego cofnąć.`)) return;
+                await api(`/api/ad-tests/${t.id}`, "DELETE");
+                load();
+              }}
+            >
+              <Trash2 size={16} />
+            </button>
+            </div>
           );
         })}
       </div>

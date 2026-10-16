@@ -162,7 +162,7 @@ function Picker({ items, selected, onChange, note }: { items: { name: string; me
           <label key={i.name} className={sel.has(i.name) ? "on" : ""}>
             <input type="checkbox" checked={sel.has(i.name)} onChange={() => toggle(i.name)} />
             <span className="picker-name">{i.name}</span>
-            <span className="picker-meta">{i.meta}</span>
+            {i.meta && <span className="picker-meta">{i.meta}</span>}
           </label>
         ))}
         {!shown.length && <span className="hint">Brak pozycji.</span>}
@@ -198,8 +198,8 @@ function ScopeFlow({ projectId, d, cur, current, onSaved }: { projectId: string;
     ...c.filter((n) => !lists.campaigns.some((x) => x.name === n)).map((n) => ({ name: n, meta: "0 wydatków w okresie" })),
   ];
   const productItems = [
-    ...lists.products.map((x) => ({ name: x.name, meta: `${num(x.count)} szt. · ${money(x.gross, cur)}` })),
-    ...p.filter((n) => !lists.products.some((x) => x.name === n)).map((n) => ({ name: n, meta: "0 sprzedaży w okresie" })),
+    ...lists.products.map((x) => ({ name: x.name, meta: "" })),
+    ...p.filter((n) => !lists.products.some((x) => x.name === n)).map((n) => ({ name: n, meta: "" })),
   ];
   const mainLabel = saved.products.length ? listLabel(saved.products, "") : (d.settings.mainCategory || "produkt główny").replace(/^wybrane: /, "");
   return (

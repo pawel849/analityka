@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Banknote, CircleAlert, CircleCheck, CircleDashed, Code2, Megaphone, Minus, Receipt, ShoppingCart, Target, Users, Wallet, Wrench, type LucideIcon } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { SetupChoice } from "@/components/setup/SetupWizard";
+import { Planner } from "@/components/dashboard/Planner";
 import { RangePicker } from "@/components/dashboard/RangePicker";
 import { TOOL_ICONS } from "@/components/shell/tool-icons";
 import { dashboard } from "@/lib/dashboard";
@@ -74,6 +75,11 @@ export default async function ProjectHome({ params, searchParams }: { params: Pr
           <Kpi icon={Receipt} tone="violet" label="Zamówienia" value={int(k.orders.now)}><Change now={k.orders.now} prev={k.orders.prev} vs={vs} /></Kpi>
           <Kpi icon={Users} tone="teal" label="Odwiedzający" value={int(k.visitors.now)}><Change now={k.visitors.now} prev={k.visitors.prev} vs={vs} /></Kpi>
         </div>
+      </section>
+
+      <section className="section">
+        <h2>Plan</h2>
+        <Planner projectId={id} />
       </section>
 
       <section className="section">

@@ -59,7 +59,7 @@ export function mergeTestSettings(raw: unknown): TestSettings {
 
 export const budgetPerVariant = (s: TestSettings) => s.budgetPerVariant ?? 2 * s.cacMax;
 
-export const ELEMENTS = ["pierwsze zdanie", "środek", "obietnica", "wezwanie", "format", "odbiorcy"] as const;
+export const ELEMENTS = ["hook", "body", "close", "kąt", "CTA", "format", "odbiorcy", "styl graficzno-wizualny"] as const;
 export const IDEA_SOURCES = ["własne reklamy", "research klientów", "VSL / strona sprzedażowa", "konkurencja"];
 export const DECISIONS = ["w toku", "wygrał", "przegrał", "remis", "wyłączony"] as const;
 export type Decision = (typeof DECISIONS)[number];
@@ -83,7 +83,7 @@ export function adName(pattern: string, angle: string, round: number, letter: st
   return pattern.replace(/\{KAT\}/g, angleSlug(angle)).replace(/\{n\}/g, String(round)).replace(/\{WARIANT\}/g, letter);
 }
 
-export const LETTERS = ["A", "B", "C", "D"];
+export const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 /** Link docelowy z UTM (utm_content = nazwa reklamy – po niej przypisujemy wejścia i zamówienia). */
 export function variantLink(pageUrl: string, name: string, campaign = ""): string {
