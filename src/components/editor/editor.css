@@ -1,18 +1,18 @@
 /* ===== Edytor lejka: dwa motywy ===== */
 .fe {
   --fe-bg: #f3f1ea;
-  --fe-grid: #c9d3e6;
+  --fe-grid: #c8dccf;
   --fe-panel: #fbfaf6;
-  --fe-panel-border: #cfd6e4;
-  --fe-ink: #1d3a7a;
-  --fe-ink-2: #4b5f8c;
-  --fe-muted: #7d8aa8;
+  --fe-panel-border: #cfe0d6;
+  --fe-ink: #0a3326;
+  --fe-ink-2: #2f5a4a;
+  --fe-muted: #6f8a7f;
   --fe-node: #fffdf7;
-  --fe-node-border: #1d3a7a;
-  --fe-edge: #1d3a7a;
-  --fe-accent: #2f5bea;
-  --fe-chip: #e6ebf6;
-  --fe-good: #1f8a4c;
+  --fe-node-border: #0b4a37;
+  --fe-edge: #0b4a37;
+  --fe-accent: #0b6e4f;
+  --fe-chip: #e3f2ea;
+  --fe-good: #1f8a63;
   --fe-bad: #c4372f;
   display: grid;
   grid-template-columns: 270px 1fr 300px;
@@ -22,19 +22,19 @@
   color: var(--fe-ink);
 }
 .fe.mode-analyze {
-  --fe-bg: #0e1116;
-  --fe-grid: #1d2430;
-  --fe-panel: #141922;
-  --fe-panel-border: #252d3b;
-  --fe-ink: #e7ecf5;
-  --fe-ink-2: #a9b4c7;
-  --fe-muted: #6f7b90;
-  --fe-node: #171d28;
-  --fe-node-border: #2c3648;
-  --fe-edge: #4b5a74;
-  --fe-accent: #6d8dff;
-  --fe-chip: #222a38;
-  --fe-good: #3fc27a;
+  --fe-bg: #0b1210;
+  --fe-grid: #1a2a24;
+  --fe-panel: #111b18;
+  --fe-panel-border: #22352e;
+  --fe-ink: #e3f2ea;
+  --fe-ink-2: #a9c4b8;
+  --fe-muted: #6f8a7f;
+  --fe-node: #14211d;
+  --fe-node-border: #2b4a3f;
+  --fe-edge: #4b7466;
+  --fe-accent: #6dbd98;
+  --fe-chip: #1c2e28;
+  --fe-good: #6dbd98;
   --fe-bad: #ff6b61;
 }
 .fe input, .fe select, .fe textarea {
@@ -176,10 +176,10 @@
 .pthumb .pt-btn-text { fill: #fff; font-family: var(--font); font-size: 5.5px; font-weight: 700; letter-spacing: .04em; }
 
 /* Cel konwersji */
-.fnode.is-goal { border-color: #c99a06; }
+.fnode.is-goal { border-color: #0b6e4f; }
 .goal-badge {
   position: absolute; top: -11px; right: 8px; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
-  background: #f5c542; color: #3a2a00; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: #c8e6d6; color: #0a3326; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* Zakładki panelu węzła */

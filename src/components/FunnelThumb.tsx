@@ -1,3 +1,5 @@
+import { CATEGORY_GREEN } from "@/lib/palette";
+
 /** Miniatura mapy lejka (SVG z pozycji elementów) – do listy map, bez ładowania edytora. */
 
 interface TNode {
@@ -15,7 +17,7 @@ interface TEdge {
   target: string;
 }
 
-const COLORS: Record<string, string> = { source: "#2f5bea", page: "#0e8a7e", action: "#c2601b", offline: "#7a4fc9" };
+const COLORS: Record<string, string> = CATEGORY_GREEN;
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && Number.isFinite(parseFloat(v)) ? parseFloat(v) : undefined);
 
 export function FunnelThumb({ graph }: { graph: { nodes?: TNode[]; edges?: TEdge[] } | null }) {

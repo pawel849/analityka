@@ -7,6 +7,7 @@ import { shapley, type MonthRow, type PeriodStats } from "@/lib/economics";
 import type { ProjectSettings } from "@/lib/settings";
 import { RangePicker, isoDay, lastDays } from "../dashboard/RangePicker";
 import { api } from "../forms";
+import { GREEN, GREEN_SERIES } from "@/lib/palette";
 
 interface Econ {
   empty: boolean;
@@ -23,9 +24,9 @@ interface Econ {
 }
 
 // Paleta kategorii (zwalidowana, stała kolejność – kolor idzie za kategorią, nie za pozycją).
-export const SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
-const REVENUE = "#1baf7a";
-const SPEND = "#eb6834";
+export const SERIES = GREEN_SERIES;
+const REVENUE = GREEN[700];
+const SPEND = GREEN[300];
 
 const money = (v: number | null | undefined, cur: string) =>
   v == null || !Number.isFinite(v) ? "—" : `${v.toLocaleString("pl-PL", { maximumFractionDigits: 0 })} ${cur}`;
@@ -379,9 +380,9 @@ export function EconomicsPanel({ projectId, from: fromQ, to: toQ, cmp: cmpQ }: {
               <Donut parts={categories.map(([n, v], i) => ({ name: n, value: v, color: SERIES[i % SERIES.length] }))} total={current.gross} cur={cur} />
               <div className="econ-money">
                 <div><span>Przychód</span><b style={{ color: REVENUE }}>{money(current.gross, cur)}</b></div>
-                <div><span>Wydatki na reklamy</span><b style={{ color: SPEND }}>− {money(current.spend, cur)}</b></div>
+                <div><span>Wydatki na reklamy</span><b>− {money(current.spend, cur)}</b></div>
                 <div className="em-bar" aria-hidden>
-                  <i style={{ width: `${Math.min(100, current.gross ? (current.spend / current.gross) * 100 : 100)}%`, background: SPEND }} />
+                  <i style={{ width: `${Math.min(100, current.gross ? (current.spend / current.gross) * 100 : 100)}%`, background: GREEN[400] }} />
                 </div>
                 <div className="em-total"><span>Zostaje po reklamach</span><b>{money(current.gross - current.spend, cur)}</b></div>
                 <div className="em-note">{current.gross ? `Reklamy zjadają ${pct(current.spend / current.gross)} przychodu` : ""}</div>

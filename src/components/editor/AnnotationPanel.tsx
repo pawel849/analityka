@@ -65,7 +65,7 @@ function TextFields({ d, onChange }: { d: TextData; onChange: (p: Partial<TextDa
         </label>
         <label className="field">
           Kolor
-          <input type="color" value={d.color || "#1d3a7a"} onChange={(e) => onChange({ color: e.target.value })} style={{ height: 34, padding: 2 }} />
+          <input type="color" value={d.color || "#0a3326"} onChange={(e) => onChange({ color: e.target.value })} style={{ height: 34, padding: 2 }} />
         </label>
       </div>
       <div className="row" style={{ marginBottom: 10 }}>
@@ -108,7 +108,7 @@ function ShapeFields({ d, onChange }: { d: ShapeData; onChange: (p: Partial<Shap
         </label>
         <label className="field">
           Obramowanie
-          <input type="color" value={d.stroke || "#1d3a7a"} onChange={(e) => onChange({ stroke: e.target.value })} style={{ height: 34, padding: 2 }} />
+          <input type="color" value={d.stroke || "#0a3326"} onChange={(e) => onChange({ stroke: e.target.value })} style={{ height: 34, padding: 2 }} />
         </label>
       </div>
       {!transparent && (

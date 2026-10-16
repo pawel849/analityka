@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { CATEGORY_GREEN } from "@/lib/palette";
 import { KindIcon } from "./icons";
 import { CATALOG, CATALOG_BY_KIND, EVENT_TYPES, FILTER_KEYS, FILTER_OPS, MANUAL_METRICS, type ChecklistItem, type NodeData, type NodeFilter } from "@/lib/catalog";
 import { formatValue, type NodeStats } from "@/lib/analysis";
@@ -89,7 +90,7 @@ function ManualData({ funnelId, nodeId, category, onChanged }: { funnelId: strin
   );
 }
 
-const CATEGORY_COLORS: Record<NodeData["category"], string> = { source: "#2f5bea", page: "#0e8a7e", action: "#c2601b", offline: "#7a4fc9" };
+const CATEGORY_COLORS: Record<NodeData["category"], string> = CATEGORY_GREEN;
 
 /** Węzeł „Zakup”: tylko zakupy wybranych produktów (lista z zamówień projektu + własne fragmenty nazw). */
 function ProductPicker({ funnelId, value, onChange }: { funnelId: string; value: string[]; onChange: (v: string[]) => void }) {

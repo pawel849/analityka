@@ -96,19 +96,19 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 
 /** Kolory znaczników podgrup (własne, bez logotypów marek). */
 export const GROUP_COLORS: Record<string, string> = {
-  "Reklamy płatne": "#2f5bea",
-  Wyszukiwarki: "#1f8a4c",
-  "Social (organicznie)": "#7a4fc9",
-  "Inne źródła": "#0e7490",
-  "CRM i e-mail": "#b45309",
-  Komunikatory: "#be185d",
-  "Inne serwisy": "#4b5563",
-  "Offline": "#0f766e",
-  "Konwersje": "#15803d",
-  "Zaangażowanie": "#c2410c",
-  "Integracje (webhook)": "#1d4ed8",
-  "Własne": "#6b7280",
-};
+  "Reklamy płatne": "#0b6e4f",
+  Wyszukiwarki: "#1f8a63",
+  "Social (organicznie)": "#3fa47c",
+  "Inne źródła": "#6dbd98",
+  "CRM i e-mail": "#0b4a37",
+  Komunikatory: "#2f7a5c",
+  "Inne serwisy": "#5c7a6e",
+  "Offline": "#0a3326",
+  "Konwersje": "#0b6e4f",
+  "Zaangażowanie": "#3fa47c",
+  "Integracje (webhook)": "#0b4a37",
+  "Własne": "#6f8a7f",
+}
 
 const src = (group: string, kind: string, label: string, abbr: string, match: string): CatalogItem => ({
   kind,

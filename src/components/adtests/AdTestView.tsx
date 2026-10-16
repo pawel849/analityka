@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../forms";
-import { pct, zl } from "./AdTestsHome";
+import { Tip } from "../Tip";
+import Link from "next/link";
+import { ArrowLeft, CalendarDays, CircleCheck, CircleX, Flag, Hourglass, Plus, RefreshCw, ShoppingBag, Target, TriangleAlert, Trophy, Wallet, X } from "lucide-react";
+import { STATUS_ICON, pct, zl } from "./AdTestsHome";
 import {
   ELEMENTS, IDEA_SOURCES, LETTERS, META_URL_PARAMS, adName, budgetPerVariant, variantLink, verdictDate, type Decision, type TestSettings,
 } from "@/lib/ad-tests";
@@ -47,36 +50,36 @@ export function AdTestView({ projectId, testId, openCreator }: { projectId: stri
 
   return (
     <div>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <a href={`/projects/${projectId}/testy`} className="hint">← Wszystkie testy</a>
-          <h1 style={{ margin: "4px 0" }}>{t.angle}</h1>
-          <span className="hint">
-            Budżet na wariant do werdyktu: <b>{zl(budgetPerVariant(s))}</b> · maks. CAC: <b>{zl(s.cacMax)}</b> · produkt główny:{" "}
-            <b>{s.productMatch.length ? s.productMatch.join(", ") : "nie ustawiony"}</b>
-          </span>
+      <Link href={`/projects/${projectId}/testy`} className="back-link"><ArrowLeft size={16} /> Testy</Link>
+      <div className="at-head">
+        <h1>{t.angle}</h1>
+        <div className="seg" role="group" aria-label="Status testu">
+          {(["planowany", "w toku", "zakończony"] as const).map((st) => {
+            const SI = STATUS_ICON[st];
+            return (
+              <button
+                key={st}
+                className={t.status === st ? "on" : ""}
+                onClick={async () => {
+                  await api(`/api/ad-tests/${testId}`, "PATCH", { status: st });
+                  load();
+                }}
+              >
+                <SI size={15} /> {st}
+              </button>
+            );
+          })}
         </div>
-        <div className="row">
-          <select
-            value={t.status}
-            onChange={async (e) => {
-              await api(`/api/ad-tests/${testId}`, "PATCH", { status: e.target.value });
-              load();
-            }}
-            aria-label="Status testu"
-          >
-            <option>planowany</option>
-            <option>w toku</option>
-            <option>zakończony</option>
-          </select>
-          <button className="btn primary" onClick={() => setCreator((v) => !v)}>{creator ? "Zamknij kreator" : "+ Nowa runda"}</button>
-        </div>
+        <button className="btn primary" onClick={() => setCreator((v) => !v)}>{creator ? <><X size={16} /> Zamknij</> : <><Plus size={16} /> Nowa runda</>}</button>
       </div>
-      <p className="hint live">
-        Odświeżane co 30 s · ostatnio {loadedAt?.toLocaleTimeString("pl-PL")}
-        {t.current?.variants.some((v) => v.sources.lastMeta) && ` · dane Meta do ${t.current.variants.map((v) => v.sources.lastMeta).filter(Boolean).sort().pop()}`}
-        <button className="btn small" style={{ marginLeft: 8 }} onClick={load}>Odśwież</button>
-      </p>
+      <div className="tt-chips big">
+        <span title="Maksymalny koszt kursanta"><Target size={15} /> maks. {zl(s.cacMax)}</span>
+        <span title="Budżet na wariant do werdyktu"><Wallet size={15} /> {zl(budgetPerVariant(s))} / wariant</span>
+        <span title={s.productMatch.join(", ") || "Produkt główny nie ustawiony"} className={s.productMatch.length ? "" : "warn"}>
+          <ShoppingBag size={15} /> {s.productMatch.length ? (s.productMatch.length === 1 ? s.productMatch[0] : `${s.productMatch.length} produkty`) : "brak produktu"}
+        </span>
+        <button className="icon-btn" onClick={load} title={`Odśwież (automatycznie co 30 s, ostatnio ${loadedAt?.toLocaleTimeString("pl-PL") ?? "—"})`} aria-label="Odśwież"><RefreshCw size={15} /></button>
+      </div>
 
       {creator && <RoundCreator testId={testId} angle={t.angle} settings={s} rounds={t.rounds} onDone={() => { setCreator(false); load(); }} />}
 
@@ -85,7 +88,7 @@ export function AdTestView({ projectId, testId, openCreator }: { projectId: stri
       {rounds.map((r) => (
         <RoundTable key={r.id} r={r} s={s} onChanged={load} />
       ))}
-      {!rounds.length && !creator && <p className="hint">Ten test nie ma jeszcze rund – kliknij „+ Nowa runda”.</p>}
+      {!rounds.length && !creator && <div className="empty-box"><Plus size={24} /> Brak rund – kliknij „Nowa runda”.</div>}
     </div>
   );
 }
@@ -94,26 +97,24 @@ function RoundTable({ r, s, onChanged }: { r: RoundResult; s: TestSettings; onCh
   const [open, setOpen] = useState<string | null>(null);
   return (
     <section className="card round">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h3 style={{ margin: 0 }}>Runda {r.number}: {r.element}</h3>
-          <span className="hint">
-            start {r.start_date} · werdykt {r.verdict_date ?? "—"}
-            {r.daysToVerdict != null && (r.daysToVerdict > 0 ? ` (za ${r.daysToVerdict} dn.)` : " (budżet powinien być wydany)")} · status: {r.status}
-          </span>
+      <div className="round-head">
+        <span className="round-n">R{r.number}</span>
+        <h3>{r.element}</h3>
+        <div className="tt-chips">
+          <span title="Start rundy"><CalendarDays size={14} /> {r.start_date}</span>
+          <span title="Data werdyktu"><Flag size={14} /> {r.verdict_date ?? "—"}</span>
+          {r.daysToVerdict != null && <span title="Do werdyktu"><Hourglass size={14} /> {r.daysToVerdict > 0 ? `${r.daysToVerdict} dn.` : "teraz"}</span>}
+          {r.status !== "w toku" && <span><CircleCheck size={14} /> {r.status}</span>}
         </div>
-        {r.page_url && <span className="hint">strona: {r.page_url}</span>}
       </div>
       {r.hints.map((h, i) => (
-        <div key={i} className="round-hint">⚠ {h}</div>
+        <div key={i} className="round-hint"><TriangleAlert size={14} /> {h}</div>
       ))}
       <div className="tbl-wrap">
         <table className="tbl round-tbl">
           <thead>
             <tr>
-              <th>Wariant</th><th>Na co zmieniono</th><th>Nazwa reklamy</th><th className="num">Wydatki</th><th>Postęp</th><th className="num">CTR</th>
-              <th className="num">Hook</th><th className="num">Utrzym.</th><th className="num">Kursy</th><th className="num">CAC</th><th className="num">Przychód / 1 zł</th>
-              <th className="num">vs najlepszy</th><th>Podpowiedź</th><th>Decyzja</th>
+              <th /><th>Wariant</th><th>Wydano</th><th className="num">CTR</th><th className="num">Kursy</th><th className="num">Koszt kursanta</th><th>Podpowiedź</th><th>Decyzja</th>
             </tr>
           </thead>
           <tbody>
@@ -138,20 +139,19 @@ function VariantRow({ v, open, onToggle, onChanged, s }: { v: VariantResult; isB
   };
   return (
     <>
-      <tr className={`vrow ${tone}`} onClick={onToggle}>
-        <td><b>{v.letter}</b></td>
-        <td title={v.hypothesis}>{v.change_to}<div className="hint">{v.idea_source}</div></td>
-        <td><code>{v.meta_ad_name}</code></td>
-        <td className="num">{zl(v.totals.spend)}<div className="hint">{v.sources.meta ? SRC_LABEL[v.sources.meta] : "brak danych"}</div></td>
-        <td><div className="bar"><span style={{ width: `${Math.round(v.d.progress * 100)}%` }} /></div><span className="hint">{Math.round(v.d.progress * 100)}%</span></td>
+      <tr className={`vrow ${tone}`} onClick={onToggle} title="Kliknij, żeby zobaczyć szczegóły">
+        <td><span className={`v-letter ${tone}`}>{v.letter}</span></td>
+        <td title={v.hypothesis}><b>{v.change_to || "—"}</b></td>
+        <td>
+          <div className="spend-cell">
+            <span>{zl(v.totals.spend)}</span>
+            <div className="bar" title={`${Math.round(v.d.progress * 100)}% budżetu do werdyktu`}><span style={{ width: `${Math.min(100, Math.round(v.d.progress * 100))}%` }} /></div>
+          </div>
+        </td>
         <td className="num">{pct(v.d.ctr, 2)}</td>
-        <td className="num">{pct(v.d.hook, 0)}</td>
-        <td className="num">{pct(v.d.retention, 0)}</td>
-        <td className="num">{v.totals.mainOrders}<div className="hint">{v.sources.shop ? SRC_LABEL[v.sources.shop] : ""}</div></td>
-        <td className="num"><b>{zl(v.d.cac)}</b>{v.d.metaCpa != null && <div className="hint" title="CPA wg Meta – tylko do porównania">Meta: {zl(v.d.metaCpa)}</div>}</td>
-        <td className="num">{v.d.revPerSpend == null ? "—" : v.d.revPerSpend.toLocaleString("pl-PL", { maximumFractionDigits: 2 })}</td>
-        <td className="num">{sug.diffToBest == null ? "—" : sug.diffToBest === 0 ? "najlepszy" : `+${pct(sug.diffToBest, 0)}`}</td>
-        <td><span className={`sug ${sug.code}`}>{sug.label}</span></td>
+        <td className="num">{v.totals.mainOrders}</td>
+        <td className="num"><b>{zl(v.d.cac)}</b></td>
+        <td><span className={`sug ${sug.code}`}>{tone === "win" ? <Trophy size={13} /> : tone === "lose" ? <CircleX size={13} /> : <Hourglass size={13} />} {sug.label}</span></td>
         <td onClick={(e) => e.stopPropagation()}>
           {v.decision !== "w toku" ? (
             <span className={`badge dec-${v.decision}`}>{v.decision}</span>
@@ -173,7 +173,7 @@ function VariantRow({ v, open, onToggle, onChanged, s }: { v: VariantResult; isB
       </tr>
       {open && (
         <tr className="vdetail">
-          <td colSpan={14}>
+          <td colSpan={8}>
             <VariantDetail v={v} s={s} onChanged={onChanged} />
           </td>
         </tr>
@@ -203,15 +203,22 @@ function VariantDetail({ v, s, onChanged }: { v: VariantResult; s: TestSettings;
         ) : (
           <p className="hint">Brak danych dziennych.</p>
         )}
-        <p className="hint">
-          Wejścia z linku (utm_content): {v.totals.visits} · wszystkie zamówienia: {v.totals.orders} · przychód: {zl(v.totals.revenue)} · Meta: {v.totals.metaPurchases} zakupów
-        </p>
-        <p className="hint">Hipoteza: {v.hypothesis || "—"}</p>
+        <div className="vd-stats">
+          <span title="Hook rate (odtworzenia 3 s ÷ wyświetlenia)"><b>{pct(v.d.hook, 0)}</b> hook</span>
+          <span title="Utrzymanie (ThruPlay ÷ odtworzenia 3 s)"><b>{pct(v.d.retention, 0)}</b> utrzymanie</span>
+          <span title="Przychód z 1 zł wydanego na wariant"><b>{v.d.revPerSpend == null ? "—" : v.d.revPerSpend.toLocaleString("pl-PL", { maximumFractionDigits: 2 })}</b> zł z 1 zł</span>
+          <span title="Różnica kosztu kursanta do najlepszego wariantu"><b>{v.suggestion.diffToBest == null ? "—" : v.suggestion.diffToBest === 0 ? "najlepszy" : `+${pct(v.suggestion.diffToBest, 0)}`}</b> vs najlepszy</span>
+          <span title="Wejścia z linku wariantu (utm_content)"><b>{v.totals.visits}</b> wejść</span>
+          <span title="Wszystkie zamówienia przypisane do wariantu"><b>{v.totals.orders}</b> zamówień</span>
+          <span title="CPA raportowane przez Meta – tylko do porównania"><b>{zl(v.d.metaCpa)}</b> CPA Meta</span>
+          <span title="Skąd dane"><b>{v.sources.meta ? SRC_LABEL[v.sources.meta] : "brak"}</b> wydatki</span>
+        </div>
+        {v.hypothesis && <p><b>Hipoteza:</b> {v.hypothesis}</p>}
       </div>
       <div>
         <b>Do Menedżera reklam</b>
         <div className="row" style={{ marginTop: 4 }}><code>{v.meta_ad_name}</code><Copy text={v.meta_ad_name} label="Kopiuj nazwę" /></div>
-        <div className="hint" style={{ marginTop: 6 }}>Parametry URL reklamy (Meta wstawi nazwę sama):</div>
+        <div style={{ marginTop: 6 }}>Parametry URL <Tip text="Wklej w polu „Parametry URL” reklamy. Meta sama wstawi nazwę kampanii i reklamy." /></div>
         <div className="row"><code className="wrap">{META_URL_PARAMS}</code><Copy text={META_URL_PARAMS} /></div>
       </div>
       <form
@@ -230,8 +237,7 @@ function VariantDetail({ v, s, onChanged }: { v: VariantResult; s: TestSettings;
           }
         }}
       >
-        <b>Wpisz ręcznie</b>
-        <p className="hint">Gdy integracja nie działa. Liczby automatyczne (Meta / sklep) zastąpią ręczne, gdy zaczną spływać.</p>
+        <b>Wpisz ręcznie</b> <Tip text="Gdy integracja nie działa. Liczby automatyczne (Meta / sklep) zastąpią ręczne, gdy zaczną spływać." />
         <div className="manual-grid">
           <input type="date" value={m.day} onChange={(e) => setM({ ...m, day: e.target.value })} />
           {(
@@ -246,7 +252,6 @@ function VariantDetail({ v, s, onChanged }: { v: VariantResult; s: TestSettings;
         </div>
         {err && <p className="error">{err}</p>}
       </form>
-      <span className="hint">Budżet do werdyktu: {zl(budgetPerVariant(s))}.</span>
     </div>
   );
 }
@@ -254,12 +259,12 @@ function VariantDetail({ v, s, onChanged }: { v: VariantResult; s: TestSettings;
 function Watch({ watch }: { watch: TestResult["watch"] }) {
   return (
     <section className="card round">
-      <h3 style={{ marginTop: 0 }}>Zwycięzcy w skalowaniu – zmęczenie</h3>
+      <h3 style={{ marginTop: 0 }}><Trophy size={17} /> Zwycięzcy w skalowaniu</h3>
       {watch.map((w) => (
         <div key={w.variantId} className="watch">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <b>R{w.round} {w.letter} · <code>{w.name}</code></b>
-            {w.fatigue ? <span className="sug przegrywa">⚠ {w.fatigue}</span> : <span className="hint">bez oznak zmęczenia</span>}
+            {w.fatigue ? <span className="sug przegrywa"><TriangleAlert size={13} /> {w.fatigue}</span> : <span className="sug zwyciezca"><CircleCheck size={13} /> bez zmęczenia</span>}
           </div>
           {w.scaling && <div className="sug zwyciezca" style={{ marginTop: 4 }}>{w.scaling}</div>}
           <table className="tbl" style={{ marginTop: 6 }}>
@@ -313,7 +318,10 @@ function RoundCreator({ testId, angle, settings: s, rounds, onDone }: { testId: 
             ))}
           </tbody>
         </table>
-        <p className="hint">Werdykt: {result.verdictDate ?? "—"}. Zamiast parametrów możesz wkleić gotowy link z kolumny obok jako adres docelowy reklamy.</p>
+        <div className="tt-chips big">
+          <span><Flag size={15} /> werdykt: <b>{result.verdictDate ?? "—"}</b></span>
+          <Tip text="Zamiast parametrów URL możesz wkleić gotowy link z kolumny obok jako adres docelowy reklamy." />
+        </div>
         <button className="btn primary" onClick={onDone}>Gotowe – pokaż tabelę</button>
       </section>
     );
@@ -335,7 +343,9 @@ function RoundCreator({ testId, angle, settings: s, rounds, onDone }: { testId: 
           <select value={count} onChange={(e) => setCount(Number(e.target.value))}>{[2, 3, 4].map((n) => <option key={n}>{n}</option>)}</select>
         </label>
       </div>
-      <p className="hint">Baza (wygrany z poprzedniej rundy): {base ? <b>{base.letter} – {base.change_to} ({base.meta_ad_name})</b> : "brak – to pierwsza runda lub runda bez zwycięzcy"}.</p>
+      <div className="tt-chips big">
+        <span title="Wygrany z poprzedniej rundy – punkt odniesienia"><Trophy size={15} /> baza: {base ? `${base.letter} – ${base.change_to}` : "brak (pierwsza runda)"}</span>
+      </div>
       <datalist id="idea-sources">
         {[...IDEA_SOURCES, ...library].map((x) => <option key={x} value={x} />)}
       </datalist>
@@ -351,7 +361,10 @@ function RoundCreator({ testId, angle, settings: s, rounds, onDone }: { testId: 
           <input placeholder="Budżet dzienny zł" inputMode="decimal" value={v.dailyBudget} onChange={(e) => setVars(vars.map((x, k) => (k === i ? { ...x, dailyBudget: e.target.value } : x)))} />
         </div>
       ))}
-      <p className="hint">Werdykt (start + {zl(budgetPerVariant(s))} ÷ budżet dzienny): <b>{vd ?? "—"}</b></p>
+      <div className="tt-chips big">
+        <span><Flag size={15} /> werdykt: <b>{vd ?? "—"}</b></span>
+        <Tip text={`Data werdyktu = start + ${zl(budgetPerVariant(s))} (budżet na wariant) ÷ budżet dzienny.`} />
+      </div>
       {err && <p className="error">{err}</p>}
       <div className="row" style={{ justifyContent: "flex-end" }}>
         <button

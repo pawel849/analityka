@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, CircleHelp, Compass, Hammer, Pencil, Plus, Trash2, Workflow, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Compass, Hammer, Pencil, Plus, Trash2, Workflow, X } from "lucide-react";
 import { api } from "../forms";
+import { Tip } from "../Tip";
+import { GREEN } from "@/lib/palette";
 
 export interface HomeClient {
   id: string;
@@ -12,20 +14,11 @@ export interface HomeClient {
   projects: { id: string; name: string }[];
 }
 
-const AVATAR = ["#2f5bea", "#0e8a7e", "#c2601b", "#7a4fc9", "#c4372f", "#1f8a4c"];
+const AVATAR = [GREEN[700], GREEN[900], GREEN[600], GREEN[800], GREEN[500]];
 const initials = (n: string) =>
   n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
 const colorOf = (id: string) => AVATAR[[...id].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR.length];
 
-/** Znak zapytania z dymkiem po najechaniu (zamiast stałych opisów na stronie). */
-export function Tip({ text }: { text: string }) {
-  return (
-    <span className="tip" tabIndex={0} aria-label={text}>
-      <CircleHelp size={16} />
-      <span className="tip-box" role="tooltip">{text}</span>
-    </span>
-  );
-}
 
 /** Kreator nowego lejka (projektu): nazwa → adres strony → sposób budowy. */
 function NewFunnelWizard({ client, onClose }: { client: HomeClient; onClose: () => void }) {
