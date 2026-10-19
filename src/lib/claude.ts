@@ -83,7 +83,7 @@ ${RULES}
 ## Co mówią liczby
 (2–3 zdania o dźwigni nr 1 i pogłębianej dźwigni)
 ## Twoje odpowiedzi a dane
-(punkty „- ”: gdzie odpowiedzi zgadzają się z danymi, a gdzie nie – cytuj krótko odpowiedź)
+(odnieś się do KAŻDEJ odpowiedzi po kolei: punkt „- ” z krótkim cytatem i oceną, czy dane to potwierdzają, przeczą czy nie da się tego sprawdzić)
 ## Hipotezy do sprawdzenia
 (2–3 punkty „- Jeśli X, to [metryka] z A do B” + jak to sprawdzić)
 - Przy „niskiej pewności” mów o zakresie, nie o jednej liczbie.

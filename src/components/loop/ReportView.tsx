@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, Flag, MessageCircleQuestion, Sparkles, Target, Trophy, X } from "lucide-react";
+import { CircleCheck, Eye, Flag, MessageCircleQuestion, MousePointerClick, ShoppingCart, Sparkles, Target, Trophy, Wallet } from "lucide-react";
 import { LEVER_NAMES } from "@/lib/loop-def";
 import type { ReportData } from "@/lib/loop";
 import { DecisionCard, Deadline } from "./Decisions";
@@ -9,34 +9,49 @@ import { DataGaps, dayLabel, fm, GoalChart, PaceBars, pct, ProfitBars, range, Ri
 const STAGE: Record<string, string> = { cpm: "Wyświetlenia (CPM)", ctr: "Kliknięcia (CTR)", cr: "Zakupy po kliknięciu (CR)", aov: "Koszyk (AOV)", "żaden": "Żaden" };
 export const stageName = (k: string | null | undefined) => (k == null ? "za mało danych" : STAGE[k] ?? k);
 
-/** Predykcja vs dane: dwa słupki + trafienie etapu. */
+const STAGE_ICON: Record<string, typeof Eye> = { cpm: Eye, ctr: MousePointerClick, cr: ShoppingCart, aov: Wallet, "żaden": CircleCheck };
+
+/** Predykcja vs dane: jedna skala z dwoma znacznikami + etap zdaniem. */
 export function PredictionVs({ p }: { p: NonNullable<ReportData["prediction"]> }) {
-  const a = p.profit_guess, b = p.profit_actual ?? 0;
-  const max = Math.max(1, Math.abs(a), Math.abs(b));
+  const a = p.profit_guess, b = p.profit_actual;
+  const vals = [a, b ?? a, 0];
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.12 || 1;
+  const pos = (v: number) => `${((v - (lo - pad)) / (hi - lo + 2 * pad)) * 100}%`;
   const hit = p.stage_actual != null && p.stage_actual === p.stage_guess;
+  const YouI = STAGE_ICON[p.stage_guess] ?? CircleCheck;
+  const DataI = p.stage_actual ? STAGE_ICON[p.stage_actual] ?? CircleCheck : null;
+  const sentence = p.stage_actual == null
+    ? "Za mało danych z ostatnich dwóch tygodni, żeby ocenić etapy."
+    : p.stage_actual === "żaden"
+      ? "Według danych żaden etap nie pogorszył się wyraźnie (o więcej niż 5%)."
+      : `Według danych najbardziej pogorszyło się: ${stageName(p.stage_actual)}.`;
   return (
-    <div className="pv">
-      <div className="pv-col">
+    <div className="pv2">
+      <div className="pv2-sec">
         <h4>Profit ostatnich 7 dni</h4>
-        <div className="pv-bars">
-          <div><i style={{ height: `${(Math.abs(a) / max) * 100}%` }} className={`you ${a < 0 ? "neg" : ""}`} /><b>{zl(a)}</b><span>Ty</span></div>
-          <div><i style={{ height: `${(Math.abs(b) / max) * 100}%` }} className={`data ${b < 0 ? "neg" : ""}`} /><b>{zl(p.profit_actual)}</b><span>Dane</span></div>
+        <div className="pv2-scale">
+          <div className="pv2-track">
+            <i className="pv2-zero" style={{ left: pos(0) }} />
+            <span className="pv2-m you" style={{ left: pos(a) }}><b>{zl(a)}</b><em>Twój typ</em></span>
+            {b != null && <span className="pv2-m data" style={{ left: pos(b) }}><em>Dane</em><b>{zl(b)}</b></span>}
+          </div>
         </div>
-        <small>pomyłka o {zl(Math.abs(a - b))}</small>
       </div>
-      <div className="pv-col">
+      <div className="pv2-sec">
         <h4>Co się pogorszyło</h4>
-        <div className={`pv-stage ${p.stage_actual == null ? "" : hit ? "hit" : "miss"}`}>
-          {p.stage_actual == null ? <span>?</span> : hit ? <CircleCheck size={28} /> : <X size={28} />}
-          <div><span>Ty: <b>{stageName(p.stage_guess)}</b></span><span>Dane: <b>{stageName(p.stage_actual)}</b></span></div>
+        <div className="pv2-st">
+          <div className="pv2-t you"><YouI size={22} /><span>Twój typ</span><b>{stageName(p.stage_guess)}</b></div>
+          <div className={`pv2-t data ${hit ? "hit" : p.stage_actual == null ? "" : "miss"}`}>{DataI ? <DataI size={22} /> : <span className="pv2-q">?</span>}<span>Dane</span><b>{p.stage_actual == null ? "za mało danych" : stageName(p.stage_actual)}</b></div>
         </div>
+        <p className="pv2-s">{hit ? <><CircleCheck size={15} /> Trafione. </> : null}{sentence}</p>
       </div>
     </div>
   );
 }
 
 /** Dźwignie jako paski w zł/mies. */
-export function LeverBars({ levers, focus, onPick, open }: { levers: NonNullable<ReportData["engine"]>["ranking"]["levers"]; focus?: string | null; onPick?: (k: string) => void; open?: string | null }) {
+export function LeverBars({ levers, focus, onPick, open, guess }: { levers: NonNullable<ReportData["engine"]>["ranking"]["levers"]; focus?: string | null; onPick?: (k: string) => void; open?: string | null; guess?: string | null }) {
   const max = Math.max(1, ...levers.map((l) => (l.lowConfidence && l.range ? l.range[1] : l.value ?? 0)));
   return (
     <div className="lb">
@@ -44,9 +59,9 @@ export function LeverBars({ levers, focus, onPick, open }: { levers: NonNullable
         const v = l.value ?? 0;
         const Tag = onPick ? "button" : "div";
         return (
-          <Tag key={l.key} className={`lb-row ${focus === l.key ? "focus" : ""} ${open === l.key ? "open" : ""}`} {...(onPick ? { onClick: () => onPick(l.key) } : {})}>
+          <Tag key={l.key} className={`lb-row ${focus === l.key ? "focus" : ""} ${open === l.key ? "open" : ""} ${guess === l.key ? "guess" : ""} ${i === 0 && l.value != null ? "top" : ""}`} {...(onPick ? { onClick: () => onPick(l.key) } : {})}>
             <span className="lb-n">{i + 1}</span>
-            <span className="lb-name">{LEVER_NAMES[l.key].name}<small>{LEVER_NAMES[l.key].short}</small></span>
+            <span className="lb-name">{LEVER_NAMES[l.key].name}<small>{LEVER_NAMES[l.key].short}{guess === l.key && <em className="lb-tag you">Twój typ</em>}{i === 0 && l.value != null && <em className="lb-tag top">Dane: nr 1</em>}</small></span>
             <span className="lb-track">
               {l.value == null ? <em className="gap-tag">brak danych</em> : (
                 <>
@@ -119,7 +134,7 @@ export function ReportView({ r }: { r: ReportData }) {
 
       {eng && (
         <Section icon={Sparkles} title="Gdzie leżą pieniądze">
-          <LeverBars levers={eng.ranking.levers} focus={r.focus} />
+          <LeverBars levers={eng.ranking.levers} focus={r.focus} guess={r.prediction?.lever_guess} />
           <div className="rp-units">
             <span>1 zamówienie = <b>{zl(eng.units.perOrder)}</b> profitu</span>
             <span>1 kliknięcie = <b>{zl(eng.units.perClick)}</b></span>
@@ -142,9 +157,9 @@ export function ReportView({ r }: { r: ReportData }) {
         </Section>
       )}
 
-      {r.analysis && (
+      {(r.analysis || r.analysisSkipped) && (
         <Section icon={Sparkles} title="Analiza Claude">
-          <RichText text={r.analysis} />
+          {r.analysis ? <RichText text={r.analysis} /> : <p>Pominięta{r.analysisSkipped ? ` – ${r.analysisSkipped}` : ""}.</p>}
         </Section>
       )}
 

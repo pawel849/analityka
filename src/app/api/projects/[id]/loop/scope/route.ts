@@ -1,6 +1,6 @@
 import { body, guarded, json, type Params } from "@/lib/api";
 import { economicsReport } from "@/lib/economics-report";
-import { saveScope } from "@/lib/loop";
+import { refreshAfterScope, saveScope } from "@/lib/loop";
 import { addDays, today } from "@/lib/loop-data";
 
 export const dynamic = "force-dynamic";
@@ -21,5 +21,6 @@ export const PUT = guarded(async (req, { params }: Params<"id">) => {
   const { id } = await params;
   const b = await body<{ campaigns?: string[]; products?: string[] }>(req);
   await saveScope(id, b.campaigns ?? [], b.products ?? []);
+  await refreshAfterScope(id);
   return json({ ok: true });
 });

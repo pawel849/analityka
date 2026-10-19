@@ -129,26 +129,30 @@ export function PaceBars({ pace, need }: { pace: number | null; need: number | n
   );
 }
 
-/** Słupki profitu (dodatnie zielone, ujemne miedziane). */
-export function ProfitBars({ items, height = 160 }: { items: { label: string; value: number }[]; height?: number }) {
+/** Słupki profitu (dodatnie zielone, ujemne miedziane) z kwotami; przy wielu słupkach kwoty w dymku. */
+export function ProfitBars({ items, height = 170 }: { items: { label: string; value: number }[]; height?: number }) {
   const max = Math.max(1, ...items.map((i) => Math.abs(i.value)));
   const hasNeg = items.some((i) => i.value < 0);
-  const zero = hasNeg ? height / 2 : height;
-  const bw = 100 / Math.max(1, items.length);
+  const showNums = items.length <= 16;
+  const short = (v: number) => (Math.abs(v) >= 10000 ? `${(v / 1000).toLocaleString("pl-PL", { maximumFractionDigits: 0 })} tys.` : zl(v));
   return (
-    <div className="pbs">
-      <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" width="100%" height={height} role="img" aria-label="Profit">
-        <line x1={0} x2={100} y1={zero} y2={zero} className="pbs-zero" vectorEffect="non-scaling-stroke" />
+    <div className={`pbs2 ${showNums ? "nums" : ""}`} style={{ ["--h" as string]: `${height}px` }}>
+      <div className={`pbs2-plot ${hasNeg ? "neg" : ""}`}>
         {items.map((it, i) => {
-          const hh = (Math.abs(it.value) / max) * (hasNeg ? height / 2 - 4 : height - 4);
+          const h = (Math.abs(it.value) / max) * 100;
           return (
-            <rect key={it.label + i} x={i * bw + bw * 0.15} width={bw * 0.7} y={it.value >= 0 ? zero - hh : zero} height={Math.max(0.5, hh)} className={it.value >= 0 ? "pos" : "neg"}>
-              <title>{it.label}: {zl(it.value)}</title>
-            </rect>
+            <div key={it.label + i} className="pbs2-col" title={`${it.label}: ${zl(it.value)}`}>
+              <div className="pbs2-up">{it.value >= 0 && <>{showNums && <span>{short(it.value)}</span>}<i className="pos" style={{ height: `${h}%` }} /></>}</div>
+              {hasNeg && <div className="pbs2-down">{it.value < 0 && <><i className="neg" style={{ height: `${h}%` }} />{showNums && <span>{short(it.value)}</span>}</>}</div>}
+            </div>
           );
         })}
-      </svg>
-      <div className="pbs-x"><span>{items[0]?.label}</span><span>{items[items.length - 1]?.label}</span></div>
+      </div>
+      {showNums ? (
+        <div className="pbs2-x">{items.map((it, i) => <span key={it.label + i}>{it.label}</span>)}</div>
+      ) : (
+        <div className="pbs-x"><span>{items[0]?.label}</span><span>suma {zl(items.reduce((a, x) => a + x.value, 0))}</span><span>{items[items.length - 1]?.label}</span></div>
+      )}
     </div>
   );
 }

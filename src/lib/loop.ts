@@ -224,7 +224,7 @@ async function missing(lid: string, projectId: string, step: number, data: LoopR
       if (!String(ans[i] ?? "").trim()) out.push(`Odpowiedz na pytanie ${i + 1}.`);
     });
   }
-  if (key === "analiza" && !String(d.text ?? "").trim()) out.push("Analiza Claude jeszcze nie powstała – spróbuj ponownie.");
+  if (key === "analiza" && !String(d.text ?? "").trim() && d.skipped !== true) out.push("Analiza Claude jeszcze nie powstała – spróbuj ponownie albo ją pomiń.");
   if (key === "decyzja" && !st.decisions.some((x) => x.loop_id === lid)) out.push("Zapisz decyzję (albo „nic nie zmieniam” z uzasadnieniem i datą).");
   if (key === "rozstrzygniecie") for (const x of st.due) out.push(`Rozstrzygnij: „${x.what}”.`);
   if (key === "raport" && !String(d.summary ?? "").trim()) out.push("Wpisz jedno zdanie: czego się nauczyłeś.");
@@ -238,8 +238,11 @@ export async function saveStep(lid: string, step: number, patch: Record<string, 
   if (!Number.isInteger(step) || step < 0 || step >= STEPS.length) throw new Error("Zły krok");
   if (step > cur) throw new Error("Najpierw zakończ wcześniejsze kroki");
   const key = STEPS[step].key;
-  if (key === "predykcja" && patch.profit_guess != null && patch.stage_guess) {
-    await savePrediction(lid, Number(patch.profit_guess), String(patch.stage_guess));
+  if (key === "predykcja" && (patch.profit_guess != null || patch.stage_guess)) {
+    const cur = await predictionOf(lid);
+    const profit = patch.profit_guess ?? cur?.profit_guess;
+    const stage = patch.stage_guess ?? cur?.stage_guess;
+    if (profit != null && stage) await savePrediction(lid, Number(profit), String(stage));
   }
   // pól liczonych przez serwer (ranking, pytania, analiza Claude) nie da się nadpisać z przeglądarki
   const own = Object.fromEntries(Object.entries(patch).filter(([k]) => !(PROTECTED[key] ?? []).includes(k)));
@@ -268,19 +271,38 @@ export async function saveScope(projectId: string, campaigns: string[], products
   );
 }
 
+/** Po zmianie zakresu w trakcie sesji: przelicz ranking i dane predykcji (typy zostają). */
+export async function refreshAfterScope(projectId: string) {
+  const open = await one<{ id: string; data: unknown }>("SELECT id, data FROM loops WHERE project_id = $1 AND finished_at IS NULL", [projectId]);
+  if (!open) return;
+  const data = j<LoopRow["data"]>(open.data, {});
+  const p = await predictionOf(open.id);
+  if (p) {
+    const a = await predictionActuals(projectId);
+    await q("UPDATE predictions SET window_from = $2, window_to = $3, profit_actual = $4, stage_actual = $5 WHERE loop_id = $1", [open.id, a.from, a.to, a.profit, a.stage]);
+  }
+  if (data.kwota?.snapshot) {
+    const eng = await engine(projectId);
+    const top = eng.ranking.levers.find((l) => l.value != null)?.key ?? null;
+    if (p) await q("UPDATE predictions SET lever_actual = $2 WHERE loop_id = $1", [open.id, top]);
+    await q("UPDATE loops SET data = $2 WHERE id = $1", [open.id, JSON.stringify({ ...data, kwota: { ...data.kwota, snapshot: eng } })]);
+  }
+}
+
 /** Predykcja – zapisywana przed odsłonięciem danych; po przejściu dalej nie da się jej zmienić. */
 export async function savePrediction(lid: string, profitGuess: number, stageGuess: string) {
-  const { projectId, step } = await loopProject(lid);
-  if (step > 1) throw new Error("Predykcja jest już porównana z danymi – nie można jej zmienić.");
+  const { projectId } = await loopProject(lid);
   if (!Number.isFinite(profitGuess)) throw new Error("Wpisz profit w zł");
   if (!stageGuess) throw new Error("Wybierz etap");
   const a = await predictionActuals(projectId);
+  const old = await predictionOf(lid);
   await q("DELETE FROM predictions WHERE loop_id = $1", [lid]);
   await q(
     `INSERT INTO predictions (id, project_id, loop_id, profit_guess, stage_guess, window_from, window_to, profit_actual, stage_actual)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [newId(), projectId, lid, profitGuess, stageGuess.slice(0, 40), a.from, a.to, a.profit, a.stage],
   );
+  if (old?.lever_guess) await q("UPDATE predictions SET lever_guess = $2, lever_actual = $3 WHERE loop_id = $1", [lid, old.lever_guess, old.lever_actual]);
 }
 
 /** Zgadywanie dźwigni → dopiero potem ranking. Ranking zamrażany w sesji (te same liczby do decyzji). */
@@ -289,7 +311,11 @@ export async function guessLever(lid: string, guess: string) {
   if (!METRICS.some((m) => m.key === guess)) throw new Error("Wybierz dźwignię");
   const p = await predictionOf(lid);
   if (!p) throw new Error("Najpierw predykcja");
-  if (p.lever_guess) throw new Error("Odpowiedź już zapisana");
+  // zmiana typu – ranking zostaje ten sam
+  if (p.lever_guess && data.kwota?.snapshot) {
+    await q("UPDATE predictions SET lever_guess = $2 WHERE loop_id = $1", [lid, guess]);
+    return;
+  }
   const eng = await engine(projectId);
   const top = eng.ranking.levers.find((l) => l.value != null)?.key ?? null;
   await q("UPDATE predictions SET lever_guess = $2, lever_actual = $3 WHERE loop_id = $1", [lid, guess, top]);
@@ -384,10 +410,11 @@ export function baselineOf(eng: EngineResult): Baseline {
 }
 
 export async function createDecision(lid: string, b: {
-  kind?: string; what?: string; who?: string; why?: string; element?: string; metric?: string; to_value?: number | null; check_date?: string; ad_test_id?: string | null;
+  kind?: string; what?: string; who?: string; why?: string; element?: string; metric?: string; to_value?: number | null; check_date?: string; ad_test_id?: string | null; replace?: boolean;
 }) {
   const { projectId, data } = await loopProject(lid);
-  if (await one("SELECT id FROM decisions WHERE loop_id = $1", [lid])) throw new Error("Decyzja tej sesji jest już zapisana. Usuń ją, żeby zapisać inną.");
+  const prev = await one<{ id: string }>("SELECT id FROM decisions WHERE loop_id = $1", [lid]);
+  if (prev && !b.replace) throw new Error("Decyzja tej sesji jest już zapisana.");
   const eng = data.kwota?.snapshot as EngineResult | undefined;
   if (!eng) throw new Error("Najpierw krok „Kwota na stole”");
   const check = String(b.check_date ?? "");
@@ -420,6 +447,11 @@ export async function createDecision(lid: string, b: {
     await q("INSERT INTO tasks (id, project_id, title, due, decision_id, required, who) VALUES ($1,$2,$3,$4,$5,true,$6)", [
       newId(), projectId, `${MEASURE_TASK}: ${what}`.slice(0, 300), addDays(t, 1), id, who,
     ]);
+  }
+  if (prev) {
+    // edycja: dopisane zadania przechodzą do nowej wersji decyzji
+    await q("UPDATE tasks SET decision_id = $2 WHERE decision_id = $1 AND NOT required", [prev.id, id]);
+    await deleteDecision(prev.id);
   }
   const d = (await listDecisions(projectId)).find((x) => x.id === id)!;
   await q(
@@ -548,6 +580,8 @@ export interface ReportData {
   questions: { q: string; a: string }[];
   questionsSource: string | null;
   analysis: string | null;
+  /** powód pominięcia analizy Claude (gdy pominięta) */
+  analysisSkipped: string | null;
   decision: Decision | null;
   verdicts: Decision[];
   summary: string;
@@ -578,6 +612,7 @@ async function buildReport(lid: string, projectId: string, data: LoopRow["data"]
     questions: qs.map((qq, i) => ({ q: qq, a: String(ans[i] ?? "") })),
     questionsSource: (data.pytania?.source as string | undefined) ?? null,
     analysis: (data.analiza?.text as string | undefined) ?? null,
+    analysisSkipped: data.analiza?.skipped === true && !data.analiza?.text ? String(data.analiza.skipReason || "Claude niedostępny") : null,
     decision: st.decisions.find((d) => d.loop_id === lid) ?? null,
     verdicts: st.decisions.filter((d) => d.verdict_loop_id === lid),
     summary: String(data.raport?.summary ?? ""),

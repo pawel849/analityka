@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Calendar, CalendarDays, CalendarRange, Check, CircleAlert, CircleCheck, Eye, FlaskConical, Flag, Gift, Globe, Loader2,
-  Megaphone, MousePointerClick, MoreHorizontal, Pause, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
+  Megaphone, MousePointerClick, MoreHorizontal, Package, Pause, Pencil, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
 } from "lucide-react";
 import { api } from "../forms";
-import { hypothesisValue, improve, METRICS, type MetricKey } from "@/lib/levers";
+import { hypothesisValue, improve, METRICS, modelProfit, type MetricKey } from "@/lib/levers";
 import { ELEMENTS, LEVER_NAMES, NO_CHANGE, STEPS } from "@/lib/loop-def";
 import type { LoopState, ReportData } from "@/lib/loop";
 import type { EngineResult } from "@/lib/loop-data";
@@ -157,14 +157,31 @@ function periodRange(p: string, base = new Date()): [string, string] {
   return [f(new Date(y, m, 1)), f(new Date(y, m + 1, 0))];
 }
 
-/** Okres jako pasek z dzisiejszym dniem. */
+const MONTHS = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+
+/** Okres jako kalendarz: kratki dni (miesiąc) albo miesięcy (kwartał, rok); dziś wyróżnione. */
 function PeriodBar({ from, to }: { from: string; to: string }) {
-  const a = Date.parse(`${from}T00:00:00`), b = Date.parse(`${to}T23:59:59`), now = Date.now();
-  const share = Math.max(0, Math.min(1, (now - a) / (b - a)));
+  const a = new Date(`${from}T12:00:00`), b = new Date(`${to}T12:00:00`), now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const left = Math.max(0, Math.round((b.getTime() - Date.parse(`${today}T12:00:00`)) / 864e5) + 1);
+  const days = Math.round((b.getTime() - a.getTime()) / 864e5) + 1;
+  const title = days <= 31 ? a.toLocaleDateString("pl-PL", { month: "long", year: "numeric" }) : `${MONTHS[a.getMonth()]} – ${MONTHS[b.getMonth()]} ${b.getFullYear()}`;
+  const cells = days <= 31
+    ? Array.from({ length: days }, (_, i) => {
+        const d = new Date(a.getTime() + i * 864e5).toISOString().slice(0, 10);
+        return { key: d, label: String(i + 1), state: d < today ? "past" : d === today ? "now" : "next" };
+      })
+    : Array.from({ length: (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth() + 1 }, (_, i) => {
+        const m = new Date(a.getFullYear(), a.getMonth() + i, 1);
+        const cur = m.getFullYear() === now.getFullYear() && m.getMonth() === now.getMonth();
+        return { key: String(i), label: MONTHS[m.getMonth()], state: cur ? "now" : m < now ? "past" : "next" };
+      });
   return (
-    <div className="prd">
-      <div className="prd-track"><i style={{ width: `${share * 100}%` }} /><b style={{ left: `${share * 100}%` }} title="dziś" /></div>
-      <div className="prd-x"><span>{dayLabel(from)}</span><span>dziś</span><span>{dayLabel(to)}</span></div>
+    <div className="cal">
+      <div className="cal-head"><b>{title}</b><span>{left > 0 ? `zostało ${left} ${left === 1 ? "dzień" : "dni"}` : "okres minął"}</span></div>
+      <div className={`cal-grid ${days <= 31 ? "d" : "m"}`}>
+        {cells.map((c) => <span key={c.key} className={c.state} title={c.state === "now" ? "dziś" : undefined}>{c.label}</span>)}
+      </div>
     </div>
   );
 }
@@ -229,10 +246,10 @@ function ScopePicker({ projectId, st, reload }: { projectId: string; st: LoopSta
     timer.current = setTimeout(async () => {
       await api(`/api/projects/${projectId}/loop/scope`, "PUT", { campaigns: c, products: p });
       setSaving(false);
-    }, 500);
+    }, 600);
   };
-  if (!lists) return <div className="sc2"><p className="ss-load"><Loader2 className="spin" size={16} /> Wczytuję kampanie i produkty…</p></div>;
-  const Col = ({ title, items, sel, setSel, other }: { title: string; items: { name: string; sub: string }[]; sel: string[]; setSel: (v: string[]) => void; other: (v: string[]) => void }) => {
+  if (!lists) return <div className="sc3"><p className="ss-load"><Loader2 className="spin" size={16} /> Wczytuję kampanie i produkty…</p></div>;
+  const Box = ({ icon: I, title, items, sel, setSel, other }: { icon: typeof Megaphone; title: string; items: { name: string; sub: string }[]; sel: string[]; setSel: (v: string[]) => void; other: (v: string[]) => void }) => {
     const names = items.map((i) => i.name);
     const all = sel.length === 0;
     const isOn = (n: string) => all || sel.includes(n);
@@ -242,20 +259,22 @@ function ScopePicker({ projectId, st, reload }: { projectId: string; st: LoopSta
       other(norm);
     };
     const toggle = (n: string) => apply(all ? names.filter((x) => x !== n) : sel.includes(n) ? sel.filter((x) => x !== n) : [...sel, n]);
-    const count = all ? names.length : sel.filter((s) => names.includes(s)).length;
+    const count = all ? names.length : sel.filter((x) => names.includes(x)).length;
     return (
-      <div className="sc2-col">
-        <div className="sc2-head">
-          <b>{title}</b>
-          <span className="sc2-count">{all ? "" : `${count} z ${names.length}`}</span>
-          <button className={`sc2-all ${all ? "on" : ""}`} onClick={() => apply(all ? [] : [])} disabled={all}>{all ? <><CircleCheck size={14} /> wszystkie</> : "zaznacz wszystkie"}</button>
+      <div className="sc3-box">
+        <div className="sc3-head">
+          <span className="sc3-ic"><I size={20} /></span>
+          <div><b>{title}</b><small>{all ? `wszystkie (${names.length})` : `${count} z ${names.length}`}</small></div>
+          <button className={`sw ${all ? "on" : ""}`} role="switch" aria-checked={all} disabled={all} onClick={() => apply([])} title={all ? "Odznacz pojedyncze pozycje poniżej" : "Zaznacz wszystkie"}>
+            <i /><span>wszystkie</span>
+          </button>
         </div>
-        <div className="sc2-grid">
+        <div className="sc3-pills">
           {items.map((x) => (
-            <button key={x.name} className={`sc2-item ${isOn(x.name) ? "on" : ""}`} onClick={() => toggle(x.name)} aria-pressed={isOn(x.name)}>
-              <span className="sc2-check">{isOn(x.name) && <Check size={14} />}</span>
-              <span className="sc2-name">{x.name}</span>
-              <small>{x.sub}</small>
+            <button key={x.name} className={`pill ${isOn(x.name) ? "on" : ""}`} onClick={() => toggle(x.name)} aria-pressed={isOn(x.name)} title={x.name}>
+              {isOn(x.name) ? <Check size={14} /> : <span className="pill-dot" />}
+              <span className="pill-name">{x.name}</span>
+              {x.sub && <small>{x.sub}</small>}
             </button>
           ))}
         </div>
@@ -263,11 +282,11 @@ function ScopePicker({ projectId, st, reload }: { projectId: string; st: LoopSta
     );
   };
   return (
-    <div className="sc2">
-      <div className="sc2-title"><b>Z czego liczymy</b>{saving ? <span className="saving"><Loader2 className="spin" size={13} /> zapisuję</span> : <span className="saved"><CircleCheck size={14} /> zapisane</span>}</div>
-      <div className="sc2-cols">
-        <Col title="Kampanie" items={lists.campaigns.map((c) => ({ name: c.name, sub: zl(c.spend) }))} sel={camps} setSel={setCamps} other={(c) => persist(c, prods)} />
-        <Col title="Produkty" items={lists.products.map((p) => ({ name: p.name, sub: p.gross == null ? "" : zl(p.gross) }))} sel={prods} setSel={setProds} other={(p) => persist(camps, p)} />
+    <div className="sc3">
+      <div className="sc3-title"><b>Z czego liczymy</b>{saving ? <span className="saving"><Loader2 className="spin" size={13} /> zapisuję</span> : <span className="saved"><CircleCheck size={14} /> zapisane</span>}</div>
+      <div className="sc3-cols">
+        <Box icon={Megaphone} title="Kampanie" items={lists.campaigns.map((c) => ({ name: c.name, sub: zl(c.spend) }))} sel={camps} setSel={setCamps} other={(c) => persist(c, prods)} />
+        <Box icon={Package} title="Produkty" items={lists.products.map((p) => ({ name: p.name, sub: p.gross == null ? "" : zl(p.gross) }))} sel={prods} setSel={setProds} other={(p) => persist(camps, p)} />
       </div>
     </div>
   );
@@ -333,7 +352,7 @@ function StepPredict({ st, g, val, set }: StepProps) {
   const max = Math.ceil((weekly * 3) / step) * step;
   const profit = val<number | null>("profit_guess", p?.profit_guess ?? null);
   const stage = val<string>("stage_guess", p?.stage_guess ?? "");
-  const locked = (st.active?.step ?? 0) > 1;
+  const locked = false;
   return (
     <div className="ss-stack">
       <div className="card-s pd">
@@ -414,7 +433,6 @@ function StepGap({ st, g }: StepProps) {
   if (!g) return <p>Brak celu – ustaw go w pierwszym kroku.</p>;
   const p = st.prediction;
   const extra = p?.stage_actual && p.stage_actual !== "żaden" ? [`Wąskie gardło w ostatnim tygodniu: ${stageName(p.stage_actual)}.`] : [];
-  const diff = g.pacePerDay != null && g.needFromNow != null ? g.pacePerDay - g.needFromNow : null;
   return (
     <div className="ss-stack">
       <div className="card-s gap-hero">
@@ -425,11 +443,6 @@ function StepGap({ st, g }: StepProps) {
         </div>
         <div className="gap-pace">
           <PaceBars pace={g.pacePerDay} need={g.needFromNow} />
-          {diff != null && (
-            <p className={`gap-diff ${diff < 0 ? "miss" : "ok"}`}>
-              {diff < 0 ? <>Codziennie brakuje <b>{zl(-diff)}</b> – miesięcznie to <b>{zl(-diff * 30)}</b>.</> : <>Robisz o <b>{zl(diff)}</b> dziennie więcej, niż trzeba.</>}
-            </p>
-          )}
         </div>
       </div>
       <DataGaps gaps={g.gaps} extra={extra} />
@@ -447,6 +460,12 @@ function LeverDetail({ eng, k }: { eng: EngineResult; k: MetricKey }) {
   const max = Math.max(L.current ?? 0, L.benchmark ?? 0) || 1;
   return (
     <div className="ld">
+      <div className="ld-card unit">
+        <h4>Ile jest warte</h4>
+        <p>{unit.label}</p>
+        <b>{zl(unit.v)}</b>
+        <small>profitu na czysto</small>
+      </div>
       <div className="ld-card">
         <h4>{N.short}: teraz vs najlepszy tydzień</h4>
         <div className="ld-bars">
@@ -467,12 +486,6 @@ function LeverDetail({ eng, k }: { eng: EngineResult; k: MetricKey }) {
         <h4>Mały krok: {N.short} lepszy o 10%</h4>
         <p>{fm(k, L.current)} → {fm(k, plus10)}</p>
         <b className="pos">{zlSigned(L.per10)} / mies.</b>
-      </div>
-      <div className="ld-card">
-        <h4>Ile jest warte</h4>
-        <p>{unit.label}</p>
-        <b>{zl(unit.v)}</b>
-        <small>profitu na czysto</small>
       </div>
     </div>
   );
@@ -516,28 +529,31 @@ function StepMoney({ loopId, st, reload }: StepProps) {
         </div>
       </div>
     );
-  const top = eng.ranking.levers.find((l) => l.value != null);
+  // łącznie: wszystkie metryki z benchmarkiem naraz (efekty się mnożą, więc to nie jest prosta suma pasków)
+  const over = Object.fromEntries(eng.ranking.levers.filter((l) => l.benchmark != null && !l.missing && (l.value ?? 0) > 0).map((l) => [l.key, l.benchmark as number]));
+  const all = Object.keys(over).length ? modelProfit(eng.ranking.budget, eng.ranking.base, eng.econ, over) : null;
+  const total = all != null && eng.ranking.profitNow != null ? all - eng.ranking.profitNow : null;
+  const anyLow = eng.ranking.levers.some((l) => l.key in over && l.lowConfidence);
   const setFocus = async (k: string) => {
     await api(`/api/loops/${loopId}/questions`, "POST", { focus: k });
     await reload();
   };
   return (
     <div className="ss-stack">
-      <div className={`guess-res ${top?.key === guess ? "hit" : "miss"}`}>
-        {top?.key === guess ? <CircleCheck size={22} /> : <X size={22} />}
-        <span>Twój typ: <b>{LEVER_NAMES[guess].name}</b></span>
-        <span>Dane: <b>{top ? LEVER_NAMES[top.key].name : "brak danych"}</b></span>
+      <div className="tot">
+        <Sparkles size={22} />
+        <div><em>Gdyby wszystko wróciło do najlepszych tygodni</em><b>{total == null ? "brak danych" : `${zlSigned(total)} / mies.`}</b>{anyLow && <small>mało danych w części pomiarów – liczba orientacyjna</small>}</div>
       </div>
       <div className="card-s">
         <h3 className="ss-h3">Ile więcej profitu miesięcznie, gdyby każda rzecz wróciła do najlepszego tygodnia</h3>
-        <LeverBars levers={eng.ranking.levers} focus={focus} open={open} onPick={(k) => setOpen(open === k ? null : k)} />
+        <div className="guess-mini"><span>Twój typ:</span>{METRICS.map((m) => { const I = LEVER_ICON[m.key]; return <button key={m.key} className={`tile sm ${guess === m.key ? "on" : ""}`} onClick={() => reveal(m.key)}><I size={16} /> {LEVER_NAMES[m.key].short}</button>; })}</div>
+        <LeverBars levers={eng.ranking.levers} focus={focus} open={open} guess={guess} onPick={(k) => setOpen(open === k ? null : k)} />
         {open && (
           <>
             <LeverDetail eng={eng} k={open as MetricKey} />
             {focus !== open && <button className="btn" onClick={() => setFocus(open)}><Flag size={14} /> Tę dźwignię pogłębiamy</button>}
           </>
         )}
-        {!open && <p className="ss-hint">Kliknij pasek, żeby zobaczyć szczegóły.</p>}
       </div>
       {eng.gaps.length > 0 && <DataGaps gaps={eng.gaps} />}
     </div>
@@ -588,6 +604,7 @@ function StepQuestions({ loopId, st, val, set }: StepProps) {
 
 function StepAnalysis({ loopId, st, reload }: StepProps) {
   const text = (st.active?.data.analiza?.text as string | undefined) ?? "";
+  const skipped = st.active?.data.analiza?.skipped === true;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const eng = snapshotOf(st);
@@ -605,8 +622,12 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
     }
   }, [loopId, reload]);
   useEffect(() => {
-    if (!text) run();
+    if (!text && !skipped) run();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const skip = async (on: boolean) => {
+    await api(`/api/loops/${loopId}`, "PATCH", { step: STEPS.findIndex((x) => x.key === "analiza"), patch: { skipped: on, skipReason: on ? err : "" }, advance: false });
+    await reload();
+  };
   const L = eng && focus ? eng.ranking.levers.find((l) => l.key === focus) : null;
   const prev = eng && focus ? eng.metricsPrev[focus] : null;
   const vals = L ? [prev, L.current, L.benchmark] : [];
@@ -627,7 +648,20 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
       <div className="card-s claude">
         <h3><Sparkles size={18} /> Analiza Claude</h3>
         {busy && <p className="ss-load"><Loader2 className="spin" size={18} /> Claude czyta liczby i Twoje odpowiedzi…</p>}
-        {!busy && err && <><p className="error">{err}</p><button className="btn" onClick={run}><RotateCw size={15} /> Spróbuj ponownie</button></>}
+        {!busy && err && !text && (
+          <div className="an-fail">
+            <CircleAlert size={26} />
+            <b>Analiza Claude nie działa</b>
+            <small>{err}</small>
+            {skipped ? <span className="saved"><CircleCheck size={15} /> pominięta – możesz iść dalej</span> : (
+              <div className="row">
+                <button className="btn" onClick={run}><RotateCw size={15} /> Spróbuj ponownie</button>
+                <button className="btn primary" onClick={() => skip(true)}>Pomiń analizę</button>
+              </div>
+            )}
+          </div>
+        )}
+        {!busy && !err && skipped && !text && <div className="an-fail"><b>Analiza pominięta</b><button className="btn" onClick={() => skip(false).then(run)}><RotateCw size={15} /> Spróbuj teraz</button></div>}
         {!busy && text && <RichText text={text} />}
       </div>
     </div>
@@ -638,7 +672,7 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
 
 const ELEMENT_ICON: Record<string, typeof Megaphone> = { reklama: Megaphone, strona: Globe, VSL: Video, checkout: ShoppingCart, oferta: Gift, inne: MoreHorizontal };
 
-function DecisionForm({ projectId, loopId, st, g, reload }: { projectId: string; loopId: string; st: LoopState; g: GoalGap | null; reload: () => Promise<void> }) {
+function DecisionForm({ projectId, loopId, st, g, reload, edit, onCancel }: { projectId: string; loopId: string; st: LoopState; g: GoalGap | null; reload: () => Promise<void>; edit?: LoopState["decisions"][number]; onCancel?: () => void }) {
   const eng = snapshotOf(st);
   const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? "cr") as MetricKey;
   const L = eng?.ranking.levers.find((l) => l.key === focus);
@@ -646,9 +680,11 @@ function DecisionForm({ projectId, loopId, st, g, reload }: { projectId: string;
     g && g.gap > 0 ? `Brakuje ${zl(g.gap)} do celu.` : "",
     L ? `${LEVER_NAMES[focus].name}: ${L.lowConfidence ? range(L.range) : zlSigned(L.value)} miesięcznie na stole.` : "",
   ].filter(Boolean).join(" ");
-  const [kind, setKind] = useState<"zmiana" | typeof NO_CHANGE>("zmiana");
-  const [f, setF] = useState({ what: "", who: "", why: autoWhy, element: "reklama", metric: focus as string, check: plus(14), ad: "" });
-  const [to, setTo] = useState<number | null>(null);
+  const [kind, setKind] = useState<"zmiana" | typeof NO_CHANGE>(edit?.kind === NO_CHANGE ? NO_CHANGE : "zmiana");
+  const [f, setF] = useState(edit
+    ? { what: edit.kind === NO_CHANGE ? "" : edit.what, who: edit.who, why: edit.why, element: edit.element || "reklama", metric: (edit.metric ?? focus) as string, check: edit.check_date, ad: edit.ad_test_id ?? "" }
+    : { what: "", who: "", why: autoWhy, element: "reklama", metric: focus as string, check: plus(14), ad: "" });
+  const [to, setTo] = useState<number | null>(edit?.to_value != null ? Math.round(edit.to_value * (edit.metric === "ctr" || edit.metric === "cr" ? 100 : 1) * 100) / 100 : null);
   const [err, setErr] = useState("");
   const isRate = f.metric === "ctr" || f.metric === "cr";
   const toNum = to == null ? NaN : to / (isRate ? 100 : 1);
@@ -659,9 +695,10 @@ function DecisionForm({ projectId, loopId, st, g, reload }: { projectId: string;
     setErr("");
     try {
       await api(`/api/loops/${loopId}/decision`, "POST", kind === NO_CHANGE
-        ? { kind, why: f.why, who: f.who, check_date: f.check }
-        : { kind, what: f.what, who: f.who, why: f.why, element: f.element, metric: f.metric, to_value: toNum, check_date: f.check, ad_test_id: f.ad || null });
+        ? { kind, why: f.why, who: f.who, check_date: f.check, replace: !!edit }
+        : { kind, what: f.what, who: f.who, why: f.why, element: f.element, metric: f.metric, to_value: toNum, check_date: f.check, ad_test_id: f.ad || null, replace: !!edit });
       await reload();
+      onCancel?.();
     } catch (x) {
       setErr((x as Error).message);
     }
@@ -730,17 +767,21 @@ function DecisionForm({ projectId, loopId, st, g, reload }: { projectId: string;
         )}
       </div>
       {err && <p className="error">{err}</p>}
-      <button className={`btn primary big ${ready ? "pulse" : ""}`} disabled={!ready} onClick={save}><Check size={16} /> Zapisz decyzję</button>
+      <div className="row">
+        <button className={`btn primary big ${ready ? "pulse" : ""}`} disabled={!ready} onClick={save}><Check size={16} /> Zapisz decyzję</button>
+        {onCancel && <button className="btn" onClick={onCancel}>Anuluj</button>}
+      </div>
     </div>
   );
 }
 
 function StepDecision({ projectId, loopId, st, g, reload }: StepProps) {
   const mine = st.decisions.find((d) => d.loop_id === loopId);
-  if (!mine) return <DecisionForm projectId={projectId} loopId={loopId} st={st} g={g} reload={reload} />;
+  const [editing, setEditing] = useState(false);
+  if (!mine || editing) return <DecisionForm projectId={projectId} loopId={loopId} st={st} g={g} reload={reload} edit={mine} onCancel={mine ? () => setEditing(false) : undefined} />;
   return (
-    <DecisionCard d={mine} onDelete={async () => { if (confirm("Usunąć decyzję i zapisać inną?")) { await api(`/api/decisions/${mine.id}`, "DELETE"); await reload(); } }}>
-      <div className="row"><CopyBrief d={mine} /></div>
+    <DecisionCard d={mine}>
+      <div className="row"><button className="btn" onClick={() => setEditing(true)}><Pencil size={15} /> Edytuj</button><CopyBrief d={mine} /></div>
     </DecisionCard>
   );
 }
