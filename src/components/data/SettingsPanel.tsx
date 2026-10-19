@@ -151,6 +151,35 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
           <p className="hint">Koszty zmienne jako % przychodu netto kategorii (np. warsztat → 50).</p>
           <RulesEditor rules={s.costs.variableCostRates} onChange={(variableCostRates) => up({ costs: { ...s.costs, variableCostRates } })} patternLabel="Kategoria" valueLabel="% przychodu netto" />
         </div>
+
+        <div className="card">
+          <h3>Sesja analityczna</h3>
+          <div className="map-grid">
+            <label className="field">Min. kliknięć w oknie<input inputMode="numeric" value={s.session.minClicks} onChange={(e) => up({ session: { ...s.session, minClicks: Number(e.target.value) || 0 } })} /></label>
+            <label className="field">Min. zamówień w oknie<input inputMode="numeric" value={s.session.minOrders} onChange={(e) => up({ session: { ...s.session, minOrders: Number(e.target.value) || 0 } })} /></label>
+          </div>
+          <p className="hint">Poniżej progu: „niska pewność” i zakres zamiast jednej liczby.</p>
+          <label className="field">Benchmark dźwigni</label>
+          <div className="seg">
+            <button className={s.session.benchmark === "best7" ? "on" : ""} onClick={() => up({ session: { ...s.session, benchmark: "best7" } })}>najlepsze 7 dni z 60</button>
+            <button className={s.session.benchmark === "targets" ? "on" : ""} onClick={() => up({ session: { ...s.session, benchmark: "targets" } })}>wartości docelowe</button>
+          </div>
+          {s.session.benchmark === "targets" && (
+            <div className="map-grid">
+              {([["cpm", "CPM (zł)", 1], ["ctr", "CTR (%)", 100], ["cr", "CR klik → zakup (%)", 100], ["aov", "AOV netto (zł)", 1]] as const).map(([k, label, mult]) => (
+                <label key={k} className="field">{label}
+                  <input inputMode="decimal" defaultValue={s.session.targets[k] != null ? String(Math.round(s.session.targets[k]! * mult * 1000) / 1000) : ""}
+                    onChange={(e) => {
+                      const v = Number(e.target.value.replace(",", "."));
+                      const t = { ...s.session.targets };
+                      if (e.target.value.trim() && Number.isFinite(v) && v > 0) t[k] = v / mult; else delete t[k];
+                      up({ session: { ...s.session, targets: t } });
+                    }} />
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

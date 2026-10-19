@@ -29,6 +29,10 @@ export interface ProjectSettings {
   };
   /** Zakres Ekonomii: dokładne nazwy kampanii (wydatki) i produktów (produkt główny). Puste = cały projekt. */
   economicsScope: { campaigns: string[]; products: string[] };
+  /** Zakres sesji analitycznej (kampanie → wydatki, produkty → zamówienia). Brak = jak w Ekonomii. Puste listy = wszystko. */
+  analysisScope?: { campaigns: string[]; products: string[] };
+  /** Sesja analityczna: progi próby i źródło benchmarku dźwigni. */
+  session: SessionSettings;
   /** Ustawienia modułu „Testy reklam” (patrz lib/ad-tests.ts → mergeTestSettings). */
   adTests?: unknown;
 }
@@ -58,7 +62,26 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   periods: [],
   costs: { incomeTaxRate: 19, variableCostRates: [], monthlyFixed: 0 },
   economicsScope: { campaigns: [], products: [] },
+  session: { minClicks: 100, minOrders: 10, benchmark: "best7", targets: {} },
 };
+
+export interface SessionSettings {
+  /** Poniżej progu w oknie = „niska pewność” + zakres. */
+  minClicks: number;
+  minOrders: number;
+  /** best7 = najlepsze okno 7 dni z ostatnich 60 (spełniające próg); targets = wartości docelowe poniżej. */
+  benchmark: "best7" | "targets";
+  targets: { cpm?: number; ctr?: number; cr?: number; aov?: number };
+}
+
+function mergeSession(v: unknown): SessionSettings {
+  const r = (v && typeof v === "object" ? v : {}) as Partial<SessionSettings>;
+  const pos = (x: unknown, d: number) => (typeof x === "number" && Number.isFinite(x) && x > 0 ? x : d);
+  const t = (r.targets ?? {}) as Record<string, unknown>;
+  const targets: SessionSettings["targets"] = {};
+  for (const k of ["cpm", "ctr", "cr", "aov"] as const) if (typeof t[k] === "number" && Number.isFinite(t[k]) && (t[k] as number) > 0) targets[k] = t[k] as number;
+  return { minClicks: pos(r.minClicks, 100), minOrders: pos(r.minOrders, 10), benchmark: r.benchmark === "targets" ? "targets" : "best7", targets };
+}
 
 export function mergeSettings(raw: unknown): ProjectSettings {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<ProjectSettings>;
@@ -74,6 +97,10 @@ export function mergeSettings(raw: unknown): ProjectSettings {
       campaigns: strings(r.economicsScope?.campaigns),
       products: strings(r.economicsScope?.products),
     },
+    analysisScope: r.analysisScope && typeof r.analysisScope === "object"
+      ? { campaigns: strings(r.analysisScope.campaigns), products: strings(r.analysisScope.products) }
+      : undefined,
+    session: mergeSession(r.session),
   };
 }
 

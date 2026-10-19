@@ -304,5 +304,52 @@ CREATE TABLE IF NOT EXISTS learnings (
 );
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS test_id TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS who TEXT;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS required BOOLEAN NOT NULL DEFAULT false
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS required BOOLEAN NOT NULL DEFAULT false;
+CREATE TABLE IF NOT EXISTS predictions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  loop_id TEXT NOT NULL,
+  profit_guess DOUBLE PRECISION NOT NULL,
+  stage_guess TEXT NOT NULL,
+  lever_guess TEXT,
+  window_from DATE,
+  window_to DATE,
+  profit_actual DOUBLE PRECISION,
+  stage_actual TEXT,
+  lever_actual TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS decisions (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  loop_id TEXT,
+  kind TEXT NOT NULL DEFAULT 'zmiana',
+  what TEXT NOT NULL,
+  who TEXT NOT NULL DEFAULT '',
+  why TEXT NOT NULL DEFAULT '',
+  element TEXT NOT NULL DEFAULT '',
+  metric TEXT,
+  from_value DOUBLE PRECISION,
+  to_value DOUBLE PRECISION,
+  hypothesis TEXT NOT NULL DEFAULT '',
+  expected_month DOUBLE PRECISION,
+  baseline JSONB NOT NULL DEFAULT '{}',
+  start_date DATE NOT NULL,
+  check_date DATE NOT NULL,
+  ad_test_id TEXT,
+  verdict TEXT,
+  actual_value DOUBLE PRECISION,
+  impact_month DOUBLE PRECISION,
+  impact_low DOUBLE PRECISION,
+  impact_high DOUBLE PRECISION,
+  low_confidence BOOLEAN,
+  learning TEXT NOT NULL DEFAULT '',
+  verdict_loop_id TEXT,
+  verdict_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS decision_id TEXT;
+ALTER TABLE winning_elements ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'reklama';
+ALTER TABLE winning_elements ADD COLUMN IF NOT EXISTS decision_id TEXT;
+ALTER TABLE winning_elements ADD COLUMN IF NOT EXISTS profit_month DOUBLE PRECISION
 `;

@@ -4,29 +4,26 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, CircleAlert, CircleCheck, Flag, Lock, Minus, Pause, Plus, Target, Trash2, Trophy, X,
+  ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, CircleCheck, Flag, Lock, Minus, Pause, Sparkles, Target, X,
 } from "lucide-react";
 import { api } from "../forms";
 import { Tip } from "../Tip";
-import { DECISIONS, ELEMENTS, LEVERS, STEPS } from "@/lib/loop-def";
-import type { LoopState, SopTest } from "@/lib/loop";
+import { hypothesisValue, improve, METRICS, modelProfit, type MetricKey } from "@/lib/levers";
+import { ELEMENTS, NO_CHANGE, STEPS } from "@/lib/loop-def";
+import type { LoopState } from "@/lib/loop";
+import type { EngineResult } from "@/lib/loop-data";
+import { CopyBrief, DecisionCard, DecisionTasks, fm, plus, range, Verdict, Waiting, zl, zlSigned } from "./Decisions";
 
-/* ---------- formatowanie ---------- */
-const zl = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : `${Math.round(v).toLocaleString("pl-PL")} zł`);
 const pct = (v: number | null | undefined, dd = 1) => (v == null || !Number.isFinite(v) ? "—" : `${(v * 100).toLocaleString("pl-PL", { maximumFractionDigits: dd })}%`);
 const num = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : Math.round(v).toLocaleString("pl-PL"));
-const isoToday = () => new Date().toISOString().slice(0, 10);
-const plus = (n: number) => new Date(Date.now() + n * 86400_000).toISOString().slice(0, 10);
 
 function Arrow({ now, prev, invert }: { now: number | null | undefined; prev: number | null | undefined; invert?: boolean }) {
   if (now == null || prev == null || !prev) return <span className="lp-arrow"><Minus size={14} /></span>;
-  const d = now / Math.abs(prev) - Math.sign(prev);
   const flat = Math.abs(now - prev) / Math.abs(prev) < 0.01;
   const up = now > prev;
   const good = invert ? !up : up;
   const I = flat ? Minus : up ? ArrowUpRight : ArrowDownRight;
   return <span className={`lp-arrow ${flat ? "" : good ? "up" : "down"}`} title="vs poprzedni okres"><I size={14} />{flat ? "" : pct(Math.abs((now - prev) / Math.abs(prev)), 0)}</span>;
-  void d;
 }
 
 interface Gap {
@@ -42,13 +39,12 @@ interface Gap {
   needFromNow: number | null;
   pacePerDay: number | null;
   forecast: number | null;
-  levers: { traffic: number | null; conversion: number | null; aov: number | null; spend: number; otherCosts: number; orders: number } | null;
   gaps: string[];
 }
 
 /** Stały pasek celu: profit vs cel, tempo, luka, prognoza „duch”. */
 export function GoalBar({ g }: { g: Gap | null }) {
-  if (!g) return <div className="gb gb-empty"><Target size={16} /> Brak celu profitu – ustawisz go w kroku 1.</div>;
+  if (!g) return <div className="gb gb-empty"><Target size={16} /> Brak celu profitu – ustawisz go w kroku 1 albo w Ustawieniach.</div>;
   const share = g.target > 0 ? Math.max(0, Math.min(1, g.achieved / g.target)) : 0;
   const timeShare = g.totalDays ? g.elapsed / g.totalDays : 0;
   const fShare = g.forecast != null && g.target > 0 ? Math.max(0, Math.min(1.2, g.forecast / g.target)) : null;
@@ -95,7 +91,7 @@ export function LoopRunner({ projectId }: { projectId: string }) {
     load().catch((e) => setErr(e.message));
   }, [load]);
 
-  if (err) return <p className="error">{err}</p>;
+  if (err && !st) return <p className="error">{err}</p>;
   if (!st?.active) return <p>Wczytuję…</p>;
   const loop = st.active;
   const step = view ?? Math.min(loop.step, STEPS.length - 1);
@@ -137,7 +133,7 @@ export function LoopRunner({ projectId }: { projectId: string }) {
     setDraft({});
     await load();
   };
-  const props: StepProps = { projectId, st, g, val, set, reload: load, loopId: loop.id };
+  const props: StepProps = { projectId, st, g, val, set, reload: load, loopId: loop.id, saveDraft };
 
   return (
     <div className="lp">
@@ -149,7 +145,7 @@ export function LoopRunner({ projectId }: { projectId: string }) {
             const open = i <= loop.step;
             return (
               <li key={s.key} className={`${i === step ? "on" : ""} ${done ? "done" : ""} ${open ? "" : "lock"}`}>
-                <button disabled={!open} onClick={() => open && go(i)} title={open ? s.title : "Najpierw zakończ wcześniejsze kroki"}>
+                <button disabled={!open} onClick={() => open && saveDraft().then(() => go(i))} title={open ? s.title : "Najpierw zakończ wcześniejsze kroki"}>
                   <span>{done ? <Check size={11} /> : open ? i + 1 : <Lock size={10} />}</span>
                   {s.title}
                 </button>
@@ -158,20 +154,21 @@ export function LoopRunner({ projectId }: { projectId: string }) {
           })}
         </ol>
       </div>
-      <GoalBar g={g} />
+      {step >= 2 && <GoalBar g={g} />}
       <section className="lp-step">
         <div className="lp-step-head">
           <span className="lp-n">Krok {step + 1}</span>
           <h1>{S.question}</h1>
         </div>
         {S.key === "cel" && <StepGoal {...props} />}
+        {S.key === "predykcja" && <StepPredict {...props} />}
         {S.key === "rzeczywistosc" && <StepReality {...props} />}
         {S.key === "luka" && <StepGap {...props} />}
-        {S.key === "lejek" && <StepFunnel {...props} />}
-        {S.key === "test" && <StepTest {...props} />}
-        {S.key === "kalendarz" && <StepSchedule {...props} />}
-        {S.key === "checklista" && <StepChecklist {...props} />}
-        {S.key === "rozstrzygniecie" && <StepDecide {...props} />}
+        {S.key === "kwota" && <StepMoney {...props} />}
+        {S.key === "pytania" && <StepQuestions {...props} />}
+        {S.key === "decyzja" && <StepDecision {...props} />}
+        {S.key === "kalendarz" && <StepCalendar {...props} />}
+        {S.key === "rozstrzygniecie" && <StepVerdict {...props} />}
         {S.key === "wnioski" && <StepLearn {...props} />}
       </section>
       {miss.length > 0 && (
@@ -184,7 +181,7 @@ export function LoopRunner({ projectId }: { projectId: string }) {
       <div className="lp-nav">
         {step > 0 ? <button className="btn" onClick={() => saveDraft().then(() => go(step - 1))}><ArrowLeft size={15} /> {STEPS[step - 1].title}</button> : <span />}
         <button className="btn primary big" disabled={busy} onClick={next}>
-          {step === STEPS.length - 1 ? <><CircleCheck size={16} /> Zakończ pętlę i wróć do celu</> : <>Zapisz i dalej: {STEPS[step + 1].title} <ArrowRight size={16} /></>}
+          {step === STEPS.length - 1 ? <><CircleCheck size={16} /> Zakończ sesję i wróć do celu</> : <>Zapisz i dalej: {STEPS[step + 1].title} <ArrowRight size={16} /></>}
         </button>
       </div>
     </div>
@@ -199,40 +196,107 @@ interface StepProps {
   val: <T>(k: string, d: T) => T;
   set: (k: string, v: unknown) => void;
   reload: () => Promise<void>;
+  saveDraft: () => Promise<void>;
 }
 
-/* ---------- Krok 1: Cel (+ rozliczenie poprzedniej pętli) ---------- */
+const snapshotOf = (st: LoopState) => (st.active?.data.kwota?.snapshot ?? null) as EngineResult | null;
 
-function periodRange(p: string): [string, string] {
-  const n = new Date();
-  const y = n.getFullYear(), m = n.getMonth();
+/* ---------- Krok 1: Cel + zakres ---------- */
+
+function periodRange(p: string, base = new Date()): [string, string] {
+  const y = base.getFullYear(), m = base.getMonth();
   const f = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   if (p === "kwartał") { const q0 = Math.floor(m / 3) * 3; return [f(new Date(y, q0, 1)), f(new Date(y, q0 + 3, 0))]; }
   if (p === "rok") return [`${y}-01-01`, `${y}-12-31`];
   return [f(new Date(y, m, 1)), f(new Date(y, m + 1, 0))];
 }
 
-function StepGoal({ projectId, loopId, st, g, val, reload }: StepProps) {
-  const [edit, setEdit] = useState(!st.goal);
-  const [period, setPeriod] = useState("miesiąc");
-  const [[from, to], setRange] = useState(periodRange("miesiąc"));
-  const [target, setTarget] = useState("");
-  const [who, setWho] = useState("");
-  const [diag, setDiag] = useState({ sales: "", cpa: "", roas: "" });
+export function GoalForm({ projectId, last, onSaved, onCancel }: { projectId: string; last: LoopState["lastGoal"]; onSaved: () => void; onCancel?: () => void }) {
+  // Auto-uzupełnienie: ten sam typ okresu i ta sama kwota co ostatnio – na bieżący okres.
+  const p0 = last?.period && ["miesiąc", "kwartał", "rok"].includes(last.period) ? last.period : "miesiąc";
+  const [period, setPeriod] = useState(p0);
+  const [[from, to], setRange] = useState(periodRange(p0));
+  const [target, setTarget] = useState(last ? String(Math.round(last.profit_target)) : "");
   const [err, setErr] = useState("");
-  const ratings = val<Record<string, { effect?: string; carry?: boolean }>>("ratings", {});
-  const saveGoal = async () => {
+  const save = async () => {
     setErr("");
     try {
-      const d: Record<string, number> = {};
-      for (const [k, v] of Object.entries(diag)) if (v.trim()) d[k] = Number(v.replace(",", "."));
-      await api(`/api/projects/${projectId}/goals`, "POST", { period, date_from: from, date_to: to, profit_target: Number(target.replace(/\s/g, "").replace(",", ".")), diag: d, approved_by: who });
-      setEdit(false);
-      await reload();
+      await api(`/api/projects/${projectId}/goals`, "POST", { period, date_from: from, date_to: to, profit_target: Number(target.replace(/\s/g, "").replace(",", ".")) });
+      onSaved();
     } catch (x) {
       setErr((x as Error).message);
     }
   };
+  return (
+    <div className="lp-card">
+      <label className="lp-l">Okres celu</label>
+      <div className="seg">
+        {["miesiąc", "kwartał", "rok"].map((p) => (
+          <button key={p} className={period === p ? "on" : ""} onClick={() => { setPeriod(p); setRange(periodRange(p)); }}>{p}</button>
+        ))}
+      </div>
+      <div className="row"><input type="date" value={from} onChange={(e) => setRange([e.target.value, to])} /> – <input type="date" value={to} onChange={(e) => setRange([from, e.target.value])} /></div>
+      <label className="lp-l">Cel profitu (zł) <Tip text="Profit po wszystkim = przychód netto − reklamy − koszty zmienne i stałe − podatek (z Ustawień klienta)." /></label>
+      <div className="money-input"><input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} /><span>zł</span></div>
+      {err && <p className="error">{err}</p>}
+      <div className="row"><button className="btn primary" disabled={!target.trim()} onClick={save}><Check size={15} /> Zapisz cel</button>{onCancel && <button className="btn" onClick={onCancel}>Anuluj</button>}</div>
+    </div>
+  );
+}
+
+function ScopePicker({ projectId, st, reload }: { projectId: string; st: LoopState; reload: () => Promise<void> }) {
+  const [lists, setLists] = useState<{ campaigns: { name: string; platform: string; spend: number }[]; products: { name: string; gross: number | null }[] } | null>(null);
+  const init = st.scope ?? st.economicsScope;
+  const [camps, setCamps] = useState<string[]>(init.campaigns);
+  const [prods, setProds] = useState<string[]>(init.products);
+  const [saved, setSaved] = useState(!!st.scope);
+  useEffect(() => {
+    api<NonNullable<typeof lists>>(`/api/projects/${projectId}/loop/scope`).then(setLists).catch(() => {});
+  }, [projectId]);
+  const toggle = (xs: string[], x: string, f: (v: string[]) => void) => { f(xs.includes(x) ? xs.filter((y) => y !== x) : [...xs, x]); setSaved(false); };
+  const save = async () => {
+    await api(`/api/projects/${projectId}/loop/scope`, "PUT", { campaigns: camps, products: prods });
+    setSaved(true);
+    await reload();
+  };
+  if (!lists) return <div className="lp-card"><p>Wczytuję kampanie i produkty…</p></div>;
+  const Pick = ({ title, tip, items, sel, setSel }: { title: string; tip: string; items: { name: string; sub: string }[]; sel: string[]; setSel: (v: string[]) => void }) => (
+    <div className="sc-col">
+      <div className="sc-head">
+        <b>{title} <Tip text={tip} /></b>
+        <button className={`chip ${sel.length === 0 ? "on" : ""}`} onClick={() => { setSel([]); setSaved(false); }}>wszystko</button>
+      </div>
+      <div className="sc-list">
+        {items.map((x) => (
+          <label key={x.name} className={`sc-item ${sel.includes(x.name) ? "on" : ""}`}>
+            <input type="checkbox" checked={sel.includes(x.name)} onChange={() => toggle(sel, x.name, setSel)} />
+            <span>{x.name}</span><small>{x.sub}</small>
+          </label>
+        ))}
+        {sel.filter((s) => !items.some((x) => x.name === s)).map((s) => (
+          <label key={s} className="sc-item on old"><input type="checkbox" checked onChange={() => toggle(sel, s, setSel)} /><span>{s}</span><small>brak w ostatnich 60 dniach</small></label>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <div className="lp-card">
+      <h3>Z czego liczymy</h3>
+      <div className="sc">
+        <Pick title="Kampanie" tip="Koszty, wyświetlenia i kliknięcia tylko z zaznaczonych kampanii. Nic nie zaznaczone = wszystkie." items={lists.campaigns.map((c) => ({ name: c.name, sub: `${c.platform} · ${zl(c.spend)}` }))} sel={camps} setSel={setCamps} />
+        <Pick title="Produkty" tip="Zamówienia zawierające zaznaczone produkty (cała wartość zamówienia). Nic nie zaznaczone = wszystkie zamówienia." items={lists.products.map((p) => ({ name: p.name, sub: p.gross == null ? "" : zl(p.gross) }))} sel={prods} setSel={setProds} />
+      </div>
+      <div className="row">
+        <button className="btn primary" onClick={save}><Check size={15} /> Zatwierdź zakres</button>
+        {saved && <span className="saved"><CircleCheck size={15} /> zakres zapisany – zostanie na kolejne sesje</span>}
+      </div>
+    </div>
+  );
+}
+
+function StepGoal({ projectId, loopId, st, g, val, reload }: StepProps) {
+  const [edit, setEdit] = useState(!st.goal);
+  const ratings = val<Record<string, { effect?: string; carry?: boolean }>>("ratings", {});
   const rate = async (taskId: string, effect: string, carry = false) => {
     await api(`/api/loops/${loopId}/rate`, "POST", { taskId, effect, carry, due: plus(3) });
     await reload();
@@ -241,7 +305,7 @@ function StepGoal({ projectId, loopId, st, g, val, reload }: StepProps) {
     <div className="lp-body">
       {st.prev && st.prevActions.length > 0 && (
         <div className="lp-card copper">
-          <h3><Flag size={16} /> Rozliczenie poprzedniej pętli ({st.prev.finished_at}) <Tip text="Każda decyzja z poprzedniej analizy musi zostać rozliczona: czy ją wykonałeś i czy przyniosła efekt. Bez tego nie przejdziesz dalej." /></h3>
+          <h3><Flag size={16} /> Rozliczenie działań z poprzedniej sesji ({st.prev.finished_at})</h3>
           <ul className="lp-rate">
             {st.prevActions.map((a) => {
               const r = ratings[a.id];
@@ -266,61 +330,79 @@ function StepGoal({ projectId, loopId, st, g, val, reload }: StepProps) {
             <span><em>Cel profitu</em><b>{zl(st.goal.profit_target)}</b></span>
             <span><em>Okres</em><b>{st.goal.period}: {st.goal.date_from} – {st.goal.date_to}</b></span>
             <span><em>Tempo potrzebne</em><b>{zl(g?.needPerWeek)}/tydz. · {zl(g?.needPerDay)}/dz.</b></span>
-            {st.goal.approved_by && <span><em>Zatwierdził</em><b>{st.goal.approved_by}</b></span>}
           </div>
-          <div className="lp-gapnote"><CircleAlert size={14} /> Maks. CPA: brak marży produktu w ustawieniach – luka.</div>
           <button className="btn small" onClick={() => setEdit(true)}>Zmień cel</button>
         </div>
       ) : (
-        <div className="lp-card">
-          <label className="lp-l">Okres celu</label>
-          <div className="seg">
-            {["miesiąc", "kwartał", "rok"].map((p) => (
-              <button key={p} className={period === p ? "on" : ""} onClick={() => { setPeriod(p); setRange(periodRange(p)); }}>{p}</button>
-            ))}
-          </div>
-          <div className="row"><input type="date" value={from} onChange={(e) => setRange([e.target.value, to])} /> – <input type="date" value={to} onChange={(e) => setRange([from, e.target.value])} /></div>
-          <label className="lp-l">Cel profitu (zł) <Tip text="Profit = przychód netto − reklamy − koszty zmienne i stałe − podatek (z Ustawień klienta)." /></label>
-          <div className="money-input"><input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} /><span>zł</span></div>
-          <label className="lp-l">Kto zatwierdził po stronie klienta</label>
-          <input value={who} onChange={(e) => setWho(e.target.value)} />
-          <details>
-            <summary>Cele diagnostyczne (opcjonalnie)</summary>
-            <div className="row">
-              <label className="lp-mini">Sprzedaż (szt.)<input inputMode="decimal" value={diag.sales} onChange={(e) => setDiag({ ...diag, sales: e.target.value })} /></label>
-              <label className="lp-mini">CPA (zł)<input inputMode="decimal" value={diag.cpa} onChange={(e) => setDiag({ ...diag, cpa: e.target.value })} /></label>
-              <label className="lp-mini">ROAS<input inputMode="decimal" value={diag.roas} onChange={(e) => setDiag({ ...diag, roas: e.target.value })} /></label>
-            </div>
-          </details>
-          {err && <p className="error">{err}</p>}
-          <div className="row"><button className="btn primary" disabled={!target.trim()} onClick={saveGoal}><Check size={15} /> Zapisz cel</button>{st.goal && <button className="btn" onClick={() => setEdit(false)}>Anuluj</button>}</div>
-        </div>
+        <GoalForm projectId={projectId} last={st.goal ?? st.lastGoal} onSaved={() => { setEdit(false); reload(); }} onCancel={st.goal ? () => setEdit(false) : undefined} />
       )}
+      <ScopePicker projectId={projectId} st={st} reload={reload} />
     </div>
   );
 }
 
-/* ---------- Krok 2: Rzeczywistość ---------- */
+/* ---------- Krok 2: Predykcja ---------- */
 
-interface Money { from: string; to: string; revenue: number; spend: number; profit: number; orders: number; visitors: number | null; variableCosts: number; fixedCosts: number; tax: number }
+const STAGE_OPTIONS = [...METRICS.map((m) => ({ key: m.key as string, label: `${m.stage} (${m.label.split(" ")[0]})` })), { key: "żaden", label: "Żaden się nie pogorszył" }];
+const stageLabel = (k: string | null | undefined) => (k == null ? "brak danych" : STAGE_OPTIONS.find((o) => o.key === k)?.label ?? k);
+
+function StepPredict({ loopId, st, reload }: StepProps) {
+  const p = st.prediction;
+  const [profit, setProfit] = useState(p ? String(Math.round(p.profit_guess)) : "");
+  const [stage, setStage] = useState(p?.stage_guess ?? "");
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState(!!p);
+  const save = async () => {
+    setErr("");
+    try {
+      await api(`/api/loops/${loopId}/prediction`, "POST", { profit: Number(profit.replace(/\s/g, "").replace(",", ".")), stage });
+      setOk(true);
+      await reload();
+    } catch (x) {
+      setErr((x as Error).message);
+    }
+  };
+  return (
+    <div className="lp-body">
+      <div className="lp-card">
+        <label className="lp-l">Ile wyniósł profit w ostatnim tygodniu (7 pełnych dni)?</label>
+        <div className="money-input"><input inputMode="decimal" value={profit} onChange={(e) => { setProfit(e.target.value); setOk(false); }} /><span>zł</span></div>
+        <label className="lp-l">Który etap lejka się pogorszył (ostatnie 7 dni vs poprzednie 7)?</label>
+        <div className="lever-grid">
+          {STAGE_OPTIONS.map((o) => (
+            <button key={o.key} className={`lever ${stage === o.key ? "on" : ""}`} onClick={() => { setStage(o.key); setOk(false); }}>
+              <b>{o.label}</b>{stage === o.key && <CircleCheck size={18} className="lever-ok" />}
+            </button>
+          ))}
+        </div>
+        {err && <p className="error">{err}</p>}
+        <div className="row">
+          <button className="btn primary" disabled={!profit.trim() || !stage} onClick={save}><Check size={15} /> Zapisz predykcję</button>
+          {ok && <span className="saved"><CircleCheck size={15} /> zapisana – po przejściu dalej nie da się jej zmienić</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Krok 3: Rzeczywistość ---------- */
+
+interface Money { from: string; to: string; revenue: number; spend: number; profit: number; orders: number; variableCosts: number; fixedCosts: number; tax: number }
 interface Reality {
   wide: Money; widePrev: Money; weeks: Money[]; days: Money[]; daily60: Money[];
   events: { day: string; title: string }[];
-  sources: { key: string; label: string; state: string; detail: string }[];
   gaps: string[];
-  sourceOf: { revenue: string | null; spend: string | null; visitors: string | null };
+  sourceOf: { revenue: string | null; spend: string | null };
 }
 
 function ProfitLine({ rows, events }: { rows: Money[]; events: { day: string; title: string }[] }) {
   const w = 900, h = 180;
   const vals = rows.map((r) => r.profit);
-  const max = Math.max(1, ...vals.map(Math.abs));
   const min = Math.min(0, ...vals);
   const top = Math.max(0, ...vals);
   const span = top - min || 1;
   const x = (i: number) => (i / Math.max(1, rows.length - 1)) * w;
   const y = (v: number) => h - ((v - min) / span) * (h - 10) - 5;
-  void max;
   return (
     <svg viewBox={`0 0 ${w} ${h + 18}`} width="100%" role="img" aria-label="Profit dzień po dniu">
       <line x1={0} x2={w} y1={y(0)} y2={y(0)} stroke="var(--border)" />
@@ -339,7 +421,7 @@ function MoneyTable({ rows, label }: { rows: Money[]; label: (r: Money) => strin
   return (
     <div className="tbl-wrap">
       <table className="tbl lp-tbl">
-        <thead><tr><th /><th className="num">Profit</th><th className="num">Przychód</th><th className="num">Reklamy</th><th className="num">Zamówienia</th><th className="num">Ruch</th><th /></tr></thead>
+        <thead><tr><th /><th className="num">Profit</th><th className="num">Przychód</th><th className="num">Reklamy</th><th className="num">Zamówienia</th><th /></tr></thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={r.from}>
@@ -348,7 +430,6 @@ function MoneyTable({ rows, label }: { rows: Money[]; label: (r: Money) => strin
               <td className="num">{zl(r.revenue)}</td>
               <td className="num">{zl(r.spend)}</td>
               <td className="num">{num(r.orders)}</td>
-              <td className="num">{r.visitors == null ? <span className="gap-tag">luka</span> : num(r.visitors)}</td>
               <td><Arrow now={r.profit} prev={rows[i - 1]?.profit} /></td>
             </tr>
           ))}
@@ -365,37 +446,40 @@ function StepReality({ projectId, st, val, set }: StepProps) {
     api<Reality>(`/api/projects/${projectId}/loop/reality`).then(setR).catch(() => {});
   }, [projectId]);
   const reliable = val<boolean | null>("reliable", null);
-  const prevSnap = (st.prev?.data.rzeczywistosc?.snapshot ?? null) as { date: string; wide: Money } | null;
+  const p = st.prediction;
   if (!r) return <p>Liczę profit z danych…</p>;
   const W = r.wide, P = r.widePrev;
+  const err = p && p.profit_actual != null ? p.profit_guess - p.profit_actual : null;
   return (
     <div className="lp-body">
+      {p && (
+        <div className="lp-card pr">
+          <h3>Twoja predykcja vs dane <small>({p.window_from} – {p.window_to})</small></h3>
+          <div className="pr-grid">
+            <div><em>Profit tygodnia</em><span>Ty: <b>{zl(p.profit_guess)}</b></span><span>Dane: <b>{zl(p.profit_actual)}</b></span><span className={`pr-diff ${err != null && Math.abs(err) <= Math.abs(p.profit_actual ?? 0) * 0.1 ? "ok" : "bad"}`}>różnica {zlSigned(err)}</span></div>
+            <div><em>Pogorszony etap</em><span>Ty: <b>{stageLabel(p.stage_guess)}</b></span><span>Dane: <b>{stageLabel(p.stage_actual)}</b></span>
+              <span className={`pr-diff ${p.stage_actual && p.stage_actual === p.stage_guess ? "ok" : "bad"}`}>{p.stage_actual == null ? "za mała próba" : p.stage_actual === p.stage_guess ? "trafione" : "nietrafione"}</span></div>
+          </div>
+        </div>
+      )}
       {r.gaps.length > 0 && (
         <div className="lp-card copper">
           <h3><CircleAlert size={16} /> Luki w danych</h3>
           <ul className="lp-gaps">{r.gaps.map((x) => <li key={x}>{x}</li>)}</ul>
         </div>
       )}
-      {prevSnap && (
-        <div className="lp-card lp-then">
-          <span>Poprzednia analiza ({prevSnap.date}): profit 60 dni <b>{zl(prevSnap.wide.profit)}</b></span>
-          <ArrowRight size={16} />
-          <span>Teraz: <b>{zl(W.profit)}</b> <Arrow now={W.profit} prev={prevSnap.wide.profit} /></span>
-        </div>
-      )}
       <div className="seg big">
-        {([["szeroka", "Szeroka · 60 dni"], ["srednia", "Średnia · tygodnie"], ["waska", "Wąska · dni"]] as const).map(([k, l]) => (
+        {([["szeroka", "Do 2 mies."], ["srednia", "Tygodnie"], ["waska", "Dni"]] as const).map(([k, l]) => (
           <button key={k} className={scale === k ? "on" : ""} onClick={() => setScale(k)}>{l}</button>
         ))}
       </div>
       {scale === "szeroka" && (
         <div className="lp-card">
           <div className="lp-kpis">
-            <div><em>Profit</em><b className={W.profit < 0 ? "neg" : ""}>{zl(W.profit)}</b><Arrow now={W.profit} prev={P.profit} /></div>
-            <div><em>Przychód</em><b>{zl(W.revenue)}</b><Arrow now={W.revenue} prev={P.revenue} /><small>{r.sourceOf.revenue ?? <span className="gap-tag">luka</span>}</small></div>
-            <div><em>Koszt reklam</em><b>{zl(W.spend)}</b><Arrow now={W.spend} prev={P.spend} invert /><small>{r.sourceOf.spend ?? <span className="gap-tag">luka</span>}</small></div>
+            <div><em>Profit 60 dni</em><b className={W.profit < 0 ? "neg" : ""}>{zl(W.profit)}</b><Arrow now={W.profit} prev={P.profit} /></div>
+            <div><em>Przychód</em><b>{zl(W.revenue)}</b><Arrow now={W.revenue} prev={P.revenue} /><small>{r.sourceOf.revenue ?? <span className="gap-tag">brak danych</span>}</small></div>
+            <div><em>Koszt reklam</em><b>{zl(W.spend)}</b><Arrow now={W.spend} prev={P.spend} invert /><small>{r.sourceOf.spend ?? <span className="gap-tag">brak danych</span>}</small></div>
             <div><em>Pozostałe koszty</em><b>{zl(W.variableCosts + W.fixedCosts + W.tax)}</b><small>ustawienia klienta</small></div>
-            <div><em>Ruch</em><b>{W.visitors == null ? "—" : num(W.visitors)}</b><Arrow now={W.visitors} prev={P.visitors} /><small>{r.sourceOf.visitors ?? <span className="gap-tag">luka</span>}</small></div>
           </div>
           <ProfitLine rows={r.daily60} events={r.events} />
           <p className="lp-legend"><i className="l-acc" /> profit dziennie <i className="l-cop" /> zdarzenie z osi czasu</p>
@@ -410,449 +494,391 @@ function StepReality({ projectId, st, val, set }: StepProps) {
           <button className={reliable === false ? "on" : ""} onClick={() => set("reliable", false)}><X size={15} /> Nie</button>
         </div>
         {reliable === false && (
-          <p className="lp-stop"><CircleAlert size={16} /> SOP stoi. Najpierw napraw pomiar w <Link href={`/projects/${projectId}/dane`}>Źródłach danych</Link>, potem wróć do tego kroku.</p>
+          <p className="lp-stop"><CircleAlert size={16} /> Sesja stoi. Najpierw napraw pomiar w <Link href={`/projects/${projectId}/dane`}>Źródłach danych</Link>, potem wróć do tego kroku.</p>
         )}
       </div>
     </div>
   );
 }
 
-/* ---------- Krok 3: Luka ---------- */
+/* ---------- Krok 4: Luka ---------- */
 
-function StepGap({ g, val, set }: StepProps) {
-  const levers = val<string[]>("levers", []);
+function StepGap({ g }: StepProps) {
   if (!g) return <p>Brak celu – wróć do kroku 1.</p>;
-  const L = g.levers;
-  const values: Record<string, string> = {
-    traffic: L?.traffic == null ? "luka" : num(L.traffic),
-    conversion: L?.conversion == null ? "luka" : pct(L.conversion, 2),
-    aov: zl(L?.aov),
-    spend: zl(L?.spend),
-    costs: zl(L?.otherCosts),
-  };
   return (
     <div className="lp-body">
       <div className="lp-card">
-        <div className="lp-kpis">
-          <div><em>Tempo potrzebne</em><b>{zl(g.needPerDay)}/dz.</b><small>{zl(g.needPerWeek)}/tydz.</small></div>
-          <div><em>Tempo obecne</em><b>{zl(g.pacePerDay)}/dz.</b><small>{g.pacePerDay != null && g.needPerDay ? pct(g.pacePerDay / g.needPerDay - 1, 0) + " vs potrzebne" : ""}</small></div>
-          <div><em>Brakuje do celu</em><b className={g.gap > 0 ? "neg" : ""}>{zl(g.gap)}</b><small>{g.target ? pct(g.gap / g.target, 0) + " celu" : ""}</small></div>
-          <div><em>Od dziś trzeba</em><b>{zl(g.needFromNow)}/dz.</b><small>{g.left} dni do końca</small></div>
+        <div className="lp-kpis big">
+          <div><em>Brakuje do celu</em><b className={g.gap > 0 ? "neg" : "pos"}>{zl(g.gap)}</b><small>{g.target ? `${pct(g.gap / g.target, 0)} celu` : ""}</small></div>
+          <div><em>Od dziś trzeba</em><b>{zl(g.needFromNow)}/dz.</b><small>{g.left} dni do końca okresu</small></div>
+          <div><em>Tempo obecne</em><b>{zl(g.pacePerDay)}/dz.</b><small>potrzebne średnio {zl(g.needPerDay)}/dz.</small></div>
+          <div><em>Różnica tempa</em><b className={(g.pacePerDay ?? 0) < (g.needFromNow ?? 0) ? "neg" : "pos"}>{g.needFromNow != null && g.pacePerDay != null ? `${zlSigned(g.pacePerDay - g.needFromNow)}/dz.` : "—"}</b><small>{g.needFromNow != null && g.pacePerDay != null ? `${zlSigned((g.pacePerDay - g.needFromNow) * 30)}/mies.` : ""}</small></div>
           <div className="gb-ghost"><em>Prognoza (duch)</em><b>{zl(g.forecast)}</b><small>jeśli tempo się utrzyma</small></div>
         </div>
       </div>
-      <div className="lp-card">
-        <h3>Profit = Ruch × Konwersja × Wartość zamówienia − Koszty <Tip text="Wartości z okresu celu do dziś, z prawdziwych danych. Ruch = wejścia na stronę (skrypt). Zaznacz dźwignie, które realnie ruszysz." /></h3>
-        <div className="lever-grid">
-          {LEVERS.map((l) => {
-            const on = levers.includes(l.key);
-            return (
-              <button key={l.key} className={`lever ${on ? "on" : ""}`} onClick={() => set("levers", on ? levers.filter((x) => x !== l.key) : [...levers, l.key])}>
-                <span className="lever-dir">{l.dir === "w górę" ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />} {l.dir}</span>
-                <b>{l.label}</b>
-                <span className={values[l.key] === "luka" ? "gap-tag" : "lever-v"}>{values[l.key]}</span>
-                {on && <CircleCheck size={18} className="lever-ok" />}
-              </button>
-            );
-          })}
-        </div>
-        <label className="lp-l">Gdzie idziemy w górę, gdzie w dół – i dlaczego?</label>
-        <textarea rows={3} value={val("why", "")} onChange={(e) => set("why", e.target.value)} />
-      </div>
+      {g.gaps.length > 0 && <div className="lp-card copper"><ul className="lp-gaps">{g.gaps.map((x) => <li key={x}>{x}</li>)}</ul></div>}
     </div>
   );
 }
 
-/* ---------- Krok 4: Lejek ---------- */
+/* ---------- Krok 5: Kwota na stole ---------- */
 
-interface Stages { from: string; to: string; spend: number; stages: { id: string; label: string; people: number | null; toNext: number | null; nextLabel: string | null; costPerPerson: number | null; change: number | null; gap: boolean }[] }
-
-function StepFunnel({ projectId, st, val, set }: StepProps) {
-  const funnelId = val<string>("funnelId", st.funnels[0]?.id ?? "");
-  const stage = val<string>("stage", "");
-  const [d, setD] = useState<Stages | null>(null);
-  useEffect(() => {
-    if (!funnelId) return;
-    setD(null);
-    api<Stages>(`/api/funnels/${funnelId}/stages`).then(setD).catch(() => {});
-    if (!val("funnelId", "")) set("funnelId", funnelId);
-  }, [funnelId]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!st.funnels.length) return <p className="lp-stop"><CircleAlert size={16} /> Brak mapy lejka. Etapy lejka ustawiasz w <Link href={`/projects/${projectId}/lejki`}>Mapach lejków</Link> (konfiguracja).</p>;
+function LeverValue({ v, r, low }: { v: number | null; r: [number, number] | null; low: boolean }) {
+  if (v == null) return <span className="gap-tag">brak danych</span>;
   return (
-    <div className="lp-body">
-      {st.funnels.length > 1 && (
-        <div className="seg">{st.funnels.map((f) => <button key={f.id} className={f.id === funnelId ? "on" : ""} onClick={() => { set("funnelId", f.id); set("stage", ""); }}>{f.name}</button>)}</div>
-      )}
-      <div className="lp-card">
-        {!d ? <p>Liczę etapy…</p> : (
-          <>
-            <p className="lp-sub">Ostatnie 30 dni ({d.from} – {d.to}) vs poprzednie 30 · koszt reklam w lejku {zl(d.spend)}</p>
-            {!d.stages.length && <p className="lp-stop"><CircleAlert size={16} /> Ta mapa nie ma etapów. Ułóż etapy w <Link href={`/funnels/${funnelId}`}>edytorze mapy</Link> albo wybierz inną mapę.</p>}
-            <div className="stage-list">
-              {d.stages.map((s, i) => (
-                <button key={s.id} className={`stage ${stage === s.label ? "on" : ""} ${s.gap ? "gap" : ""}`} onClick={() => set("stage", s.label)}>
-                  <span className="stage-n">{i + 1}</span>
-                  <b>{s.label}</b>
-                  <span className="stage-v">{s.gap ? <span className="gap-tag">luka pomiarowa</span> : <>{num(s.people)} os.</>}</span>
-                  <span className="stage-c" title={s.nextLabel ? `przejście do: ${s.nextLabel}` : ""}>{s.toNext == null ? "" : <>→ {pct(s.toNext, 1)}</>}</span>
-                  <span className="stage-k">{s.costPerPerson == null ? "" : `${zl(s.costPerPerson)}/os.`}</span>
-                  <span>{s.change == null ? "" : <Arrow now={1 + s.change} prev={1} />}</span>
-                  {stage === s.label && <span className="stage-flag"><Flag size={14} /> wąskie gardło</span>}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-      <div className="lp-card">
-        <label className="lp-l">Dlaczego ten etap?</label>
-        <textarea rows={2} value={val("note", "")} onChange={(e) => set("note", e.target.value)} />
-      </div>
+    <span className="lv-val">
+      <b>{low ? range(r) : `${zlSigned(v)}`}</b><small>/mies.</small>
+      {low && <span className="conf-low" title={`Środek: ${zlSigned(v)}`}><CircleAlert size={12} /> niska pewność</span>}
+    </span>
+  );
+}
+
+/** Mikroliczby etapu – każda z ekwiwalentem w zł/mies. */
+function StageDetail({ eng, k }: { eng: EngineResult; k: MetricKey }) {
+  const W = eng.window;
+  const b = eng.ranking.base;
+  const u = eng.units;
+  const budget = eng.ranking.budget;
+  const now = eng.ranking.profitNow;
+  const sens = (over: Partial<Record<MetricKey, number>>) => {
+    const p = modelProfit(budget, b, eng.econ, over);
+    return p == null || now == null ? null : p - now;
+  };
+  const cpc = b.cpm != null && b.ctr ? b.cpm / (1000 * b.ctr) : null;
+  const cpa = W.orders ? W.spend / W.orders : null;
+  const rows: Record<MetricKey, { label: string; value: string; eq: string; tip?: string }[]> = {
+    cpm: [
+      { label: "Wydatki (30 dni)", value: zl(W.spend), eq: "budżet stały w modelu" },
+      { label: "Wyświetlenia", value: num(W.impressions), eq: `1000 wyśw. = ${zl(u.perMille)}` },
+      { label: "CPM", value: fm("cpm", b.cpm), eq: `−10% = ${zlSigned(b.cpm == null ? null : sens({ cpm: improve("cpm", b.cpm, 0.1) }))}/mies.` },
+    ],
+    ctr: [
+      { label: "Kliknięcia w link", value: num(W.clicks), eq: `1 klik = ${zl(u.perClick)}` },
+      { label: "CTR", value: fm("ctr", b.ctr), eq: `+10% = ${zlSigned(b.ctr == null ? null : sens({ ctr: improve("ctr", b.ctr, 0.1) }))}/mies.` },
+      { label: "CPC", value: fm("cpm", cpc), eq: `−10% = ${zlSigned(b.cpm == null ? null : sens({ cpm: improve("cpm", b.cpm, 0.1) }))}/mies.`, tip: "CPC = CPM ÷ (1000 × CTR); −10% CPC przy tym samym CTR = −10% CPM." },
+    ],
+    cr: [
+      { label: "Zamówienia", value: num(W.orders), eq: `1 zamówienie = ${zl(u.perOrder)}` },
+      { label: "CR", value: fm("cr", b.cr), eq: `+10% = ${zlSigned(b.cr == null ? null : sens({ cr: improve("cr", b.cr, 0.1) }))}/mies.` },
+      { label: "Koszt zamówienia (CPA)", value: zl(cpa), eq: `−10% = ${zlSigned(b.cr == null ? null : sens({ cr: b.cr / 0.9 }))}/mies.`, tip: "CPA = wydatki ÷ zamówienia; −10% CPA przy stałym budżecie = +11% zamówień." },
+    ],
+    aov: [
+      { label: "Przychód netto (30 dni)", value: zl(W.net), eq: `1 zamówienie = ${zl(u.perOrder)}` },
+      { label: "AOV netto", value: fm("aov", b.aov), eq: `+10% = ${zlSigned(b.aov == null ? null : sens({ aov: improve("aov", b.aov, 0.1) }))}/mies.` },
+      { label: "LTV 30 ponad 1. zakup", value: eng.ltv.value == null ? "brak danych" : zl(eng.ltv.value), eq: eng.ltv.value == null ? "liczone z samego AOV" : `${eng.ltv.matured} klientów z pełnym oknem` },
+    ],
+  };
+  const i = METRICS.findIndex((m) => m.key === k);
+  const show = METRICS.filter((_, j) => Math.abs(j - i) <= 1);
+  return (
+    <div className="sd">
+      {show.map((m) => (
+        <div key={m.key} className={`sd-col ${m.key === k ? "on" : ""}`}>
+          <b>{m.stage}</b>
+          {rows[m.key].map((r) => (
+            <div key={r.label} className="sd-row"><span>{r.label}{r.tip && <Tip text={r.tip} />}</span><b>{r.value}</b><small>{r.eq}</small></div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }
 
-/* ---------- Krok 5: Test ---------- */
-
-function TestCardForm({ projectId, loopId, stage, adTests, onDone }: { projectId: string; loopId: string; stage: string; adTests: { id: string; angle: string }[]; onDone: () => void }) {
-  const [f, setF] = useState({ hypothesis: "", element: "reklama", stage, metric: "", gain: "", budget: "", hours: "", ad: "" });
-  const [vars, setVars] = useState(["", ""]);
+function StepMoney({ loopId, st, reload }: StepProps) {
+  const eng = snapshotOf(st);
+  const guess = st.prediction?.lever_guess ?? null;
+  const [pick, setPick] = useState("");
+  const [open, setOpen] = useState<MetricKey | null>(null);
   const [err, setErr] = useState("");
-  const save = async () => {
+  const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? null) as MetricKey | null;
+  const reveal = async () => {
     setErr("");
     try {
-      const n = (x: string) => (x.trim() ? Number(x.replace(",", ".")) : null);
-      await api(`/api/projects/${projectId}/sop-tests`, "POST", {
-        loopId, hypothesis: f.hypothesis, element: f.element, stage: f.stage, metric: f.metric, gain_estimate: n(f.gain), cost_budget: n(f.budget), cost_hours: n(f.hours),
-        ad_test_id: f.element === "reklama" ? f.ad || null : null,
-        variants: vars.map((desc, i) => ({ letter: String.fromCharCode(65 + i), desc })),
-      });
-      onDone();
-    } catch (x) {
-      setErr((x as Error).message);
-    }
-  };
-  return (
-    <div className="lp-card tc-form">
-      <label className="lp-l">Hipoteza</label>
-      <textarea rows={2} value={f.hypothesis} onChange={(e) => setF({ ...f, hypothesis: e.target.value })} />
-      <label className="lp-l">Element testowany</label>
-      <div className="seg">{ELEMENTS.map((x) => <button key={x} className={f.element === x ? "on" : ""} onClick={() => setF({ ...f, element: x })}>{x}</button>)}</div>
-      {f.element === "reklama" && adTests.length > 0 && (
-        <label className="lp-mini">Wyniki z testu reklam <Tip text="Podpięty test z modułu Testy reklam dostarczy koszt i przychód wariantów (po utm_content)." />
-          <select value={f.ad} onChange={(e) => setF({ ...f, ad: e.target.value })}><option value="">— nie podpinaj —</option>{adTests.map((a) => <option key={a.id} value={a.id}>{a.angle}</option>)}</select>
-        </label>
-      )}
-      <div className="row">
-        <label className="lp-mini">Etap lejka<input value={f.stage} onChange={(e) => setF({ ...f, stage: e.target.value })} /></label>
-        <label className="lp-mini">Metryka sukcesu etapu<input value={f.metric} onChange={(e) => setF({ ...f, metric: e.target.value })} /></label>
-      </div>
-      <div className="row">
-        <label className="lp-mini">Spodziewany przyrost profitu (Twoja ocena, zł)<input inputMode="decimal" value={f.gain} onChange={(e) => setF({ ...f, gain: e.target.value })} /></label>
-        <label className="lp-mini">Koszt testu: budżet (zł)<input inputMode="decimal" value={f.budget} onChange={(e) => setF({ ...f, budget: e.target.value })} /></label>
-        <label className="lp-mini">Czas pracy (h)<input inputMode="decimal" value={f.hours} onChange={(e) => setF({ ...f, hours: e.target.value })} /></label>
-      </div>
-      <label className="lp-l">Warianty</label>
-      {vars.map((v, i) => (
-        <div key={i} className="tc-var">
-          <span className="v-letter">{String.fromCharCode(65 + i)}</span>
-          <input value={v} onChange={(e) => setVars(vars.map((x, k) => (k === i ? e.target.value : x)))} placeholder={i === 0 ? "kontrola (obecna wersja)" : ""} />
-          {i > 1 && <button className="icon-btn danger" onClick={() => setVars(vars.filter((_, k) => k !== i))} aria-label="Usuń wariant"><Trash2 size={14} /></button>}
-        </div>
-      ))}
-      <button className="btn small" onClick={() => setVars([...vars, ""])}><Plus size={14} /> wariant</button>
-      {err && <p className="error">{err}</p>}
-      <div className="row"><button className="btn primary" onClick={save}><Check size={15} /> Zapisz kartę testu</button></div>
-    </div>
-  );
-}
-
-function TestCard({ t, collision, children }: { t: SopTest; collision?: string[]; children?: React.ReactNode }) {
-  const prio = t.gain_estimate != null && t.cost_budget ? t.gain_estimate / t.cost_budget : null;
-  return (
-    <div className="tc">
-      <div className="tc-head">
-        <span className={`tc-phase ph-${t.phase.replace(/ /g, "-")}`}>{t.phase}</span>
-        <b>{t.hypothesis}</b>
-        {prio != null && <span className="tc-prio" title="Twoja ocena przyrostu ÷ budżet testu">ROI {prio.toLocaleString("pl-PL", { maximumFractionDigits: 1 })}×</span>}
-      </div>
-      <div className="tt-chips">
-        <span>{t.element}</span>
-        {t.stage && <span><Flag size={13} /> {t.stage}</span>}
-        {t.metric && <span>{t.metric}</span>}
-        {t.start_date && <span>{t.start_date} → {t.end_date}</span>}
-        <span>{t.variants.map((v) => v.letter).join(" / ")}</span>
-      </div>
-      {collision && collision.length > 0 && <div className="lp-warn"><CircleAlert size={14} /> Kolizja: ten sam etap w tym samym czasie co „{collision.join("”, „")}” – wyniki się wymieszają.</div>}
-      {children}
-    </div>
-  );
-}
-
-function StepTest({ projectId, loopId, st, val, set, reload }: StepProps) {
-  const stage = (st.active?.data.lejek?.stage as string) ?? "";
-  const mine = st.tests.filter((t) => t.loop_id === loopId);
-  const [form, setForm] = useState(!mine.length);
-  const sorted = [...mine].sort((a, b) => (b.gain_estimate ?? 0) / (b.cost_budget || 1) - (a.gain_estimate ?? 0) / (a.cost_budget || 1));
-  const past = st.learnings.filter((l) => !stage || l.stage === stage);
-  return (
-    <div className="lp-body">
-      {past.length > 0 && (
-        <div className="lp-card copper">
-          <h3>Wnioski z poprzednich testów{stage ? ` na etapie „${stage}”` : ""}</h3>
-          <ul className="lp-gaps">{past.slice(0, 8).map((l) => <li key={l.id}>{l.text}{l.profit_delta != null && <b> ({zl(l.profit_delta)})</b>}</li>)}</ul>
-        </div>
-      )}
-      {sorted.map((t) => (
-        <TestCard key={t.id} t={t}>
-          <button className="icon-btn danger" title="Usuń kartę" onClick={async () => { if (confirm("Usunąć kartę testu?")) { await api(`/api/sop-tests/${t.id}`, "DELETE"); reload(); } }}><Trash2 size={14} /></button>
-        </TestCard>
-      ))}
-      {form ? (
-        <TestCardForm projectId={projectId} loopId={loopId} stage={stage} adTests={st.adTests} onDone={() => { setForm(false); reload(); }} />
-      ) : (
-        <button className="btn" onClick={() => setForm(true)}><Plus size={15} /> Kolejny pomysł na test</button>
-      )}
-      {!mine.length && (
-        <div className="lp-card">
-          <label className="lp-l">Albo: dlaczego w tej pętli nie planujesz nowego testu?</label>
-          <textarea rows={2} value={val("skip", "")} onChange={(e) => set("skip", e.target.value)} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ---------- Krok 6: Kalendarz testu ---------- */
-
-function StepSchedule({ loopId, st, reload }: StepProps) {
-  const mine = st.tests.filter((t) => t.loop_id === loopId);
-  if (!mine.length) return <p>W tej pętli nie ma nowego testu – przejdź dalej.</p>;
-  return (
-    <div className="lp-body">
-      {mine.map((t) => <ScheduleForm key={t.id} t={t} collision={st.collisions[t.id]} reload={reload} />)}
-    </div>
-  );
-}
-
-function ScheduleForm({ t, collision, reload }: { t: SopTest; collision?: string[]; reload: () => Promise<void> }) {
-  const [f, setF] = useState({ start: t.start_date ?? plus(1), end: t.end_date ?? plus(8), budget: t.budget != null ? String(t.budget) : t.cost_budget != null ? String(t.cost_budget) : "", cond: t.end_condition || "Termin minął + porównanie: ile wydaliśmy, a ile zarobiło (koszt pozyskania)" });
-  const [ok, setOk] = useState(false);
-  const save = async () => {
-    await api(`/api/sop-tests/${t.id}`, "PATCH", { start_date: f.start, end_date: f.end, budget: f.budget ? Number(f.budget.replace(",", ".")) : null, end_condition: f.cond });
-    setOk(true);
-    await reload();
-  };
-  return (
-    <TestCard t={t} collision={collision}>
-      <div className="row">
-        <label className="lp-mini">Start<input type="date" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></label>
-        <label className="lp-mini">Koniec<input type="date" value={f.end} min={f.start} onChange={(e) => setF({ ...f, end: e.target.value })} /></label>
-        <label className="lp-mini">Budżet testu (zł)<input inputMode="decimal" value={f.budget} onChange={(e) => setF({ ...f, budget: e.target.value })} /></label>
-      </div>
-      <label className="lp-mini">Warunek zakończenia<input value={f.cond} onChange={(e) => setF({ ...f, cond: e.target.value })} /></label>
-      <div className="row"><button className="btn primary" onClick={save}><Check size={15} /> Zapisz i wstaw do kalendarza</button>{ok && <span className="saved"><CircleCheck size={15} /> w kalendarzu i na osi czasu</span>}</div>
-    </TestCard>
-  );
-}
-
-/* ---------- Krok 7: Checklista ---------- */
-
-function StepChecklist({ loopId, st, reload }: StepProps) {
-  const mine = st.tests.filter((t) => t.loop_id === loopId);
-  if (!mine.length) return <p>W tej pętli nie ma nowego testu – przejdź dalej.</p>;
-  return <div className="lp-body">{mine.map((t) => <Checklist key={t.id} t={t} reload={reload} />)}</div>;
-}
-
-function Checklist({ t, reload }: { t: SopTest; reload: () => Promise<void> }) {
-  const [f, setF] = useState({ title: "", who: "Paweł", due: t.start_date ?? plus(1) });
-  const add = async () => {
-    if (!f.title.trim()) return;
-    await api(`/api/sop-tests/${t.id}/checklist`, "POST", f);
-    setF({ ...f, title: "" });
-    await reload();
-  };
-  const all = t.checklist.length > 0 && t.checklist.every((c) => c.done);
-  return (
-    <TestCard t={t}>
-      <ul className="ck">
-        {t.checklist.map((c) => (
-          <li key={c.id} className={`${c.done ? "done" : ""} ${c.required ? "req" : ""}`}>
-            <input type="checkbox" checked={c.done} onChange={async () => { await api(`/api/tasks/${c.id}`, "PATCH", { done: !c.done }); await reload(); }} />
-            <span>{c.title}</span>
-            <em>{c.who ?? ""} · {c.due}</em>
-          </li>
-        ))}
-      </ul>
-      <div className="ck-add">
-        <input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Zadanie" aria-label="Zadanie" />
-        <select value={f.who} onChange={(e) => setF({ ...f, who: e.target.value })}>{["Paweł", "copywriter", "klient"].map((x) => <option key={x}>{x}</option>)}</select>
-        <input type="date" value={f.due} onChange={(e) => setF({ ...f, due: e.target.value })} />
-        <button className="btn" onClick={add} disabled={!f.title.trim()} aria-label="Dodaj"><Plus size={15} /></button>
-      </div>
-      <p className={`ck-state ${all ? "ok" : ""}`}>{all ? <><CircleCheck size={15} /> Wszystko odhaczone – test przejdzie w „W trakcie” w dniu startu.</> : <><Lock size={14} /> Test nie wystartuje, dopóki wszystkie punkty (z pomiarem) nie są odhaczone.</>}</p>
-    </TestCard>
-  );
-}
-
-/* ---------- Krok 8: Rozstrzygnięcie ---------- */
-
-interface VRes { letter: string; desc: string; spend: number | null; revenue: number | null; profit: number | null; source: string | null }
-
-function StepDecide({ loopId, st, reload }: StepProps) {
-  const dueIds = new Set(st.due.map((t) => t.id));
-  const running = st.tests.filter((t) => t.phase !== "zamknięty" && !dueIds.has(t.id));
-  const decidedHere = st.tests.filter((t) => t.result.loop_id === loopId && t.result.decision);
-  return (
-    <div className="lp-body">
-      {decidedHere.map((t) => (
-        <div key={t.id} className="lp-card"><span className="saved"><CircleCheck size={15} /> {t.hypothesis} – {t.result.decision}{t.result.winner ? `: wariant ${t.result.winner}` : ""}{t.result.decision === "przedłużyć" ? ` do ${t.end_date}` : ""}</span></div>
-      ))}
-      {!st.due.length && !decidedHere.length && <div className="lp-card"><CircleCheck size={16} /> Żaden test nie spełnił jeszcze warunku zakończenia – nie ma czego rozstrzygać.</div>}
-      {st.due.map((t) => <Decide key={t.id} t={t} loopId={loopId} reload={reload} />)}
-      {running.length > 0 && (
-        <div className="lp-card">
-          <h3>W toku – za mało danych</h3>
-          <ul className="lp-gaps">{running.map((t) => <li key={t.id}>{t.hypothesis} – {t.phase}{t.end_date ? `, koniec ${t.end_date}` : ""}</li>)}</ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Decide({ t, loopId, reload }: { t: SopTest; loopId: string; reload: () => Promise<void> }) {
-  const [res, setRes] = useState<VRes[] | null>(null);
-  const [manual, setManual] = useState<Record<string, { spend: string; revenue: string }>>({});
-  const [ext, setExt] = useState(plus(7));
-  const [err, setErr] = useState("");
-  const load = useCallback(() => api<VRes[]>(`/api/sop-tests/${t.id}/results`).then(setRes), [t.id]);
-  useEffect(() => {
-    load();
-  }, [load]);
-  const best = res?.filter((v) => v.profit != null).sort((a, b) => b.profit! - a.profit!)[0];
-  const decide = async (decision: string, winner?: string) => {
-    setErr("");
-    try {
-      await api(`/api/sop-tests/${t.id}`, "PATCH", decision === "przedłużyć" ? { decision, end_date: ext, loop_id_decided: loopId } : { decision, winner, loop_id_decided: loopId });
+      await api(`/api/loops/${loopId}/lever`, "POST", { guess: pick });
       await reload();
     } catch (x) {
       setErr((x as Error).message);
     }
   };
-  const saveManual = async () => {
-    const variants = t.variants.map((v) => {
-      const m = manual[v.letter];
-      return m ? { ...v, spend: m.spend ? Number(m.spend.replace(",", ".")) : null, revenue: m.revenue ? Number(m.revenue.replace(",", ".")) : null, manual: true } : v;
-    });
-    await api(`/api/sop-tests/${t.id}`, "PATCH", { variants });
-    await load();
+  if (!guess || !eng)
+    return (
+      <div className="lp-body">
+        <div className="lp-card">
+          <label className="lp-l">Gdzie Twoim zdaniem jest największa dźwignia?</label>
+          <div className="lever-grid">
+            {METRICS.map((m) => (
+              <button key={m.key} className={`lever ${pick === m.key ? "on" : ""}`} onClick={() => setPick(m.key)}>
+                <span className="lever-dir">{m.better === "up" ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />} {m.stage}</span>
+                <b>{m.label}</b>{pick === m.key && <CircleCheck size={18} className="lever-ok" />}
+              </button>
+            ))}
+          </div>
+          {err && <p className="error">{err}</p>}
+          <div className="row"><button className="btn primary" disabled={!pick} onClick={reveal}><Sparkles size={15} /> Odpowiedz i pokaż ranking</button></div>
+        </div>
+      </div>
+    );
+  const top = eng.ranking.levers.find((l) => l.value != null);
+  const setFocus = async (k: MetricKey) => {
+    await api(`/api/loops/${loopId}/questions`, "POST", { focus: k });
+    await reload();
   };
   return (
-    <TestCard t={t}>
-      {!res ? <p>Liczę…</p> : (
-        <div className="ad-grid">
-          {res.map((v) => (
-            <div key={v.letter} className={`ad-card ${best && best.letter === v.letter ? "win" : "run"}`}>
-              <div className="dec-head"><span className="ad-letter big">{v.letter}</span>{best?.letter === v.letter && <span className="chip on"><Trophy size={13} /> najwyższy profit</span>}</div>
-              <p className="dec-desc">{v.desc}</p>
-              <div className="ad-stats">
-                <div><span>Koszt</span><b>{zl(v.spend)}</b></div>
-                <div><span>Przychód</span><b>{zl(v.revenue)}</b></div>
-                <div><span>Profit</span><b className={v.profit != null && v.profit < 0 ? "neg" : ""}>{zl(v.profit)}</b></div>
-                <div><span>Źródło</span><b className="small">{v.source ?? <span className="gap-tag">luka</span>}</b></div>
-              </div>
-              {v.source !== "Testy reklam (UTM)" && (
-                <div className="row">
-                  <input placeholder="koszt" inputMode="decimal" value={manual[v.letter]?.spend ?? ""} onChange={(e) => setManual({ ...manual, [v.letter]: { ...(manual[v.letter] ?? { revenue: "" }), spend: e.target.value } })} />
-                  <input placeholder="przychód" inputMode="decimal" value={manual[v.letter]?.revenue ?? ""} onChange={(e) => setManual({ ...manual, [v.letter]: { ...(manual[v.letter] ?? { spend: "" }), revenue: e.target.value } })} />
+    <div className="lp-body">
+      <div className={`lp-card pr ${top && top.key === guess ? "" : "copper"}`}>
+        <span>Twoja odpowiedź: <b>{METRICS.find((m) => m.key === guess)?.label}</b> · dane: <b>{top ? top.label : "brak danych"}</b> {top && (top.key === guess ? <span className="pr-diff ok">trafione</span> : <span className="pr-diff bad">nietrafione</span>)}</span>
+      </div>
+      {eng.gaps.length > 0 && <div className="lp-card copper"><ul className="lp-gaps">{eng.gaps.map((x) => <li key={x}>{x}</li>)}</ul></div>}
+      <div className="lp-card">
+        <p className="lp-sub">
+          Okno {eng.window.from} – {eng.window.to} · budżet {zl(eng.ranking.budget)}/mies. · model: profit po wszystkich kosztach{eng.ltv.value != null ? ", przychód = AOV + LTV 30" : ", przychód = AOV (brak LTV 30)"}
+          <Tip text="Założenia przy każdej pozycji: budżet stały, reszta lejka bez zmian, zmienia się tylko ta jedna metryka – do poziomu benchmarku." />
+        </p>
+        <div className="lv">
+          {eng.ranking.levers.map((l, i) => (
+            <div key={l.key} className={`lv-item ${open === l.key ? "open" : ""} ${focus === l.key ? "focus" : ""}`}>
+              <button className="lv-row" onClick={() => setOpen(open === l.key ? null : l.key)} aria-expanded={open === l.key}>
+                <span className="stage-n">{i + 1}</span>
+                <span className="lv-name"><b>{l.label}</b><small>{l.stage}</small></span>
+                <span className="lv-m"><small>teraz</small>{fm(l.key, l.current)}</span>
+                <span className="lv-m"><small>benchmark</small>{fm(l.key, l.benchmark)}</span>
+                <LeverValue v={l.value} r={l.range} low={l.lowConfidence} />
+                <ChevronDown size={16} className="lv-chev" />
+              </button>
+              {open === l.key && (
+                <div className="lv-detail">
+                  <p className="lp-sub">{l.missing ? <span className="gap-tag">brak danych: {l.missing}</span> : <>Benchmark: {l.benchmarkSource}. Zakres 90%: {range(l.range)}/mies.</>} · +10% poprawy = {zlSigned(l.per10)}/mies.</p>
+                  <StageDetail eng={eng} k={l.key} />
+                  {focus !== l.key && <button className="btn small" onClick={() => setFocus(l.key)}><Flag size={14} /> Pogłębiam tę dźwignię</button>}
                 </div>
               )}
-              <button className="btn small primary" onClick={() => decide("wygrany", v.letter)}><Trophy size={14} /> Wygrany</button>
+              {focus === l.key && <span className="lv-flag"><Flag size={13} /> pogłębiamy</span>}
             </div>
           ))}
         </div>
-      )}
-      {Object.keys(manual).length > 0 && <button className="btn small" onClick={saveManual}>Zapisz wpisane wyniki</button>}
-      <div className="row dec-other">
-        <button className="btn" onClick={() => decide(DECISIONS[1])}>Nierozstrzygnięty</button>
-        <span className="row">Przedłużyć do <input type="date" value={ext} onChange={(e) => setExt(e.target.value)} /> <button className="btn" onClick={() => decide("przedłużyć")}>Przedłuż</button></span>
-      </div>
-      {t.result.decision && <p className="saved"><CircleCheck size={15} /> Decyzja: {t.result.decision}{t.result.winner ? ` (${t.result.winner})` : ""}</p>}
-      {err && <p className="error">{err}</p>}
-    </TestCard>
-  );
-}
-
-/* ---------- Krok 9: Wnioski ---------- */
-
-function StepLearn({ loopId, st, g, val, set, reload }: StepProps) {
-  const decided = st.tests.filter((t) => t.result.loop_id === loopId && t.result.decision && t.result.decision !== "przedłużyć");
-  const [act, setAct] = useState({ title: "", due: plus(3) });
-  const [filter, setFilter] = useState("");
-  const addAct = async () => {
-    if (!act.title.trim()) return;
-    await api(`/api/loops/${loopId}/actions`, "POST", { title: act.title, due: act.due, level: "wnioski" });
-    setAct({ ...act, title: "" });
-    await reload();
-  };
-  const snap = (st.active?.data.rzeczywistosc?.snapshot ?? null) as { wide: { profit: number } } | null;
-  const reg = st.learnings.filter((l) => !filter || `${l.stage} ${l.element} ${l.text}`.toLowerCase().includes(filter.toLowerCase()));
-  return (
-    <div className="lp-body">
-      {decided.map((t) => <LearningForm key={t.id} t={t} loopId={loopId} done={st.learnings.some((l) => l.test_id === t.id)} reload={reload} />)}
-      <div className="lp-card">
-        <h3><Target size={16} /> Cel przed i po</h3>
-        <div className="lp-kpis">
-          <div><em>Profit 60 dni w dniu analizy</em><b>{zl(snap?.wide.profit)}</b></div>
-          <div><em>Profit w okresie celu</em><b>{zl(g?.achieved)}</b><small>z {zl(g?.target)}</small></div>
-          <div><em>Luka</em><b className={(g?.gap ?? 0) > 0 ? "neg" : ""}>{zl(g?.gap)}</b></div>
-        </div>
-        <label className="lp-l">Czy cel się ruszył i co robisz do następnej analizy?</label>
-        <textarea rows={3} value={val("summary", "")} onChange={(e) => set("summary", e.target.value)} />
-      </div>
-      <div className="lp-card">
-        <h3><Flag size={16} /> Działania (trafią do kalendarza i do rozliczenia w następnej pętli)</h3>
-        <ul className="ck">{st.actions.map((a) => <li key={a.id} className={a.done ? "done" : ""}><CircleCheck size={15} /><span>{a.title}</span><em>do {a.due}</em></li>)}</ul>
-        <div className="ck-add">
-          <input value={act.title} onChange={(e) => setAct({ ...act, title: e.target.value })} aria-label="Działanie" />
-          <input type="date" value={act.due} onChange={(e) => setAct({ ...act, due: e.target.value })} />
-          <button className="btn" onClick={addAct} disabled={!act.title.trim()} aria-label="Dodaj"><Plus size={15} /></button>
-        </div>
-      </div>
-      <div className="lp-card">
-        <h3>Rejestr wniosków</h3>
-        <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Szukaj po etapie, elemencie…" aria-label="Szukaj" />
-        <ul className="lp-gaps">{reg.slice(0, 30).map((l) => <li key={l.id}><span className="tt-chips"><span>{l.stage || "—"}</span><span>{l.element || "—"}</span></span> {l.text} <small>{l.created_at}</small></li>)}</ul>
-        {!reg.length && <p>Brak wniosków.</p>}
       </div>
     </div>
   );
 }
 
-function LearningForm({ t, loopId, done, reload }: { t: SopTest; loopId: string; done: boolean; reload: () => Promise<void> }) {
-  const [res, setRes] = useState<VRes[] | null>(null);
-  const [text, setText] = useState("");
+/* ---------- Krok 6: Pytania sokratejskie ---------- */
+
+function StepQuestions({ loopId, st, val, set, saveDraft, reload }: StepProps) {
+  const [qs, setQs] = useState<{ questions: string[]; focus: MetricKey | null } | null>(null);
+  const [claude, setClaude] = useState<string>((st.active?.data.pytania?.claude as string) ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   useEffect(() => {
-    api<VRes[]>(`/api/sop-tests/${t.id}/results`).then((r) => {
-      setRes(r);
-      const w = r.find((v) => v.letter === t.result.winner);
-      const a = r.find((v) => v.letter === "A");
-      const delta = w && a && w.profit != null && a.profit != null ? w.profit - a.profit : null;
-      setText(`Na etapie ${t.stage || "?"}, zmiana „${w?.desc ?? "?"}” dała ${delta == null ? "? zł (brak danych)" : `${delta >= 0 ? "+" : "−"}${Math.abs(Math.round(delta))} zł`} profitu.`);
-    });
-  }, [t]);
-  const w = res?.find((v) => v.letter === t.result.winner);
-  const a = res?.find((v) => v.letter === "A");
-  const delta = w && a && w.profit != null && a.profit != null ? w.profit - a.profit : null;
+    api<{ questions: string[]; focus: MetricKey | null }>(`/api/loops/${loopId}/questions`).then(setQs).catch((e) => setErr(e.message));
+  }, [loopId]);
+  const answers = val<Record<string, string>>("answers", {});
+  const eng = snapshotOf(st);
+  if (!qs) return <p>{err || "Układam pytania…"}</p>;
+  const L = eng?.ranking.levers.find((l) => l.key === qs.focus);
+  const all = qs.questions.length > 0 && qs.questions.every((_, i) => (answers[i] ?? "").trim());
+  const ask = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await saveDraft();
+      const r = await api<{ text: string }>(`/api/loops/${loopId}/claude`, "POST");
+      setClaude(r.text);
+      await reload();
+    } catch (x) {
+      setErr((x as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <TestCard t={t}>
-      {done ? <p className="saved"><CircleCheck size={15} /> Wniosek zapisany w rejestrze.</p> : (
+    <div className="lp-body">
+      {L && (
+        <div className="lp-card pr">
+          <span><Flag size={14} /> <b>{L.label}</b> · teraz {fm(L.key, L.current)} · benchmark {fm(L.key, L.benchmark)} · <LeverValue v={L.value} r={L.range} low={L.lowConfidence} /></span>
+        </div>
+      )}
+      {!qs.questions.length && <p className="lp-stop"><CircleAlert size={16} /> Brak dźwigni z danymi – wróć do kroku „Kwota na stole”.</p>}
+      {qs.questions.map((q, i) => (
+        <div key={q} className="lp-card">
+          <label className="lp-l">{i + 1}. {q}</label>
+          <textarea rows={2} value={answers[i] ?? ""} onChange={(e) => set("answers", { ...answers, [i]: e.target.value })} />
+        </div>
+      ))}
+      <div className="lp-card">
+        <div className="row">
+          <button className="btn" disabled={!all || busy} onClick={ask}><Sparkles size={15} /> {busy ? "Claude analizuje…" : claude ? "Pokaż analizę Claude ponownie" : "Pokaż analizę Claude"}</button>
+          {!all && <span className="lp-sub"><Lock size={13} /> najpierw Twoje odpowiedzi</span>}
+        </div>
+        {err && <p className="error">{err}</p>}
+        {claude && <div className="claude-box">{claude}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Krok 7: Decyzja = zlecenie ---------- */
+
+function DecisionForm({ projectId, loopId, st, g, reload }: { projectId: string; loopId: string; st: LoopState; g: Gap | null; reload: () => Promise<void> }) {
+  const eng = snapshotOf(st);
+  const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? "cr") as MetricKey;
+  const L = eng?.ranking.levers.find((l) => l.key === focus);
+  const gapTxt = g ? `Luka do celu: ${zl(g.gap)}. ` : "";
+  const autoWhy = L
+    ? `${gapTxt}Kwota na stole: ${L.label} – ${L.value == null ? "brak danych" : L.lowConfidence ? `${range(L.range)}/mies. (niska pewność)` : `${zlSigned(L.value)}/mies.`} (teraz ${fm(L.key, L.current)}, benchmark ${fm(L.key, L.benchmark)}).`
+    : "";
+  const [kind, setKind] = useState<"zmiana" | typeof NO_CHANGE>("zmiana");
+  const [f, setF] = useState({ what: "", who: "", why: autoWhy, element: "reklama", metric: focus, to: "", check: plus(14), ad: "" });
+  const [err, setErr] = useState("");
+  const isRate = f.metric === "ctr" || f.metric === "cr";
+  const toNum = f.to.trim() ? Number(f.to.replace(",", ".")) / (isRate ? 100 : 1) : NaN;
+  const base = eng?.ranking.base;
+  const A = base?.[f.metric as MetricKey] ?? null;
+  const expected = eng && Number.isFinite(toNum) ? hypothesisValue(eng.ranking.budget, eng.ranking.base, eng.econ, f.metric as MetricKey, toNum) : null;
+  const m = METRICS.find((x) => x.key === f.metric)!;
+  const save = async () => {
+    setErr("");
+    try {
+      await api(`/api/loops/${loopId}/decision`, "POST", kind === NO_CHANGE
+        ? { kind, why: f.why, who: f.who, check_date: f.check }
+        : { kind, what: f.what, who: f.who, why: f.why, element: f.element, metric: f.metric, to_value: toNum, check_date: f.check, ad_test_id: f.ad || null });
+      await reload();
+    } catch (x) {
+      setErr((x as Error).message);
+    }
+  };
+  return (
+    <div className="lp-card df">
+      <div className="seg big">
+        <button className={kind === "zmiana" ? "on" : ""} onClick={() => setKind("zmiana")}>Zmieniam jedną rzecz</button>
+        <button className={kind === NO_CHANGE ? "on" : ""} onClick={() => setKind(NO_CHANGE)}>Nic nie zmieniam</button>
+      </div>
+      {kind === "zmiana" && (
         <>
-          <label className="lp-l">Wniosek: „Na etapie X, zmiana Y dała Z zł profitu”</label>
-          <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} />
-          <button className="btn primary" onClick={async () => { await api(`/api/loops/${loopId}/learnings`, "POST", { test_id: t.id, stage: t.stage, element: t.element, text, profit_delta: delta }); await reload(); }}><Check size={15} /> Zapisz wniosek</button>
+          <label className="lp-l">Co – jedna konkretna zmiana</label>
+          <input value={f.what} onChange={(e) => setF({ ...f, what: e.target.value })} />
+          <label className="lp-l">Kto</label>
+          <input value={f.who} onChange={(e) => setF({ ...f, who: e.target.value })} />
         </>
       )}
-    </TestCard>
+      <label className="lp-l">Dlaczego {kind === "zmiana" && <Tip text="Uzupełnione z luki i kwoty na stole – możesz dopisać." />}</label>
+      <textarea rows={3} value={f.why} onChange={(e) => setF({ ...f, why: e.target.value })} />
+      {kind === "zmiana" && (
+        <>
+          <label className="lp-l">Etap zmiany</label>
+          <div className="seg">{ELEMENTS.map((x) => <button key={x} className={f.element === x ? "on" : ""} onClick={() => setF({ ...f, element: x })}>{x}</button>)}</div>
+          <label className="lp-l">Hipoteza: jeśli {f.what || "…"}, to</label>
+          <div className="hy">
+            <select value={f.metric} onChange={(e) => setF({ ...f, metric: e.target.value as MetricKey, to: "" })}>
+              {METRICS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+            </select>
+            <span>z <b>{fm(f.metric, A)}</b> do</span>
+            <div className="money-input"><input inputMode="decimal" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} aria-label="Wartość docelowa" /><span>{isRate ? "%" : "zł"}</span></div>
+          </div>
+          <div className="hy-val">
+            <em>Wartość oczekiwana</em>
+            <b className={(expected ?? 0) < 0 ? "neg" : "pos"}>{expected == null ? "—" : `${zlSigned(expected)}/mies.`}</b>
+            <small>{m.label}: budżet stały, reszta lejka bez zmian</small>
+          </div>
+          {st.adTests.length > 0 && (
+            <label className="lp-mini">Test reklam do tej decyzji (opcjonalnie)
+              <select value={f.ad} onChange={(e) => setF({ ...f, ad: e.target.value })}><option value="">—</option>{st.adTests.map((a) => <option key={a.id} value={a.id}>{a.angle}</option>)}</select>
+            </label>
+          )}
+          <Link href={`/projects/${projectId}/testy`} className="btn small" target="_blank">Utwórz test w Testach reklam</Link>
+        </>
+      )}
+      <label className="lp-l">Data sprawdzenia</label>
+      <input type="date" value={f.check} min={plus(1)} onChange={(e) => setF({ ...f, check: e.target.value })} />
+      {err && <p className="error">{err}</p>}
+      <div className="row"><button className="btn primary" onClick={save}><Check size={15} /> Zapisz decyzję</button></div>
+    </div>
+  );
+}
+
+function StepDecision({ projectId, loopId, st, g, reload }: StepProps) {
+  const mine = st.decisions.find((d) => d.loop_id === loopId);
+  if (!mine) return <div className="lp-body"><DecisionForm projectId={projectId} loopId={loopId} st={st} g={g} reload={reload} /></div>;
+  return (
+    <div className="lp-body">
+      <DecisionCard d={mine} onDelete={async () => { if (confirm("Usunąć decyzję i zapisać inną?")) { await api(`/api/decisions/${mine.id}`, "DELETE"); await reload(); } }}>
+        <div className="row"><CopyBrief d={mine} /><span className="saved"><CircleCheck size={15} /> na osi czasu</span></div>
+      </DecisionCard>
+    </div>
+  );
+}
+
+/* ---------- Krok 8: Kalendarz + checklista ---------- */
+
+function StepCalendar({ projectId, loopId, st, reload }: StepProps) {
+  const mine = st.decisions.find((d) => d.loop_id === loopId);
+  if (!mine) return <p>Brak decyzji – wróć do kroku 7.</p>;
+  return (
+    <div className="lp-body">
+      <DecisionCard d={mine}>
+        {mine.kind === NO_CHANGE ? <p className="lp-sub">Nic do wdrożenia. Sprawdzenie {mine.check_date} – pojawi się w kalendarzu.</p> : <DecisionTasks d={mine} reload={reload} />}
+        <div className="row"><CopyBrief d={mine} /><Link className="btn small" href={`/projects/${projectId}#kalendarz`} target="_blank">Kalendarz</Link></div>
+      </DecisionCard>
+    </div>
+  );
+}
+
+/* ---------- Krok 9: Rozstrzygnięcie ---------- */
+
+function StepVerdict({ loopId, st, reload }: StepProps) {
+  const t = new Date().toISOString().slice(0, 10);
+  const waiting = st.decisions.filter((d) => !d.verdict && d.check_date > t);
+  const doneHere = st.decisions.filter((d) => d.verdict_loop_id === loopId);
+  return (
+    <div className="lp-body">
+      {st.due.map((d) => <Verdict key={d.id} d={d} onDone={reload} />)}
+      {doneHere.map((d) => (
+        <div key={d.id} className="lp-card"><span className="saved"><CircleCheck size={15} /> {d.what} – {d.verdict}{d.impact_month != null ? ` · ${zlSigned(d.impact_month)}/mies.${d.low_confidence ? " (niska pewność)" : ""}` : ""}</span></div>
+      ))}
+      {!st.due.length && !doneHere.length && <div className="lp-card"><span><CircleCheck size={16} /> Żadna decyzja nie czeka dziś na sprawdzenie.</span></div>}
+      {waiting.length > 0 && (
+        <div className="lp-card">
+          <h3>Czekają na dzień sprawdzenia</h3>
+          <ul className="dc-waits">{waiting.map((d) => <Waiting key={d.id} d={d} />)}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Krok 10: Wnioski ---------- */
+
+export function Counter({ c }: { c: LoopState["counter"] }) {
+  const trend = c.lastError != null && c.earlierError != null && Math.round(c.lastError) !== Math.round(c.earlierError) ? (c.lastError < c.earlierError ? "up" : "down") : null;
+  return (
+    <div className="cn">
+      <div><em>Decyzje z analityki <Tip text="Suma zweryfikowanych wpływów (zł/mies.) z rozstrzygniętych decyzji – bez „za mało danych”." /></em><b><span className="pos">{zlSigned(c.plus)}</span> / <span className="neg">{zlSigned(c.minus)}</span></b><small>{c.verifiedCount} zweryfikowanych</small></div>
+      <div><em>Trafność hipotez</em><b>{c.hitRate == null ? "—" : pct(c.hitRate, 0)}</b><small>{c.judged} rozstrzygniętych</small></div>
+      <div><em>Średni błąd predykcji profitu</em><b>{zl(c.meanError)}</b><small>{trend ? <span className={`lp-arrow ${trend}`}>{trend === "up" ? <ArrowDownRight size={13} /> : <ArrowUpRight size={13} />} ostatnio {zl(c.lastError)}</span> : `${c.predictions} predykcji`}</small></div>
+      <div><em>Trafione etapy / dźwignie</em><b>{c.stageHit == null ? "—" : pct(c.stageHit, 0)} / {c.leverHit == null ? "—" : pct(c.leverHit, 0)}</b></div>
+    </div>
+  );
+}
+
+function StepLearn({ st, g, val, set }: StepProps) {
+  const [filter, setFilter] = useState("");
+  const reg = st.learnings.filter((l) => !filter || `${l.stage} ${l.element} ${l.text}`.toLowerCase().includes(filter.toLowerCase()));
+  return (
+    <div className="lp-body">
+      <div className="lp-card">
+        <label className="lp-l">Czego się nauczyłeś w tej sesji? (1 zdanie)</label>
+        <textarea rows={2} value={val("summary", "")} onChange={(e) => set("summary", e.target.value)} />
+        <div className="lp-kpis">
+          <div><em>Profit w okresie celu</em><b>{zl(g?.achieved)}</b><small>z {zl(g?.target)}</small></div>
+          <div><em>Luka</em><b className={(g?.gap ?? 0) > 0 ? "neg" : ""}>{zl(g?.gap)}</b></div>
+        </div>
+      </div>
+      <div className="lp-card"><Counter c={st.counter} /></div>
+      <div className="lp-card">
+        <h3>Rejestr wniosków</h3>
+        <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Szukaj" aria-label="Szukaj" />
+        <ul className="lp-gaps">{reg.slice(0, 30).map((l) => <li key={l.id}><span className="tt-chips"><span>{l.stage || "—"}</span>{l.element && <span>{l.element}</span>}</span> {l.text}{l.profit_delta != null && <b> ({zlSigned(l.profit_delta)}/mies.)</b>} <small>{l.created_at}</small></li>)}</ul>
+        {!reg.length && <p>Brak wniosków.</p>}
+      </div>
+    </div>
   );
 }

@@ -1,12 +1,13 @@
 import { body, guarded, json, type Params } from "@/lib/api";
-import { addLoopAction } from "@/lib/loop";
+import { guessLever } from "@/lib/loop";
 
+/** „Gdzie jest największa dźwignia?” – odpowiedź odsłania ranking. */
 export const POST = guarded(async (req, { params }: Params<"lid">) => {
   const { lid } = await params;
-  const b = await body<{ title?: string; due?: string; level?: string }>(req);
+  const b = await body<{ guess?: string }>(req);
   try {
-    await addLoopAction(lid, b.title ?? "", b.due ?? "", b.level ?? "");
-    return json({ ok: true }, 201);
+    await guessLever(lid, String(b.guess ?? ""));
+    return json({ ok: true });
   } catch (e) {
     return json({ error: (e as Error).message }, 400);
   }

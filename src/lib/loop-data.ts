@@ -1,9 +1,11 @@
 // Liczby dla pętli SOP – wyłącznie z prawdziwych danych. Brak danych = luka (null), nigdy szacunek.
 import { q } from "./db";
 import { dataSources, type SourceStatus } from "./dashboard";
-import { periodStats, prepare, type EconAd, type Prepared } from "./economics";
-import { runFunnelAnalysis } from "./funnel-analysis";
-import { loadAds, loadOrders, loadSettings } from "./project-data";
+import { periodStats, prepare, type Prepared } from "./economics";
+import { fold } from "./csv";
+import { netOf } from "./settings";
+import { bestWindows, levers, metricsOf, sumDays, unitValues, worstStage, type DayAgg, type Econ, type MetricKey, type Totals } from "./levers";
+import { loadAds, loadOrders, loadSettings, type AdRecord } from "./project-data";
 import type { ProjectSettings } from "./settings";
 
 const DAY = 86400_000;
@@ -31,14 +33,21 @@ export interface Money {
 interface Ctx {
   s: ProjectSettings;
   p: Prepared;
-  ads: EconAd[];
+  ads: AdRecord[];
+  onlyMain: boolean;
+  scope: { campaigns: string[]; products: string[] };
   visitorsByDay: Map<string, Set<string>>;
   lastOrder: string | null;
   lastAd: string | null;
 }
 
+/** Zakres sesji: wybrane kampanie (wydatki) i produkty (zamówienia). Brak wyboru w sesji = zakres Ekonomii. */
+export function scopeOf(s: ProjectSettings) {
+  return s.analysisScope ?? s.economicsScope;
+}
+
 async function ctx(projectId: string, from: string): Promise<Ctx> {
-  const [s, orders, ads, vis] = await Promise.all([
+  const [s, orders, allAds, vis] = await Promise.all([
     loadSettings(projectId),
     loadOrders(projectId),
     loadAds(projectId),
@@ -54,16 +63,22 @@ async function ctx(projectId: string, from: string): Promise<Ctx> {
     set.add(v.visitor_id);
     visitorsByDay.set(v.day, set);
   }
-  const p = prepare(orders, s);
+  const scope = scopeOf(s);
+  const camps = new Set(scope.campaigns.map((c) => fold(c)));
+  const ads = camps.size ? allAds.filter((a) => camps.has(fold(a.campaign.trim()))) : allAds;
+  const prods = new Set(scope.products.map((x) => fold(x)));
+  const match = prods.size ? (name: string) => prods.has(fold(name.trim())) : undefined;
+  const settings = match ? { ...s, mainCategory: "wybrane produkty" } : s;
+  const p = prepare(orders, settings, match);
   return {
-    s, p, ads, visitorsByDay,
+    s: settings, p, ads, onlyMain: !!match, scope, visitorsByDay,
     lastOrder: p.lastDataTs ? iso(p.lastDataTs) : null,
     lastAd: ads.map((a) => a.end).sort().pop() ?? null,
   };
 }
 
 function money(c: Ctx, from: string, to: string): Money {
-  const st = periodStats(c.p, c.ads, c.s, { name: "", from, to });
+  const st = periodStats(c.p, c.ads, c.s, { name: "", from, to }, c.onlyMain);
   const days = daysBetween(from, to);
   const fixedCosts = (c.s.costs.monthlyFixed || 0) * (days / 30.4375);
   const before = st.profit.netRevenue - st.profit.spend - st.profit.variableCosts - fixedCosts;
@@ -176,47 +191,134 @@ export async function gap(projectId: string, goal: GoalRow) {
   };
 }
 
-/** Krok 4: etapy lejka (kolejność z mapy), osoby, przejście do następnego, koszt na osobę, zmiana vs poprzednie 30 dni. */
-export async function funnelStages(funnelId: string) {
-  const t = today();
-  const from = addDays(t, -29);
-  const [cur, prev, raw] = await Promise.all([
-    runFunnelAnalysis(funnelId, from, t),
-    runFunnelAnalysis(funnelId, addDays(from, -30), addDays(from, -1)),
-    q<{ graph: unknown }>("SELECT graph FROM funnels WHERE id = $1", [funnelId]),
-  ]);
-  if (!cur || !raw[0]) return null;
-  const graph = (typeof raw[0].graph === "string" ? JSON.parse(raw[0].graph) : raw[0].graph) as {
-    nodes: { id: string; type?: string; position?: { x: number; y: number }; data?: { label?: string; category?: string; eventType?: string } }[];
-    edges?: { source: string; target: string }[];
-  };
-  const nodes = (graph.nodes ?? [])
-    .filter((n) => (n.type ?? "funnel") === "funnel" && n.data?.category && n.data.category !== "offline")
-    .sort((a, b) => (a.position?.x ?? 0) - (b.position?.x ?? 0) || (a.position?.y ?? 0) - (b.position?.y ?? 0));
-  const value = (st: { people: number; conversions?: number; category: string } | undefined, purchase: boolean) =>
-    st ? (purchase ? st.conversions ?? st.people : st.people) : null;
-  const spend = cur.totals.spend;
-  const stages = nodes.map((n, i) => {
-    const purchase = n.data?.eventType === "purchase";
-    const st = cur.nodes[n.id];
-    const pv = prev?.nodes[n.id];
-    const people = st && st.tracked ? value(st, purchase) : null;
-    const before = pv && pv.tracked ? value(pv, purchase) : null;
-    return { id: n.id, label: n.data?.label ?? `Etap ${i + 1}`, category: n.data?.category ?? "", people, before, gap: !st || !st.tracked || !people };
-  });
+/* ---------- Silnik „Kwota na stole” na danych projektu ---------- */
+
+/** Dni w zakresie sesji: reklamy (wiersze dzielone po równo na dni) + zamówienia (netto). */
+function dailyAgg(c: Ctx, from: string, to: string): DayAgg[] {
+  const m = new Map<string, DayAgg>();
+  for (let t = d(from); t <= d(to); t += DAY) {
+    const k = iso(t);
+    m.set(k, { day: k, spend: 0, impressions: 0, clicks: 0, orders: 0, net: 0, sq: 0 });
+  }
+  for (const a of c.ads) {
+    const s = d(a.start);
+    const e = d(a.end);
+    const n = Math.round((e - s) / DAY) + 1;
+    if (n <= 0) continue;
+    for (let t = s; t <= e; t += DAY) {
+      const x = m.get(iso(t));
+      if (!x) continue;
+      x.spend += a.spend / n;
+      x.impressions += a.impressions / n;
+      x.clicks += a.clicks / n;
+    }
+  }
+  for (const o of c.p.orders) {
+    if (c.onlyMain && !o.hasMain) continue;
+    const x = m.get(iso(o.ts));
+    if (!x) continue;
+    const net = netOf(o.gross, c.s.vat);
+    x.orders++;
+    x.net += net;
+    x.sq += net * net;
+  }
+  return [...m.values()];
+}
+
+/** LTV 30 ponad pierwszy zakup: średni przychód netto z kolejnych zamówień w 30 dni (klienci z pełnym oknem, start w ostatnich 120 dniach). */
+function ltvExtra(c: Ctx, to: string): { value: number | null; matured: number } {
+  const last = c.p.lastDataTs;
+  const f = d(addDays(to, -119));
+  const byKey = new Map<string, number[]>();
+  for (const o of c.p.orders) byKey.set(o.key, [...(byKey.get(o.key) ?? []), o.ts]);
+  const gross = new Map<string, number>();
+  for (const o of c.p.orders) gross.set(`${o.key}|${o.ts}`, o.gross);
+  let sum = 0;
+  let n = 0;
+  for (const [k, first] of c.p.firstMain) {
+    if (first < f || first + 30 * DAY > last) continue;
+    n++;
+    for (const ts of byKey.get(k) ?? []) if (ts > first && ts <= first + 30 * DAY) sum += gross.get(`${k}|${ts}`) ?? 0;
+  }
+  return n ? { value: netOf(sum / n, c.s.vat), matured: n } : { value: null, matured: 0 };
+}
+
+function econOf(c: Ctx, win: Money, ltv: number | null): Econ {
   return {
-    from, to: t, spend,
-    stages: stages.map((s) => {
-      // przejście liczone po strzałkach z mapy: suma osób na etapach, do których prowadzi ten etap
-      const targets = (graph.edges ?? []).filter((e) => e.source === s.id).map((e) => stages.find((x) => x.id === e.target)).filter((x): x is (typeof stages)[number] => !!x);
-      const reach = targets.filter((x) => x.people != null).reduce((a, x) => a + (x.people ?? 0), 0);
-      return {
-        ...s,
-        nextLabel: targets.map((x) => x.label).join(", ") || null,
-        toNext: targets.length && s.people && targets.some((x) => x.people != null) ? reach / s.people : null,
-        costPerPerson: s.people && spend ? spend / s.people : null,
-        change: s.people != null && s.before ? s.people / s.before - 1 : null,
-      };
-    }),
+    varRate: win.net > 0 ? win.variableCosts / win.net : 0,
+    fixedMonth: (c.s.costs.monthlyFixed || 0) * (30 / 30.4375),
+    taxRate: (c.s.costs.incomeTaxRate || 0) / 100,
+    ltvExtra: ltv,
   };
+}
+
+export interface EngineResult {
+  window: Totals;
+  prev: Totals;
+  metricsPrev: Record<MetricKey, number | null>;
+  ranking: ReturnType<typeof levers>;
+  units: ReturnType<typeof unitValues>;
+  econ: Econ;
+  ltv: { value: number | null; matured: number };
+  benchWindows: Partial<Record<MetricKey, { from: string; to: string }>>;
+  benchmarkMode: "best7" | "targets";
+  th: { minClicks: number; minOrders: number };
+  scope: { campaigns: string[]; products: string[] };
+  events: { day: string; title: string }[];
+  gaps: string[];
+}
+
+/** Ranking dźwigni: okno bieżące = ostatnie 30 pełnych dni; benchmark = najlepsze 7 dni z 60 (albo cele z ustawień). */
+export async function engine(projectId: string): Promise<EngineResult> {
+  const end = addDays(today(), -1);
+  const from60 = addDays(end, -59);
+  const c = await ctx(projectId, from60);
+  const days = dailyAgg(c, from60, end);
+  const window = sumDays(days, addDays(end, -29), end);
+  const prev = sumDays(days, from60, addDays(end, -30));
+  const th = { minClicks: c.s.session.minClicks, minOrders: c.s.session.minOrders };
+  const ltv = ltvExtra(c, end);
+  const econ = econOf(c, money(c, window.from, window.to), ltv.value);
+  const bench: Parameters<typeof levers>[0]["bench"] = {};
+  const benchWindows: EngineResult["benchWindows"] = {};
+  if (c.s.session.benchmark === "targets") {
+    for (const [k, v] of Object.entries(c.s.session.targets)) if (v) bench[k as MetricKey] = { value: v, source: "cel z ustawień" };
+  } else {
+    const best = bestWindows(days, from60, end, th, addDays);
+    for (const [k, b] of Object.entries(best)) {
+      bench[k as MetricKey] = { value: b.value, source: `najlepsze 7 dni: ${b.from} – ${b.to}`, totals: b.totals };
+      benchWindows[k as MetricKey] = { from: b.from, to: b.to };
+    }
+  }
+  const ranking = levers({ current: window, bench, econ, th });
+  const sources = await dataSources(projectId);
+  const events = await q<{ day: string; title: string }>(
+    "SELECT to_char(day, 'YYYY-MM-DD') AS day, title FROM timeline_events WHERE project_id = $1 AND day >= $2::date ORDER BY day",
+    [projectId, from60],
+  );
+  const gaps = dataGaps(c, sources, end);
+  if (ltv.value == null) gaps.push("Brak danych: LTV 30 (żaden klient nie ma jeszcze pełnych 30 dni) – wartość zakupu = sam AOV.");
+  if (window.impressions <= 0) gaps.push("Brak danych: wyświetlenia i kliknięcia reklam w zakresie – CPM i CTR nie do policzenia.");
+  return {
+    window, prev, metricsPrev: metricsOf(prev), ranking, units: unitValues(ranking.base, econ), econ, ltv, benchWindows,
+    benchmarkMode: c.s.session.benchmark, th, scope: c.scope, events, gaps,
+  };
+}
+
+/** Okno pomiaru (do rozstrzygnięcia decyzji) w zakresie sesji. */
+export async function measure(projectId: string, from: string, to: string) {
+  const c = await ctx(projectId, from);
+  const days = dailyAgg(c, from, to);
+  return { totals: sumDays(days, from, to), money: money(c, from, to), th: { minClicks: c.s.session.minClicks, minOrders: c.s.session.minOrders } };
+}
+
+/** Prawdziwe wartości do porównania z predykcją: profit ostatnich 7 pełnych dni i etap, który się pogorszył. */
+export async function predictionActuals(projectId: string) {
+  const end = addDays(today(), -1);
+  const c = await ctx(projectId, addDays(end, -13));
+  const days = dailyAgg(c, addDays(end, -13), end);
+  const last = sumDays(days, addDays(end, -6), end);
+  const prev = sumDays(days, addDays(end, -13), addDays(end, -7));
+  const th = { minClicks: c.s.session.minClicks, minOrders: c.s.session.minOrders };
+  return { from: addDays(end, -6), to: end, profit: money(c, addDays(end, -6), end).profit, stage: worstStage(last, prev, th), last, prev };
 }

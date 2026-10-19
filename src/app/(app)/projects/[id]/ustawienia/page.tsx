@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { SettingsPanel } from "@/components/data/SettingsPanel";
+import { GoalSettings } from "@/components/data/SessionSettings";
 import { DeleteButton } from "@/components/forms";
 import { ToolHeader } from "@/components/shell/ToolHeader";
 import { loadProject } from "@/lib/project-context";
@@ -11,6 +12,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
   return (
     <>
       <ToolHeader tool="ustawienia" projectId={id} />
+      <GoalSettings projectId={id} />
       <SettingsPanel projectId={id} />
       <div className="card section danger-zone">
         <h3>Usuń projekt</h3>

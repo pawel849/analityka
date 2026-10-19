@@ -68,14 +68,15 @@ export const HELP_ARTICLES: HelpArticle[] = [
   },
   {
     id: "przeglad",
-    title: "Analiza SOP: poprawa reklam pod cel zysku",
-    tags: "analiza sop pętla cel profit luka lejek test kalendarz checklista rozstrzygnięcie wnioski",
+    title: "Sesja analityczna → decyzja w złotówkach",
+    tags: "sesja analiza pętla cel predykcja rzeczywistość luka kwota na stole dźwignia benchmark pytania claude decyzja hipoteza brief kalendarz rozstrzygnięcie wnioski licznik pewność",
     body: [
-      "Na pulpicie: „Rozpocznij analizę”. Zawsze te same kroki, zawsze od 1 do 9: Cel → Rzeczywistość → Luka → Lejek → Test → Kalendarz testu → Checklista → Rozstrzygnięcie → Wnioski. Nie da się wejść w środek – następny krok otwiera się po zapisie poprzedniego.",
-      "Profit = przychód netto − koszt reklam − koszty zmienne i stałe − podatek (koszty i podatek z Ustawień klienta). Wszystkie liczby z prawdziwych danych; brak danych = widoczna luka. Prognoza w pasku celu to tylko prosta ekstrapolacja tempa (szara).",
-      "Krok 2 wymaga potwierdzenia, że dane są wiarygodne – inaczej SOP stoi. Krok 7: test startuje dopiero, gdy cała checklista (z punktem „Sprawdzić, czy pomiar etapu działa”) jest odhaczona.",
-      "Krok 8 rozstrzyga testy, których termin minął: wygrywa wyższy profit (przychód − koszt wariantu). Krok 9: wniosek „Na etapie X, zmiana Y dała Z zł” do rejestru + działania do kalendarza.",
-      "Następna pętla zaczyna się od rozliczenia poprzednich działań (zrobione? pomogło?) i porównania profitu z poprzedniej analizy z obecnym.",
+      "Na pulpicie: „Rozpocznij sesję”. Zawsze 10 kroków od początku do końca: Cel → Predykcja → Rzeczywistość → Luka → Kwota na stole → Pytania → Decyzja → Kalendarz → Rozstrzygnięcie → Wnioski. Następny krok otwiera się po zapisie poprzedniego. Sesji nie da się zamknąć bez decyzji (dopuszczalne „nic nie zmieniam” – z uzasadnieniem i datą).",
+      "Krok 1: cel profitu (ten sam co w Ustawieniach, auto-uzupełniany) i zakres: z których kampanii (koszty, wyświetlenia, kliknięcia) i produktów (zamówienia) liczymy. Zakres zostaje na kolejne sesje.",
+      "Profit = przychód netto − reklamy − koszty zmienne i stałe − podatek (z Ustawień). Krok 2: zanim zobaczysz dane, wpisujesz profit z ostatnich 7 dni i etap, który się pogorszył – krok 3 pokazuje różnicę.",
+      "Kwota na stole: model CPM → CTR (kliknięcia w link) → CR (kliknięcie → zakup) → wartość zakupu (AOV netto + LTV 30, jeśli są dane). Dźwignia = ile zł/mies. więcej przy metryce na poziomie benchmarku (najlepsze 7 dni z 60 spełniające próg próby albo wartości docelowe z Ustawień), przy stałym budżecie i reszcie lejka bez zmian. Poniżej progu próby: „niska pewność” i zakres 90%.",
+      "Pytania (2–3) układane z danych dla wybranej dźwigni; analiza Claude dopiero po Twoich odpowiedziach. Decyzja: co, kto, dlaczego, hipoteza „metryka M z A do B”, wartość oczekiwana z modelu, data sprawdzenia (domyślnie +14 dni). Trafia na oś czasu i do kalendarza; „Generuj brief” kopiuje zlecenie.",
+      "W dniu sprawdzenia decyzja wraca na pulpit: „Miałeś rację?” – wynik metryki od wdrożenia, realny wpływ w zł/mies. (model: tylko ta metryka się zmienia), wniosek jednym zdaniem. Trafiona zmiana z zyskiem trafia do zwycięskich elementów. Licznik na pulpicie: suma zweryfikowanych zł, trafność hipotez, średni błąd predykcji.",
     ],
   },
   {

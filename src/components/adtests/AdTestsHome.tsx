@@ -297,7 +297,7 @@ function TestList({ projectId, goSettings }: { projectId: string; goSettings: ()
 /* ---------- Biblioteka zwycięzców ---------- */
 
 function Library({ projectId }: { projectId: string }) {
-  const [rows, setRows] = useState<{ id: string; angle: string; element: string; change_to: string; idea_source: string; cac: number | null; ctr: number | null; diff_vs_base: number | null; won_at: string; test_id: string | null }[] | null>(null);
+  const [rows, setRows] = useState<{ id: string; angle: string; stage: string; element: string; change_to: string; idea_source: string; cac: number | null; ctr: number | null; diff_vs_base: number | null; profit_month: number | null; won_at: string; test_id: string | null }[] | null>(null);
   const [angle, setAngle] = useState("");
   const [element, setElement] = useState("");
   useEffect(() => {
@@ -305,7 +305,7 @@ function Library({ projectId }: { projectId: string }) {
   }, [projectId]);
   if (!rows) return <p>Wczytuję…</p>;
   if (!rows.length) return <div className="empty-box"><Trophy size={28} /> Tu trafią zwycięskie warianty – po zatwierdzeniu „wygrał” w rundzie.</div>;
-  const angles = [...new Set(rows.map((r) => r.angle))];
+  const angles = [...new Set(rows.map((r) => r.angle).filter(Boolean))];
   const shown = rows.filter((r) => (!angle || r.angle === angle) && (!element || r.element === element));
   return (
     <div>
@@ -322,10 +322,10 @@ function Library({ projectId }: { projectId: string }) {
       <div className="win-grid">
         {shown.map((r) => (
           <div key={r.id} className="win-card">
-            <div className="win-head"><Trophy size={16} /> <span>{r.element}</span></div>
+            <div className="win-head"><Trophy size={16} /> <span>{r.stage && r.stage !== "reklama" ? `${r.stage} · ` : ""}{r.element}</span></div>
             <b>{r.change_to}</b>
             <div className="tt-chips">
-              <span title="Koszt kursanta"><Target size={14} /> {zl(r.cac)}</span>
+              {r.profit_month != null ? <span title="Zweryfikowany wpływ (sesja analityczna)"><TrendingUp size={14} /> +{zl(r.profit_month)}/mies.</span> : <span title="Koszt kursanta"><Target size={14} /> {zl(r.cac)}</span>}
               {r.diff_vs_base != null && <span title="Różnica względem bazy"><TrendingUp size={14} /> {pct(r.diff_vs_base, 0)}</span>}
               <span title="Data wygranej"><CalendarClock size={14} /> {new Date(r.won_at).toLocaleDateString("pl-PL")}</span>
             </div>

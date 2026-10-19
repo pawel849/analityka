@@ -347,8 +347,8 @@ export async function addManual(variantId: string, m: { day: string; spend?: num
 }
 
 export async function winningElements(projectId: string) {
-  return q<{ id: string; angle: string; element: string; change_to: string; idea_source: string; cac: number | null; ctr: number | null; diff_vs_base: number | null; won_at: string; test_id: string | null }>(
-    `SELECT id, angle, element, change_to, idea_source, cac, ctr, diff_vs_base, won_at, test_id FROM winning_elements WHERE project_id = $1 ORDER BY won_at DESC`,
+  return q<{ id: string; angle: string; stage: string; element: string; change_to: string; idea_source: string; cac: number | null; ctr: number | null; diff_vs_base: number | null; profit_month: number | null; won_at: string; test_id: string | null }>(
+    `SELECT id, angle, stage, element, change_to, idea_source, cac, ctr, diff_vs_base, profit_month, won_at, test_id FROM winning_elements WHERE project_id = $1 ORDER BY won_at DESC`,
     [projectId],
   );
 }
