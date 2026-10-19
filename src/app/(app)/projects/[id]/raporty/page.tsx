@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronRight, FileText, Flag } from "lucide-react";
 import { counter, listReports } from "@/lib/loop";
 import { LEVER_NAMES } from "@/lib/loop-def";
 import { loadProject } from "@/lib/project-context";
+import { DeleteReport } from "@/components/loop/ReportActions";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function ReportsPage({ params }: { params: Promise<{ id: st
               </span>
             </span>
             {r.expected != null && <span className="rl-val">{signed(r.expected)}<small>/mies.</small></span>}
+            <DeleteReport lid={r.id} small />
             <ChevronRight size={18} />
           </Link>
         ))}

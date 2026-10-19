@@ -1,5 +1,5 @@
 import { body, guarded, json, type Params } from "@/lib/api";
-import { renameReport } from "@/lib/loop";
+import { deleteReport, renameReport } from "@/lib/loop";
 
 /** Zmiana tytułu raportu. */
 export const PATCH = guarded(async (req, { params }: Params<"lid">) => {
@@ -9,5 +9,14 @@ export const PATCH = guarded(async (req, { params }: Params<"lid">) => {
     return json({ ok: true });
   } catch (e) {
     return json({ error: (e as Error).message }, 400);
+  }
+});
+
+export const DELETE = guarded(async (_req, { params }: Params<"lid">) => {
+  try {
+    await deleteReport((await params).lid);
+    return json({ ok: true });
+  } catch (e) {
+    return json({ error: (e as Error).message }, 404);
   }
 });

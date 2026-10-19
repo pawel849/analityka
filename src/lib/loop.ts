@@ -696,6 +696,14 @@ export async function getReport(lid: string) {
   return r?.report ? { projectId: r.project_id, report: j<ReportData>(r.report, {} as ReportData), shareToken: r.share_token } : null;
 }
 
+/** Usunięcie raportu. Decyzje i predykcje z tej sesji zostają (sprawdzenia i licznik efektów). */
+export async function deleteReport(lid: string) {
+  const r = await one<{ project_id: string }>("SELECT project_id FROM loops WHERE id = $1 AND finished_at IS NOT NULL", [lid]);
+  if (!r) throw new Error("Brak raportu");
+  await q("UPDATE loops SET data = data - 'report', share_token = NULL WHERE id = $1", [lid]);
+  await q("DELETE FROM timeline_events WHERE project_id = $1 AND link = $2", [r.project_id, `report:${lid}`]);
+}
+
 /** Zmiana tytułu raportu. */
 export async function renameReport(lid: string, title: string) {
   const t = title.trim().slice(0, 200);
