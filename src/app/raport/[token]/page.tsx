@@ -9,5 +9,5 @@ export default async function PublicReport({ params }: { params: Promise<{ token
   const { token } = await params;
   const r = await reportByToken(token);
   if (!r) notFound();
-  return <main className="rp-public"><ReportView r={r} /></main>;
+  return <main className="rp-public"><ReportView r={r.report} maps={r.maps} /></main>;
 }

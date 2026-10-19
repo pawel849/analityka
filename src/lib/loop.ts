@@ -707,6 +707,9 @@ export async function renameReport(lid: string, title: string) {
 export async function shareReport(lid: string) {
   const r = await getReport(lid);
   if (!r) throw new Error("Brak raportu");
+  // mapy lejków projektu też dostają link tylko do odczytu – klient otworzy je z raportu
+  const funnels = await q<{ id: string }>("SELECT id FROM funnels WHERE project_id = $1 AND share_token IS NULL", [r.projectId]);
+  for (const f of funnels) await q("UPDATE funnels SET share_token = $2 WHERE id = $1", [f.id, crypto.randomUUID().replace(/-/g, "")]);
   if (r.shareToken) return r.shareToken;
   const token = crypto.randomUUID().replace(/-/g, "");
   await q("UPDATE loops SET share_token = $2 WHERE id = $1", [lid, token]);
@@ -715,6 +718,14 @@ export async function shareReport(lid: string) {
 
 export async function reportByToken(token: string) {
   if (!/^[a-f0-9]{32}$/.test(token)) return null;
-  const r = await one<{ report: unknown }>("SELECT data->'report' AS report FROM loops WHERE share_token = $1", [token]);
-  return r?.report ? j<ReportData>(r.report, {} as ReportData) : null;
+  const r = await one<{ report: unknown; project_id: string }>("SELECT data->'report' AS report, project_id FROM loops WHERE share_token = $1", [token]);
+  if (!r?.report) return null;
+  const maps = await q<{ name: string; share_token: string }>("SELECT name, share_token FROM funnels WHERE project_id = $1 AND share_token IS NOT NULL ORDER BY updated_at DESC", [r.project_id]);
+  return { report: j<ReportData>(r.report, {} as ReportData), maps: maps.map((m) => ({ name: m.name, href: `/share/${m.share_token}` })) };
+}
+
+/** Mapy lejków projektu (do raportu wewnętrznego). */
+export async function projectMaps(projectId: string) {
+  const rows = await q<{ id: string; name: string }>("SELECT id, name FROM funnels WHERE project_id = $1 ORDER BY updated_at DESC", [projectId]);
+  return rows.map((m) => ({ name: m.name, href: `/funnels/${m.id}` }));
 }

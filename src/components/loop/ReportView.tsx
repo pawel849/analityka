@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { ChevronDown, CircleCheck, Eye, Flag, MessageCircleQuestion, MousePointerClick, ShoppingCart, Sparkles, Target, Trophy, Wallet } from "lucide-react";
+import { ChevronDown, CircleCheck, ExternalLink, Map as MapIcon, Workflow, Eye, Flag, MessageCircleQuestion, MousePointerClick, ShoppingCart, Sparkles, Target, Trophy, Wallet } from "lucide-react";
 import { LEVER_NAMES } from "@/lib/loop-def";
 import { improve, type MetricKey } from "@/lib/levers";
 import type { ReportData } from "@/lib/loop";
@@ -128,7 +128,7 @@ function Section({ icon: I, title, children }: { icon: typeof Target; title: str
 }
 
 /** Raport z sesji – od góry do dołu, liczby zamrożone w dniu sesji. */
-export function ReportView({ r, title }: { r: ReportData; title?: React.ReactNode }) {
+export function ReportView({ r, title, maps }: { r: ReportData; title?: React.ReactNode; maps?: { name: string; href: string }[] }) {
   const g = r.gap as unknown as GoalGap | null;
   const eng = r.engine;
   const [open, setOpen] = useState<string | null>(null);
@@ -169,6 +169,16 @@ export function ReportView({ r, title }: { r: ReportData; title?: React.ReactNod
         <h3 className="rp-sub">Profit tygodniowo (8 tygodni)</h3>
         <ProfitBars items={r.reality.weeks.map((w) => ({ label: dayLabel(w.from), value: w.profit }))} />
       </Section>
+
+      {maps && maps.length > 0 && (
+        <Section icon={MapIcon} title="Mapa lejka">
+          <div className="rp-maps">
+            {maps.map((m) => (
+              <a key={m.href} href={m.href} target="_blank" rel="noreferrer" className="rp-map"><Workflow size={26} /><b>{m.name}</b><span>Otwórz mapę z aktualnymi danymi <ExternalLink size={14} /></span></a>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {eng && (
         <Section icon={Sparkles} title="Gdzie leżą pieniądze">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CircleCheck } from "lucide-react";
+import { AlertTriangle, CircleCheck, Eye, Megaphone, Plug, Repeat, ShoppingCart, TrendingDown, Wallet } from "lucide-react";
 
 /* ---------- formatowanie ---------- */
 
@@ -129,43 +129,65 @@ export function PaceBars({ pace, need }: { pace: number | null; need: number | n
   );
 }
 
-/** Słupki profitu (dodatnie zielone, ujemne miedziane) z kwotami; przy wielu słupkach kwoty w dymku. */
+/** Słupki profitu (dodatnie zielone, ujemne miedziane) z kwotami; przy wielu dniach – przewijane. */
 export function ProfitBars({ items, height = 170 }: { items: { label: string; value: number }[]; height?: number }) {
   const max = Math.max(1, ...items.map((i) => Math.abs(i.value)));
   const hasNeg = items.some((i) => i.value < 0);
-  const showNums = items.length <= 16;
-  const short = (v: number) => (Math.abs(v) >= 10000 ? `${(v / 1000).toLocaleString("pl-PL", { maximumFractionDigits: 0 })} tys.` : zl(v));
+  const many = items.length > 16;
+  const short = (v: number) => (Math.abs(v) >= 10000 ? `${(v / 1000).toLocaleString("pl-PL", { maximumFractionDigits: 0 })} tys.` : Math.abs(v) >= 1000 && many ? `${(v / 1000).toLocaleString("pl-PL", { maximumFractionDigits: 1 })} tys.` : zl(v).replace(" zł", many ? "" : " zł"));
   return (
-    <div className={`pbs2 ${showNums ? "nums" : ""}`} style={{ ["--h" as string]: `${height}px` }}>
-      <div className={`pbs2-plot ${hasNeg ? "neg" : ""}`}>
-        {items.map((it, i) => {
-          const h = (Math.abs(it.value) / max) * 100;
-          return (
-            <div key={it.label + i} className="pbs2-col" title={`${it.label}: ${zl(it.value)}`}>
-              <div className="pbs2-up">{it.value >= 0 && <>{showNums && <span>{short(it.value)}</span>}<i className="pos" style={{ height: `${h}%` }} /></>}</div>
-              {hasNeg && <div className="pbs2-down">{it.value < 0 && <><i className="neg" style={{ height: `${h}%` }} />{showNums && <span>{short(it.value)}</span>}</>}</div>}
-            </div>
-          );
-        })}
-      </div>
-      {showNums ? (
+    <div className={`pbs2 ${many ? "many" : ""}`} style={{ ["--h" as string]: `${height}px`, ["--n" as string]: items.length }}>
+      <div className="pbs2-scroll">
+        <div className={`pbs2-plot ${hasNeg ? "neg" : ""}`}>
+          {items.map((it, i) => {
+            const h = (Math.abs(it.value) / max) * 100;
+            return (
+              <div key={it.label + i} className="pbs2-col" title={`${it.label}: ${zl(it.value)}`}>
+                <div className="pbs2-up">{it.value >= 0 && <><span>{short(it.value)}</span><i className="pos" style={{ height: `${h}%` }} /></>}</div>
+                {hasNeg && <div className="pbs2-down">{it.value < 0 && <><i className="neg" style={{ height: `${h}%` }} /><span>{short(it.value)}</span></>}</div>}
+              </div>
+            );
+          })}
+        </div>
         <div className="pbs2-x">{items.map((it, i) => <span key={it.label + i}>{it.label}</span>)}</div>
-      ) : (
-        <div className="pbs-x"><span>{items[0]?.label}</span><span>suma {zl(items.reduce((a, x) => a + x.value, 0))}</span><span>{items[items.length - 1]?.label}</span></div>
-      )}
+      </div>
+      {many && <div className="pbs-x"><span>przewiń w bok · kwoty w zł</span><span>suma {zl(items.reduce((a, x) => a + x.value, 0))}</span></div>}
     </div>
   );
 }
 
-/** Luki w danych – wyeksponowane. */
+/** Luki w danych – każda jako karta: co nie działa i co to znaczy dla liczb. */
+function gapCard(t: string): { icon: typeof AlertTriangle; title: string; detail: string; effect: string } {
+  if (/Koszty reklam są tylko do/.test(t)) return { icon: Megaphone, title: "Koszty reklam nieaktualne", detail: t.replace(/ – późniejsze.*/, "."), effect: "profit zawyżony o nowsze wydatki" };
+  if (/Brak kosztów reklam/.test(t)) return { icon: Megaphone, title: "Brak kosztów reklam", detail: "Nie ma żadnych danych o wydatkach.", effect: "profit zawyżony o całe wydatki" };
+  if (/Brak zamówień/.test(t)) return { icon: ShoppingCart, title: "Brak zamówień", detail: "Nie ma żadnych zamówień w danych.", effect: "przychód = 0" };
+  if (/kosztów stałych i zmiennych/.test(t)) return { icon: Wallet, title: "Brak kosztów stałych i zmiennych", detail: "Ustawienia klienta → Koszty.", effect: "profit liczony tylko po reklamach i podatku" };
+  if (/LTV 30/.test(t)) return { icon: Repeat, title: "Brak LTV 30", detail: "Żaden klient nie ma jeszcze pełnych 30 dni.", effect: "wartość zakupu = sam koszyk" };
+  if (/wyświetlenia i kliknięcia/.test(t)) return { icon: Eye, title: "Brak wyświetleń i kliknięć", detail: "W wybranych kampaniach nie ma tych danych.", effect: "CPM i CTR nie do policzenia" };
+  if (/Wąskie gardło/.test(t)) return { icon: TrendingDown, title: "Wąskie gardło", detail: t.replace(/^Wąskie gardło[^:]*:\s*/, ""), effect: "tu spadło najbardziej" };
+  const i = t.indexOf(":");
+  return { icon: Plug, title: i > 0 ? t.slice(0, i) : "Problem ze źródłem danych", detail: i > 0 ? t.slice(i + 1).trim() : t, effect: "dane z tego źródła mogą być niepełne" };
+}
+
 export function DataGaps({ gaps, extra }: { gaps: string[]; extra?: string[] }) {
   const all = [...(extra ?? []), ...gaps];
   if (!all.length)
     return <div className="dg ok"><CircleCheck size={20} /> <b>Dane kompletne</b> – liczymy wszystko.</div>;
   return (
-    <div className="dg">
-      <div className="dg-head"><AlertTriangle size={20} /> <b>Luki w danych</b> <span>{all.length}</span></div>
-      <ul>{all.map((x) => <li key={x}>{x}</li>)}</ul>
+    <div className="dg2">
+      <div className="dg2-head"><AlertTriangle size={22} /> <b>Luki w danych</b><span>{all.length}</span><small>liczby poniżej mogą się różnić od rzeczywistości</small></div>
+      <div className="dg2-grid">
+        {all.map((x) => {
+          const c = gapCard(x);
+          const I = c.icon;
+          return (
+            <div key={x} className={`dg2-card ${/Wąskie/.test(x) ? "bn" : ""}`}>
+              <span className="dg2-ic"><I size={20} /></span>
+              <div><b>{c.title}</b><p>{c.detail}</p><em>{c.effect}</em></div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

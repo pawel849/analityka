@@ -286,8 +286,8 @@ function ScopePicker({ projectId, st, reload }: { projectId: string; st: LoopSta
     <div className="sc3">
       <div className="sc3-title"><b>Z czego liczymy</b>{saving ? <span className="saving"><Loader2 className="spin" size={13} /> zapisuję</span> : <span className="saved"><CircleCheck size={14} /> zapisane</span>}</div>
       <div className="sc3-cols">
-        <Box icon={Megaphone} title="Kampanie" items={lists.campaigns.map((c) => ({ name: c.name, sub: zl(c.spend) }))} sel={camps} setSel={setCamps} other={(c) => persist(c, prods)} />
-        <Box icon={Package} title="Produkty" items={lists.products.map((p) => ({ name: p.name, sub: p.gross == null ? "" : zl(p.gross) }))} sel={prods} setSel={setProds} other={(p) => persist(camps, p)} />
+        <Box icon={Megaphone} title="Kampanie" items={lists.campaigns.map((c) => ({ name: c.name, sub: "" }))} sel={camps} setSel={setCamps} other={(c) => persist(c, prods)} />
+        <Box icon={Package} title="Produkty" items={lists.products.map((p) => ({ name: p.name, sub: "" }))} sel={prods} setSel={setProds} other={(p) => persist(camps, p)} />
       </div>
     </div>
   );
@@ -554,6 +554,19 @@ function StepMoney({ loopId, st, reload }: StepProps) {
   const over = Object.fromEntries(eng.ranking.levers.filter((l) => l.benchmark != null && !l.missing && (l.value ?? 0) > 0).map((l) => [l.key, l.benchmark as number]));
   const all = Object.keys(over).length ? modelProfit(eng.ranking.budget, eng.ranking.base, eng.econ, over) : null;
   const total = all != null && eng.ranking.profitNow != null ? all - eng.ranking.profitNow : null;
+  // rozkład: dokładamy dźwignie po kolei (kolejność rankingu) – kroki sumują się dokładnie do łącznej kwoty
+  const steps: { key: string; alone: number; step: number }[] = [];
+  {
+    let applied: Partial<Record<MetricKey, number>> = {};
+    let prevP = eng.ranking.profitNow ?? 0;
+    for (const l of eng.ranking.levers) {
+      if (!(l.key in over)) continue;
+      applied = { ...applied, [l.key]: over[l.key] };
+      const p = modelProfit(eng.ranking.budget, eng.ranking.base, eng.econ, applied) ?? prevP;
+      steps.push({ key: l.key, alone: l.value ?? 0, step: p - prevP });
+      prevP = p;
+    }
+  }
   const anyLow = eng.ranking.levers.some((l) => l.key in over && l.lowConfidence);
   const setFocus = async (k: string) => {
     await api(`/api/loops/${loopId}/questions`, "POST", { focus: k });
@@ -562,8 +575,23 @@ function StepMoney({ loopId, st, reload }: StepProps) {
   return (
     <div className="ss-stack">
       <div className="tot">
-        <Sparkles size={22} />
-        <div><em>Gdyby wszystko wróciło do najlepszych tygodni</em><b>{total == null ? "brak danych" : `${zlSigned(total)} / mies.`}</b>{anyLow && <small>mało danych w części pomiarów – liczba orientacyjna</small>}</div>
+        <div className="tot-head">
+          <Sparkles size={22} />
+          <div><em>Gdyby wszystko poniżej wróciło do najlepszych tygodni</em><b>{total == null ? "brak danych" : `${zlSigned(total)} / mies.`}</b>{anyLow && <small>mało danych w części pomiarów – liczba orientacyjna</small>}</div>
+        </div>
+        {steps.length > 0 && total != null && total > 0 && (
+          <div className="wf">
+            {steps.map((x) => (
+              <div key={x.key} className="wf-row">
+                <span>{LEVER_NAMES[x.key].name}</span>
+                <div><i style={{ width: `${(Math.max(0, x.step) / total) * 100}%` }} /></div>
+                <b>{zlSigned(x.step)}</b>
+                <small>osobno {zlSigned(x.alone)}</small>
+              </div>
+            ))}
+            <p>Kroki dodają się do łącznej kwoty. Są większe niż „osobno”, bo poprawy się mnożą: więcej kliknięć × więcej zakupów × większy koszyk.</p>
+          </div>
+        )}
       </div>
       <div className="card-s">
         <h3 className="ss-h3">Ile więcej profitu miesięcznie, gdyby każda rzecz wróciła do najlepszego tygodnia</h3>
@@ -588,10 +616,14 @@ function FocusHero({ eng, focus }: { eng: EngineResult | null; focus: MetricKey 
   if (!L || !focus) return null;
   const I = LEVER_ICON[focus];
   return (
-    <div className="fh">
-      <I size={26} />
-      <div><b>{LEVER_NAMES[focus].name}</b><span>{fm(focus, L.current)} → {fm(focus, L.benchmark)}</span></div>
-      <strong>{L.lowConfidence ? range(L.range) : zlSigned(L.value)}<small>/mies.</small></strong>
+    <div className="fh2">
+      <div className="fh2-name"><I size={26} /><div><em>Pogłębiamy</em><b>{LEVER_NAMES[focus].name}</b><small>{LEVER_NAMES[focus].short}</small></div></div>
+      <div className="fh2-ab">
+        <div className="fh2-v now"><em>teraz</em><b>{fm(focus, L.current)}</b></div>
+        <ArrowRight size={22} />
+        <div className="fh2-v best"><em>najlepszy tydzień</em><b>{fm(focus, L.benchmark)}</b></div>
+      </div>
+      <div className="fh2-zl"><em>na stole</em><b>{L.lowConfidence ? range(L.range) : zlSigned(L.value)}</b><small>miesięcznie</small></div>
     </div>
   );
 }
@@ -603,9 +635,9 @@ function StepQuestions({ loopId, st, val, set }: StepProps) {
     api<NonNullable<typeof qs>>(`/api/loops/${loopId}/questions`).then(setQs).catch((e) => setErr(e.message));
   }, [loopId]);
   const answers = val<Record<string, string>>("answers", {});
-  if (!qs) return <p className="ss-load"><Loader2 className="spin" size={18} /> {err || "Claude układa pytania…"}</p>;
+  if (!qs) return <p className="ss-load center"><Loader2 className="spin" size={18} /> {err || "Claude układa pytania…"}</p>;
   return (
-    <div className="ss-stack">
+    <div className="ss-stack ss-center">
       <FocusHero eng={snapshotOf(st)} focus={qs.focus} />
       {qs.source === "dane" && <div className="dg"><div className="dg-head"><CircleAlert size={18} /> <b>Claude niedostępny – pytania z danych</b></div><ul><li>{qs.error}</li></ul></div>}
       {qs.questions.map((q, i) => (
@@ -652,16 +684,17 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
   const L = eng && focus ? eng.ranking.levers.find((l) => l.key === focus) : null;
   const prev = eng && focus ? eng.metricsPrev[focus] : null;
   const vals = L ? [prev, L.current, L.benchmark] : [];
+
   const max = Math.max(0, ...vals.map((v) => v ?? 0)) || 1;
   return (
     <div className="ss-stack">
       <FocusHero eng={eng} focus={focus} />
       {L && focus && (
         <div className="card-s">
-          <h3 className="ss-h3">{LEVER_NAMES[focus].short}: jak było, jak jest, do czego dążymy</h3>
-          <div className="an-bars">
-            {[["Poprzednie 30 dni", prev], ["Ostatnie 30 dni", L.current], ["Najlepszy tydzień", L.benchmark]].map(([l, v]) => (
-              <div key={l as string}><i style={{ height: `${(((v as number | null) ?? 0) / max) * 100}%` }} /><b>{fm(focus, v as number | null)}</b><span>{l as string}</span></div>
+          <h3 className="ss-h3">{LEVER_NAMES[focus].name} ({LEVER_NAMES[focus].short}): jak było, jak jest, do czego dążymy</h3>
+          <div className="ld2-bars">
+            {([["Poprzedni okres", prev, "prev"], ["Teraz", L.current, L.current != null && L.benchmark != null && (focus === "cpm" ? L.current <= L.benchmark : L.current >= L.benchmark) ? "good" : "bad"], ["Najlepszy tydzień", L.benchmark, "best"]] as const).map(([l, v, cls]) => (
+              <div key={l} className={`ld2-bar ${cls}`}><span>{l}</span><div><i style={{ width: `${((v ?? 0) / max) * 100}%` }} /></div><b>{fm(focus, v)}</b></div>
             ))}
           </div>
         </div>
