@@ -2,15 +2,16 @@
 // Dane per projekt (klient) – nic tu nie zależy od konkretnego klienta.
 import { newId, one, q } from "./db";
 import { loadSettings } from "./project-data";
-import { addDays, engine, measure, predictionActuals, today, type EngineResult, type GoalRow } from "./loop-data";
+import { addDays, engine, gap, measure, predictionActuals, reality, today, type EngineResult, type GoalRow } from "./loop-data";
 import { hypothesisValue, METRICS, verdictImpact, type Econ, type MetricKey, type Metrics } from "./levers";
-import { MEASURE_TASK, NO_CHANGE, STEPS, VERDICTS } from "./loop-def";
+import { LEVER_NAMES, MEASURE_TASK, NO_CHANGE, phraseOk, STEPS, VERDICTS } from "./loop-def";
+import { ClaudeError, claudeAnalysis, claudeQuestions } from "./claude";
 
 export * from "./loop-def";
 
 const j = <T>(v: unknown, d: T): T => (v == null ? d : typeof v === "string" ? (JSON.parse(v) as T) : (v as T));
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const VERSION = 2;
+const VERSION = 3;
 
 /* ---------- Cel ---------- */
 
@@ -184,9 +185,12 @@ export async function loopState(projectId: string) {
 }
 export type LoopState = Awaited<ReturnType<typeof loopState>>;
 
-export async function startLoop(projectId: string) {
+/** Nowa sesja. Gdy jest poprzedni raport – trzeba wpisać „przejrzałem poprzedni raport”. */
+export async function startLoop(projectId: string, phrase = "") {
   const open = await one<{ id: string }>("SELECT id FROM loops WHERE project_id = $1 AND finished_at IS NULL", [projectId]);
   if (open) return open.id;
+  const last = await one("SELECT id FROM loops WHERE project_id = $1 AND finished_at IS NOT NULL AND data ? 'report'", [projectId]);
+  if (last && !phraseOk(phrase)) throw new Error("Najpierw przejrzyj poprzedni raport i wpisz: przejrzałem poprzedni raport");
   const id = newId();
   await q("INSERT INTO loops (id, project_id, data) VALUES ($1, $2, $3)", [id, projectId, JSON.stringify({ meta: { v: VERSION } })]);
   return id;
@@ -206,41 +210,47 @@ async function missing(lid: string, projectId: string, step: number, data: LoopR
   const d = data[key] ?? {};
   const out: string[] = [];
   if (key === "cel") {
-    if (!st.goal) out.push("Ustal cel profitu i okres.");
-    if (!st.scope) out.push("Zatwierdź zakres: kampanie i produkty, z których liczymy.");
+    if (!st.goal) out.push("Ustal cel profitu i kliknij „Zapisz cel”.");
     const ratings = (d.ratings ?? {}) as Record<string, { effect?: string }>;
     for (const a of st.prevActions) if (!ratings[a.id]?.effect) out.push(`Rozlicz działanie z poprzedniej sesji: „${a.title}”.`);
   }
-  if (key === "predykcja" && !st.prediction) out.push("Wpisz predykcję: profit z ostatniego tygodnia i etap, który się pogorszył.");
-  if (key === "rzeczywistosc" && d.reliable !== true) out.push("Potwierdź, że dane są wiarygodne. Jeśli nie są – najpierw napraw pomiar.");
+  if (key === "predykcja" && !st.prediction) out.push("Ustaw profit z ostatniego tygodnia i wybierz etap.");
   if (key === "kwota" && !st.prediction?.lever_guess) out.push("Wskaż, gdzie Twoim zdaniem jest największa dźwignia.");
   if (key === "pytania") {
     const qs = (d.questions ?? []) as string[];
     const ans = (d.answers ?? {}) as Record<string, string>;
-    if (!qs.length) out.push("Brak pytań – odśwież krok.");
+    if (!qs.length) out.push("Brak pytań – odśwież stronę.");
     qs.forEach((qq, i) => {
-      if (!String(ans[i] ?? "").trim()) out.push(`Odpowiedz: „${qq.slice(0, 80)}${qq.length > 80 ? "…" : ""}”`);
+      if (!String(ans[i] ?? "").trim()) out.push(`Odpowiedz na pytanie ${i + 1}.`);
     });
   }
-  if (key === "decyzja" && !st.decisions.some((x) => x.loop_id === lid)) out.push("Zapisz decyzję. Dopuszczalne „nic nie zmieniam” – z uzasadnieniem i datą sprawdzenia.");
-  if (key === "rozstrzygniecie") for (const x of st.due) out.push(`Rozstrzygnij: „${x.what}” (sprawdzenie ${x.check_date}).`);
-  if (key === "wnioski" && !String(d.summary ?? "").trim()) out.push("Wpisz jedno zdanie: czego się nauczyłeś.");
+  if (key === "analiza" && !String(d.text ?? "").trim()) out.push("Analiza Claude jeszcze nie powstała – spróbuj ponownie.");
+  if (key === "decyzja" && !st.decisions.some((x) => x.loop_id === lid)) out.push("Zapisz decyzję (albo „nic nie zmieniam” z uzasadnieniem i datą).");
+  if (key === "rozstrzygniecie") for (const x of st.due) out.push(`Rozstrzygnij: „${x.what}”.`);
+  if (key === "raport" && !String(d.summary ?? "").trim()) out.push("Wpisz jedno zdanie: czego się nauczyłeś.");
   return out;
 }
+
+const PROTECTED: Record<string, string[]> = { kwota: ["snapshot", "focus"], pytania: ["questions", "source", "error", "focus"], analiza: ["text", "at"] };
 
 export async function saveStep(lid: string, step: number, patch: Record<string, unknown>, advance: boolean) {
   const { projectId, step: cur, data } = await loopProject(lid);
   if (!Number.isInteger(step) || step < 0 || step >= STEPS.length) throw new Error("Zły krok");
   if (step > cur) throw new Error("Najpierw zakończ wcześniejsze kroki");
   const key = STEPS[step].key;
-  const merged = { ...data, [key]: { ...(data[key] ?? {}), ...patch } };
+  if (key === "predykcja" && patch.profit_guess != null && patch.stage_guess) {
+    await savePrediction(lid, Number(patch.profit_guess), String(patch.stage_guess));
+  }
+  // pól liczonych przez serwer (ranking, pytania, analiza Claude) nie da się nadpisać z przeglądarki
+  const own = Object.fromEntries(Object.entries(patch).filter(([k]) => !(PROTECTED[key] ?? []).includes(k)));
+  const merged = { ...data, [key]: { ...(data[key] ?? {}), ...own } };
   await q("UPDATE loops SET data = $2 WHERE id = $1", [lid, JSON.stringify(merged)]);
   if (!advance) return { missing: [] as string[] };
   const miss = await missing(lid, projectId, step, merged);
   if (miss.length) return { missing: miss };
   if (step === STEPS.length - 1) {
     await finish(lid, projectId, merged);
-    return { missing: [], finished: true };
+    return { missing: [], finished: true, reportId: lid };
   }
   await q("UPDATE loops SET step = GREATEST(step, $2) WHERE id = $1", [lid, step + 1]);
   return { missing: [] };
@@ -283,61 +293,82 @@ export async function guessLever(lid: string, guess: string) {
   const eng = await engine(projectId);
   const top = eng.ranking.levers.find((l) => l.value != null)?.key ?? null;
   await q("UPDATE predictions SET lever_guess = $2, lever_actual = $3 WHERE loop_id = $1", [lid, guess, top]);
-  const kwota = { ...(data.kwota ?? {}), snapshot: eng, focus: top };
+  // pogłębiamy dźwignię nr 1; gdy żadna nie ma danych – tę, którą wskazałeś
+  const kwota = { ...(data.kwota ?? {}), snapshot: eng, focus: top ?? guess };
   await q("UPDATE loops SET data = $2 WHERE id = $1", [lid, JSON.stringify({ ...data, kwota })]);
 }
 
 const fmtM = (key: MetricKey, v: number | null | undefined) =>
   v == null ? "brak danych" : key === "ctr" || key === "cr" ? `${(v * 100).toLocaleString("pl-PL", { maximumFractionDigits: 2 })}%` : `${v.toLocaleString("pl-PL", { maximumFractionDigits: 2 })} zł`;
-const zl = (v: number | null | undefined) => (v == null ? "brak danych" : `${Math.round(v).toLocaleString("pl-PL")} zł`);
-const chg = (a: number | null, b: number | null) => (a == null || b == null || !b ? "bez danych do porównania" : `${a >= b ? "+" : "−"}${Math.abs(Math.round((a / b - 1) * 100))}% vs poprzednie 30 dni`);
+const zl = (v: number | null | undefined) => (v == null ? "brak danych" : `${v < 0 ? "−" : ""}${String(Math.abs(Math.round(v))).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} zł`);
+const moved = (a: number | null, b: number | null, what: string) =>
+  a == null || b == null || !b ? "" : Math.abs(a / b - 1) < 0.03 ? `${what} prawie się nie zmienił.` : `${what} ${a > b ? "wzrósł" : "spadł"} o ${Math.abs(Math.round((a / b - 1) * 100))}% względem poprzednich 30 dni.`;
 
-/** 2–3 pytania z danych dla wybranej dźwigni (reguły, nie AI). */
+/** Pytania zapasowe (gdy Claude niedostępny) – z danych, ludzkim językiem. */
 export function socratic(eng: EngineResult, focus: MetricKey): string[] {
   const L = eng.ranking.levers.find((l) => l.key === focus)!;
   const base = eng.ranking.base;
   const P = eng.metricsPrev;
-  const win = eng.benchWindows[focus];
-  const where = win ? ` (${win.from} – ${win.to})` : eng.benchmarkMode === "targets" ? " (cel z ustawień)" : "";
-  const vs = `${L.label}: teraz ${fmtM(focus, L.current)}, benchmark ${fmtM(focus, L.benchmark)}${where}`;
+  const name = LEVER_NAMES[focus].short;
+  const goal = L.benchmark != null ? ` W najlepszym tygodniu było ${fmtM(focus, L.benchmark)} – do tego dążymy.` : "";
+  const now = `Twój ${name} wynosi teraz ${fmtM(focus, L.current)}.${goal}`;
   const u = eng.units;
   const qs: string[] = [];
   if (focus === "cpm") {
-    qs.push(`${vs}. CTR ${chg(base.ctr, P.ctr)}. Co zmieniło się w aukcji: grupa odbiorców, sezon, konkurencja czy częstotliwość?`);
-    qs.push(`1000 wyświetleń jest dziś warte ${zl(u.perMille)} profitu. Która kampania w zakresie płaci najwięcej za wyświetlenia i czy jej wynik to uzasadnia?`);
+    qs.push(`${now} ${moved(base.ctr, P.ctr, "Odsetek kliknięć (CTR)")} Co zmieniło się w tym, komu i jak często pokazujesz reklamy?`);
+    qs.push(`Każde 1000 wyświetleń daje dziś ${zl(u.perMille)} profitu. Która kampania płaci najwięcej za wyświetlenia – i czy jej wyniki to uzasadniają?`);
   }
   if (focus === "ctr") {
-    qs.push(`${vs}. CPM ${chg(base.cpm, P.cpm)}. Co było w reklamach w najlepszym tygodniu, czego teraz nie ma?`);
-    qs.push(`1 kliknięcie jest dziś warte ${zl(u.perClick)}. Czy największy budżet dostają reklamy z najwyższym CTR?`);
+    qs.push(`${now} ${moved(base.cpm, P.cpm, "Koszt wyświetleń (CPM)")} Co było w reklamach w najlepszym tygodniu, czego teraz nie ma?`);
+    qs.push(`Jedno kliknięcie jest dziś warte ${zl(u.perClick)} profitu. Czy najwięcej budżetu dostają reklamy, w które ludzie klikają najchętniej?`);
   }
   if (focus === "cr") {
-    qs.push(`${vs}. CTR ${chg(base.ctr, P.ctr)}, CPM ${chg(base.cpm, P.cpm)}. Co zmieniło się po kliknięciu: strona, cena, oferta, płatność?`);
-    qs.push(`1 zamówienie jest warte ${zl(u.perOrder)}. Czy ludzie z reklam trafiają na tę samą stronę i ofertę co w najlepszym tygodniu?`);
+    qs.push(`${now} ${moved(base.ctr, P.ctr, "Odsetek kliknięć w reklamę (CTR)")} Co zmieniło się po kliknięciu – na stronie, w cenie, ofercie albo płatności?`);
+    qs.push(`Jedno zamówienie to ${zl(u.perOrder)} profitu. Czy ludzie z reklam trafiają na tę samą stronę i ofertę co w najlepszym tygodniu?`);
   }
   if (focus === "aov") {
-    qs.push(`${vs}. Co zmieniło się w koszyku: dodatki (order bump), cena, rabaty, mix produktów?`);
+    qs.push(`Średnia wartość zamówienia (AOV) to teraz ${fmtM("aov", L.current)}.${goal} Co zmieniło się w koszyku: dodatki, cena, rabaty?`);
     qs.push(eng.ltv.value != null
-      ? `Kupujący dokupują średnio ${zl(eng.ltv.value)} w 30 dni. Co to jest i czy proponujesz to już przy pierwszym zakupie?`
-      : "Brak danych o dokupieniach w 30 dni. Co kupujący mogliby dobrać od razu przy zakupie?");
+      ? `Kupujący dokupują średnio ${zl(eng.ltv.value)} w ciągu 30 dni. Co to jest i czy proponujesz to już przy pierwszym zakupie?`
+      : "Nie mamy danych o dokupieniach w 30 dni. Co kupujący mogliby dobrać od razu przy zakupie?");
   }
-  const evWin = win ? eng.events.filter((e) => e.day >= win.from && e.day <= win.to) : [];
-  const evRecent = eng.events.filter((e) => e.day >= eng.window.from);
-  if (evWin.length) qs.push(`W najlepszym tygodniu na osi czasu: ${evWin.slice(0, 3).map((e) => `${e.day} „${e.title}”`).join(", ")}. Czy to wyjaśnia wynik?`);
-  else if (evRecent.length) qs.push(`Ostatnie 30 dni na osi czasu: ${evRecent.slice(-3).map((e) => `${e.day} „${e.title}”`).join(", ")}. Która z tych zmian mogła ruszyć ${L.label}?`);
-  return qs.slice(0, 3);
+  return qs;
 }
 
-/** Pytania do kroku 6 – generowane raz z zamrożonego rankingu. */
+/** Pytania – układa Claude (z liczb sesji); gdy niedostępny, pytania zapasowe z danych. Generowane raz na dźwignię. */
 export async function ensureQuestions(lid: string) {
   const { data } = await loopProject(lid);
   const eng = data.kwota?.snapshot as EngineResult | undefined;
-  if (!eng) throw new Error("Najpierw krok „Kwota na stole”");
+  if (!eng) throw new Error("Najpierw krok „Gdzie leżą pieniądze”");
   const focus = (data.pytania?.focus ?? data.kwota?.focus) as MetricKey | null;
-  if (!focus) return { questions: [] as string[], focus: null };
-  if (Array.isArray(data.pytania?.questions) && data.pytania.focus === focus) return { questions: data.pytania.questions as string[], focus };
-  const questions = socratic(eng, focus);
-  await q("UPDATE loops SET data = $2 WHERE id = $1", [lid, JSON.stringify({ ...data, pytania: { ...(data.pytania ?? {}), focus, questions, answers: {} } })]);
-  return { questions, focus };
+  if (!focus) return { questions: [] as string[], focus: null, source: null as string | null, error: null as string | null };
+  if (Array.isArray(data.pytania?.questions) && data.pytania.focus === focus)
+    return { questions: data.pytania.questions as string[], focus, source: (data.pytania.source as string) ?? null, error: (data.pytania.error as string) ?? null };
+  let questions: string[];
+  let source = "claude";
+  let error: string | null = null;
+  try {
+    questions = await claudeQuestions(eng, focus);
+  } catch (e) {
+    if (!(e instanceof ClaudeError) && !(e instanceof SyntaxError)) throw e;
+    questions = socratic(eng, focus);
+    source = "dane";
+    error = (e as Error).message;
+  }
+  await q("UPDATE loops SET data = $2 WHERE id = $1", [lid, JSON.stringify({ ...data, pytania: { ...(data.pytania ?? {}), focus, questions, source, error, answers: {} } })]);
+  return { questions, focus, source, error };
+}
+
+/** Analiza Claude po odpowiedziach – obowiązkowa, bez niej sesja nie idzie dalej. */
+export async function runAnalysis(lid: string) {
+  const { data } = await loopProject(lid);
+  const eng = data.kwota?.snapshot as EngineResult | undefined;
+  const qs = (data.pytania?.questions ?? []) as string[];
+  const ans = (data.pytania?.answers ?? {}) as Record<string, string>;
+  if (!eng || !qs.length || qs.some((_, i) => !String(ans[i] ?? "").trim())) throw new Error("Najpierw odpowiedz na wszystkie pytania.");
+  const text = await claudeAnalysis(eng, (data.pytania?.focus as string) ?? null, qs.map((qq, i) => ({ q: qq, a: String(ans[i]) })));
+  await q("UPDATE loops SET data = $2 WHERE id = $1", [lid, JSON.stringify({ ...data, analiza: { text, at: new Date().toISOString() } })]);
+  return text;
 }
 
 /** Zmiana dźwigni do pogłębienia (np. nr 2 zamiast nr 1) – nowe pytania. */
@@ -501,20 +532,119 @@ export async function rateAction(lid: string, taskId: string, effect: string, ca
   if (carry) await q("INSERT INTO tasks (id, project_id, title, due, review_id, level) VALUES ($1,$2,$3,$4,$5,'przeniesione')", [newId(), projectId, t.title, due && DAY.test(due) ? due : today(), lid]);
 }
 
+/* ---------- Raport (zamrożone liczby z sesji) ---------- */
+
+export interface ReportData {
+  createdAt: string;
+  client: string;
+  project: string;
+  scope: { campaigns: string[]; products: string[] };
+  goal: GoalRow | null;
+  gap: Awaited<ReturnType<typeof gap>> | null;
+  reality: Pick<Awaited<ReturnType<typeof reality>>, "wide" | "widePrev" | "weeks" | "days" | "daily60" | "gaps" | "events">;
+  prediction: Prediction | null;
+  engine: EngineResult | null;
+  focus: string | null;
+  questions: { q: string; a: string }[];
+  questionsSource: string | null;
+  analysis: string | null;
+  decision: Decision | null;
+  verdicts: Decision[];
+  summary: string;
+  counter: Awaited<ReturnType<typeof counter>>;
+}
+
+async function buildReport(lid: string, projectId: string, data: LoopRow["data"]): Promise<ReportData> {
+  const [st, r, settings, names] = await Promise.all([
+    loopState(projectId),
+    reality(projectId),
+    loadSettings(projectId),
+    one<{ project: string; client: string }>("SELECT p.name AS project, c.name AS client FROM projects p JOIN clients c ON c.id = p.client_id WHERE p.id = $1", [projectId]),
+  ]);
+  const g = st.goal ? await gap(projectId, st.goal) : null;
+  const qs = (data.pytania?.questions ?? []) as string[];
+  const ans = (data.pytania?.answers ?? {}) as Record<string, string>;
+  return {
+    createdAt: new Date().toISOString(),
+    client: names?.client ?? "",
+    project: names?.project ?? "",
+    scope: settings.analysisScope ?? settings.economicsScope,
+    goal: st.goal,
+    gap: g,
+    reality: { wide: r.wide, widePrev: r.widePrev, weeks: r.weeks, days: r.days, daily60: r.daily60, gaps: r.gaps, events: r.events },
+    prediction: st.prediction,
+    engine: (data.kwota?.snapshot as EngineResult | undefined) ?? null,
+    focus: (data.pytania?.focus as string | undefined) ?? null,
+    questions: qs.map((qq, i) => ({ q: qq, a: String(ans[i] ?? "") })),
+    questionsSource: (data.pytania?.source as string | undefined) ?? null,
+    analysis: (data.analiza?.text as string | undefined) ?? null,
+    decision: st.decisions.find((d) => d.loop_id === lid) ?? null,
+    verdicts: st.decisions.filter((d) => d.verdict_loop_id === lid),
+    summary: String(data.raport?.summary ?? ""),
+    counter: st.counter,
+  };
+}
+
+/** Podgląd raportu przed zamknięciem sesji (te same dane, które zostaną zapisane). */
+export async function previewReport(lid: string) {
+  const { projectId, data } = await loopProject(lid);
+  return buildReport(lid, projectId, data);
+}
+
 async function finish(lid: string, projectId: string, data: LoopRow["data"]) {
-  const st = await loopState(projectId);
-  const dec = st.decisions.find((d) => d.loop_id === lid);
-  const eng = data.kwota?.snapshot as EngineResult | undefined;
-  const top = eng?.ranking.levers.find((l) => l.value != null);
+  const report = await buildReport(lid, projectId, data);
+  const dec = report.decision;
+  const top = report.engine?.ranking.levers.find((l) => l.value != null);
   const lines = [
-    st.goal ? `Cel: ${Math.round(st.goal.profit_target)} zł profitu (${st.goal.date_from} – ${st.goal.date_to})` : "",
-    top ? `Największa dźwignia: ${top.label} – ${Math.round(top.value!)} zł/mies.${top.lowConfidence ? " (niska pewność)" : ""}` : "",
+    report.goal ? `Cel: ${Math.round(report.goal.profit_target)} zł profitu (${report.goal.date_from} – ${report.goal.date_to})` : "",
+    top ? `Największa dźwignia: ${LEVER_NAMES[top.key].name} – ${Math.round(top.value!)} zł/mies.${top.lowConfidence ? " (niska pewność)" : ""}` : "",
     dec ? `Decyzja: ${dec.what}${dec.expected_month != null ? ` (oczekiwane ${Math.round(dec.expected_month)} zł/mies.)` : ""}, sprawdzenie ${dec.check_date}` : "",
-    data.wnioski?.summary ? `Wniosek: ${data.wnioski.summary}` : "",
+    report.summary ? `Wniosek: ${report.summary}` : "",
   ].filter(Boolean);
   await q(
-    "INSERT INTO timeline_events (id, project_id, day, type, title, description, source, confidence) VALUES ($1,$2,$3,'analiza',$4,$5,'Sesja analityczna','memory')",
-    [newId(), projectId, today(), "Sesja analityczna", lines.join("\n")],
+    "INSERT INTO timeline_events (id, project_id, day, type, title, description, source, link, confidence) VALUES ($1,$2,$3,'analiza',$4,$5,'Sesja analityczna',$6,'memory')",
+    [newId(), projectId, today(), "Sesja analityczna – raport", lines.join("\n"), `report:${lid}`],
   );
-  await q("UPDATE loops SET finished_at = now(), step = $2 WHERE id = $1", [lid, STEPS.length]);
+  await q("UPDATE loops SET finished_at = now(), step = $2, data = $3 WHERE id = $1", [lid, STEPS.length, JSON.stringify({ ...data, report })]);
+}
+
+export async function listReports(projectId: string) {
+  const rows = await q<{ id: string; finished_at: string; report: unknown }>(
+    "SELECT id, to_char(finished_at, 'YYYY-MM-DD') AS finished_at, data->'report' AS report FROM loops WHERE project_id = $1 AND finished_at IS NOT NULL AND data ? 'report' ORDER BY finished_at DESC",
+    [projectId],
+  );
+  return rows.map((r) => {
+    const rep = j<ReportData>(r.report, {} as ReportData);
+    const top = rep.engine?.ranking.levers.find((l) => l.value != null);
+    return {
+      id: r.id, date: r.finished_at,
+      profit: rep.gap?.achieved ?? null, target: rep.goal?.profit_target ?? null,
+      decision: rep.decision?.what ?? null, expected: rep.decision?.expected_month ?? null,
+      lever: top ? { key: top.key, value: top.value } : null,
+    };
+  });
+}
+
+export async function getReport(lid: string) {
+  const r = await one<{ project_id: string; report: unknown; share_token: string | null }>(
+    "SELECT project_id, data->'report' AS report, share_token FROM loops WHERE id = $1 AND finished_at IS NOT NULL",
+    [lid],
+  );
+  return r?.report ? { projectId: r.project_id, report: j<ReportData>(r.report, {} as ReportData), shareToken: r.share_token } : null;
+}
+
+/** Link tylko do odczytu dla klienta (tworzony na żądanie). */
+export async function shareReport(lid: string) {
+  const r = await getReport(lid);
+  if (!r) throw new Error("Brak raportu");
+  if (r.shareToken) return r.shareToken;
+  const token = crypto.randomUUID().replace(/-/g, "");
+  await q("UPDATE loops SET share_token = $2 WHERE id = $1", [lid, token]);
+  return token;
+}
+
+export async function reportByToken(token: string) {
+  if (!/^[a-f0-9]{32}$/.test(token)) return null;
+  const r = await one<{ report: unknown }>("SELECT data->'report' AS report FROM loops WHERE share_token = $1", [token]);
+  return r?.report ? j<ReportData>(r.report, {} as ReportData) : null;
 }

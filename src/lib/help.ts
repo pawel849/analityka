@@ -68,15 +68,15 @@ export const HELP_ARTICLES: HelpArticle[] = [
   },
   {
     id: "przeglad",
-    title: "Sesja analityczna → decyzja w złotówkach",
-    tags: "sesja analiza pętla cel predykcja rzeczywistość luka kwota na stole dźwignia benchmark pytania claude decyzja hipoteza brief kalendarz rozstrzygnięcie wnioski licznik pewność",
+    title: "Sesja analityczna i raporty",
+    tags: "sesja analiza raport raporty cel predykcja luka dźwignia pytania claude decyzja hipoteza plan sprawdzenie pdf link klient przejrzałem",
     body: [
-      "Na pulpicie: „Rozpocznij sesję”. Zawsze 10 kroków od początku do końca: Cel → Predykcja → Rzeczywistość → Luka → Kwota na stole → Pytania → Decyzja → Kalendarz → Rozstrzygnięcie → Wnioski. Następny krok otwiera się po zapisie poprzedniego. Sesji nie da się zamknąć bez decyzji (dopuszczalne „nic nie zmieniam” – z uzasadnieniem i datą).",
-      "Krok 1: cel profitu (ten sam co w Ustawieniach, auto-uzupełniany) i zakres: z których kampanii (koszty, wyświetlenia, kliknięcia) i produktów (zamówienia) liczymy. Zakres zostaje na kolejne sesje.",
-      "Profit = przychód netto − reklamy − koszty zmienne i stałe − podatek (z Ustawień). Krok 2: zanim zobaczysz dane, wpisujesz profit z ostatnich 7 dni i etap, który się pogorszył – krok 3 pokazuje różnicę.",
-      "Kwota na stole: model CPM → CTR (kliknięcia w link) → CR (kliknięcie → zakup) → wartość zakupu (AOV netto + LTV 30, jeśli są dane). Dźwignia = ile zł/mies. więcej przy metryce na poziomie benchmarku (najlepsze 7 dni z 60 spełniające próg próby albo wartości docelowe z Ustawień), przy stałym budżecie i reszcie lejka bez zmian. Poniżej progu próby: „niska pewność” i zakres 90%.",
-      "Pytania (2–3) układane z danych dla wybranej dźwigni; analiza Claude dopiero po Twoich odpowiedziach. Decyzja: co, kto, dlaczego, hipoteza „metryka M z A do B”, wartość oczekiwana z modelu, data sprawdzenia (domyślnie +14 dni). Trafia na oś czasu i do kalendarza; „Generuj brief” kopiuje zlecenie.",
-      "W dniu sprawdzenia decyzja wraca na pulpit: „Miałeś rację?” – wynik metryki od wdrożenia, realny wpływ w zł/mies. (model: tylko ta metryka się zmienia), wniosek jednym zdaniem. Trafiona zmiana z zyskiem trafia do zwycięskich elementów. Licznik na pulpicie: suma zweryfikowanych zł, trafność hipotez, średni błąd predykcji.",
+      "Pulpit klienta ma dwie rzeczy: „Rozpocznij nową sesję” i „Raporty”. Pozostałe narzędzia (mapy, testy reklam, kalendarz, dane, ustawienia) są pod „⋯”.",
+      "Sesja idzie zawsze od początku do końca: Cel i zakres → Twoja predykcja → Wynik vs cel → Luka → Gdzie leżą pieniądze → Pytania → Analiza Claude → Decyzja → Plan działań → Sprawdzenie decyzji → Raport. Przerwać można (pauza) – wracasz w to samo miejsce.",
+      "Raport powstaje na końcu sesji i zapisuje liczby z tego dnia – za tydzień zobaczysz, jak było wtedy. Raport można pobrać jako PDF i wysłać klientowi linkiem tylko do odczytu.",
+      "Gdy jest poprzedni raport, nowej sesji nie zaczniesz bez wpisania „przejrzałem poprzedni raport”.",
+      "Profit = przychód netto − reklamy − koszty zmienne i stałe − podatek (z Ustawień). Dźwignie: model wyświetlenia → kliknięcia → zakupy → koszyk; każda pokazuje, ile zł miesięcznie dałby powrót do najlepszego tygodnia (budżet stały). Mało danych = zakres zamiast jednej liczby.",
+      "Pytania i analizę pisze Claude na podstawie liczb sesji i Twoich odpowiedzi (wymaga klucza ANTHROPIC_API_KEY na serwerze). Bez analizy sesja nie idzie dalej.",
     ],
   },
   {

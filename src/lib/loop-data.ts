@@ -165,8 +165,18 @@ export async function gap(projectId: string, goal: GoalRow) {
   const needFromNow = left > 0 ? (goal.profit_target - achieved) / left : null;
   const pacePerDay = elapsed > 0 ? achieved / elapsed : null;
   const sources = await dataSources(projectId);
+  // profit narastająco dzień po dniu (do wykresu celu)
+  const series: { day: string; cum: number }[] = [];
+  if (started) {
+    let cum = 0;
+    for (let t = d(goal.date_from); t <= d(end); t += DAY) {
+      cum += money(c, iso(t), iso(t)).profit;
+      series.push({ day: iso(t), cum });
+    }
+  }
   return {
     goal,
+    series,
     achieved,
     money: done,
     totalDays, elapsed, left,

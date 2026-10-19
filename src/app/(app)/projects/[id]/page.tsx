@@ -1,23 +1,20 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { Planner } from "@/components/dashboard/Planner";
-import { LoopStart } from "@/components/loop/LoopStart";
-import { TOOL_ICONS } from "@/components/shell/tool-icons";
-import { LEGACY_TABS, TOOLS, projectHref } from "@/lib/nav";
+import { SessionHome } from "@/components/loop/SessionHome";
+import { LEGACY_TABS, projectHref } from "@/lib/nav";
 import { loadProject } from "@/lib/project-context";
 
-/** Pulpit projektu: same przyciski do narzędzi (+ przekierowanie starych adresów ?tab=…). */
-export default async function ProjectHome({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; analiza?: string }> }) {
+/** Pulpit klienta: nowa sesja + raporty (+ przekierowanie starych adresów ?tab=…). */
+export default async function ProjectHome({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
-  const { tab, analiza } = await searchParams;
+  const { tab } = await searchParams;
   if (tab && LEGACY_TABS[tab]) redirect(projectHref(id, LEGACY_TABS[tab]) + (tab === "integracje" ? "?s=api" : ""));
   const project = await loadProject(id);
   if (!project) notFound();
-  const guideActive = project.setup.mode === "guided" && !project.setup.done && !project.setup.hidden;
   return (
     <>
-      <header className="tool-head">
+      <header className="tool-head sh-head">
         <div className="tool-title">
           <Link href="/" className="back-btn" title="Wróć do klientów" aria-label="Wróć do klientów"><ArrowLeft size={20} /></Link>
           <div>
@@ -26,34 +23,7 @@ export default async function ProjectHome({ params, searchParams }: { params: Pr
           </div>
         </div>
       </header>
-      <LoopStart projectId={id} finished={analiza === "zakonczona"} />
-      <div className="cfg-row">
-        <span className="cfg-label">Warsztat</span>
-        {TOOLS.filter((t) => t.key === "lejki" || t.key === "testy").map((t) => {
-          const Icon = TOOL_ICONS[t.key];
-          return (
-            <Link key={t.key} href={projectHref(id, t.key)} className="cfg-tile" data-tour={`nav-${t.key}`}>
-              <Icon size={18} /> {t.key === "lejki" ? "Etapy lejka (mapy)" : "Testy reklam – nazwy i UTM"}
-            </Link>
-          );
-        })}
-      </div>
-      <div className="cfg-row">
-        <span className="cfg-label">Konfiguracja</span>
-        {TOOLS.filter((t) => t.section === "dane").map((t) => {
-          const Icon = TOOL_ICONS[t.key];
-          return (
-            <Link key={t.key} href={projectHref(id, t.key)} className="cfg-tile" data-tour={`nav-${t.key}`}>
-              <Icon size={18} /> {t.label}
-              {t.key === "przewodnik" && guideActive && <span className="pulpit-dot" title="Przewodnik w toku" />}
-            </Link>
-          );
-        })}
-      </div>
-      <section className="section" id="kalendarz">
-        <h2>Kalendarz</h2>
-        <Planner projectId={id} />
-      </section>
+      <SessionHome projectId={id} />
     </>
   );
 }

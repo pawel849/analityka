@@ -2,77 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, CircleCheck, Flag, Lock, Minus, Pause, Sparkles, Target, X,
+  ArrowLeft, ArrowRight, Calendar, CalendarDays, CalendarRange, Check, CircleAlert, CircleCheck, Eye, FlaskConical, Flag, Gift, Globe, Loader2,
+  Megaphone, MousePointerClick, MoreHorizontal, Pause, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
 } from "lucide-react";
 import { api } from "../forms";
-import { Tip } from "../Tip";
-import { hypothesisValue, improve, METRICS, modelProfit, type MetricKey } from "@/lib/levers";
-import { ELEMENTS, NO_CHANGE, STEPS } from "@/lib/loop-def";
-import type { LoopState } from "@/lib/loop";
+import { hypothesisValue, improve, METRICS, type MetricKey } from "@/lib/levers";
+import { ELEMENTS, LEVER_NAMES, NO_CHANGE, STEPS } from "@/lib/loop-def";
+import type { LoopState, ReportData } from "@/lib/loop";
 import type { EngineResult } from "@/lib/loop-data";
-import { CopyBrief, DecisionCard, DecisionTasks, fm, plus, range, Verdict, Waiting, zl, zlSigned } from "./Decisions";
+import { DecisionCard, DecisionTasks, CopyBrief, Deadline, Verdict } from "./Decisions";
+import { LeverBars, PredictionVs, ReportView, stageName } from "./ReportView";
+import {
+  DataGaps, dayLabel, fm, formatAmount, GoalChart, MoneyInput, PaceBars, plus, ProfitBars, range, RichText, zl, zlSigned, type GoalGap,
+} from "./ui";
 
-const pct = (v: number | null | undefined, dd = 1) => (v == null || !Number.isFinite(v) ? "—" : `${(v * 100).toLocaleString("pl-PL", { maximumFractionDigits: dd })}%`);
-const num = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : Math.round(v).toLocaleString("pl-PL"));
-
-function Arrow({ now, prev, invert }: { now: number | null | undefined; prev: number | null | undefined; invert?: boolean }) {
-  if (now == null || prev == null || !prev) return <span className="lp-arrow"><Minus size={14} /></span>;
-  const flat = Math.abs(now - prev) / Math.abs(prev) < 0.01;
-  const up = now > prev;
-  const good = invert ? !up : up;
-  const I = flat ? Minus : up ? ArrowUpRight : ArrowDownRight;
-  return <span className={`lp-arrow ${flat ? "" : good ? "up" : "down"}`} title="vs poprzedni okres"><I size={14} />{flat ? "" : pct(Math.abs((now - prev) / Math.abs(prev)), 0)}</span>;
-}
-
-interface Gap {
-  goal: { period: string; date_from: string; date_to: string; profit_target: number; approved_by: string };
-  achieved: number;
-  totalDays: number;
-  elapsed: number;
-  left: number;
-  target: number;
-  gap: number;
-  needPerDay: number;
-  needPerWeek: number;
-  needFromNow: number | null;
-  pacePerDay: number | null;
-  forecast: number | null;
-  gaps: string[];
-}
-
-/** Stały pasek celu: profit vs cel, tempo, luka, prognoza „duch”. */
-export function GoalBar({ g }: { g: Gap | null }) {
-  if (!g) return <div className="gb gb-empty"><Target size={16} /> Brak celu profitu – ustawisz go w kroku 1 albo w Ustawieniach.</div>;
-  const share = g.target > 0 ? Math.max(0, Math.min(1, g.achieved / g.target)) : 0;
-  const timeShare = g.totalDays ? g.elapsed / g.totalDays : 0;
-  const fShare = g.forecast != null && g.target > 0 ? Math.max(0, Math.min(1.2, g.forecast / g.target)) : null;
-  return (
-    <div className="gb">
-      <div className="gb-nums">
-        <span><em>Profit</em><b>{zl(g.achieved)}</b><small>z {zl(g.target)}</small></span>
-        <span><em>Luka</em><b className={g.gap > 0 ? "neg" : "pos"}>{zl(g.gap)}</b></span>
-        <span><em>Tempo teraz</em><b>{zl(g.pacePerDay)}/dz.</b></span>
-        <span><em>Potrzebne od dziś</em><b>{zl(g.needFromNow)}/dz.</b></span>
-        <span className="gb-ghost" title="Prosta ekstrapolacja obecnego tempa – nie model, tylko orientacyjnie."><em>Prognoza</em><b>{zl(g.forecast)}</b></span>
-      </div>
-      <div className="gb-track" title={`${g.elapsed} z ${g.totalDays} dni okresu`}>
-        <i className="gb-fill" style={{ width: `${share * 100}%` }} />
-        {fShare != null && <i className="gb-fc" style={{ width: `${Math.min(1, fShare) * 100}%` }} />}
-        <i className="gb-time" style={{ left: `${timeShare * 100}%` }} />
-      </div>
-      <div className="gb-foot">{g.goal.date_from} – {g.goal.date_to} · dzień {g.elapsed}/{g.totalDays}</div>
-    </div>
-  );
-}
+const LEVER_ICON: Record<string, typeof Eye> = { cpm: Eye, ctr: MousePointerClick, cr: ShoppingCart, aov: Wallet };
 
 /* ---------- główny komponent ---------- */
 
 export function LoopRunner({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [st, setSt] = useState<LoopState | null>(null);
-  const [g, setG] = useState<Gap | null>(null);
+  const [g, setG] = useState<GoalGap | null>(null);
   const [view, setView] = useState<number | null>(null);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [miss, setMiss] = useState<string[]>([]);
@@ -81,18 +34,18 @@ export function LoopRunner({ projectId }: { projectId: string }) {
   const load = useCallback(async () => {
     const s = await api<LoopState>(`/api/projects/${projectId}/loop`);
     if (!s.active) {
-      await api(`/api/projects/${projectId}/loop`, "POST");
-      return load();
+      router.replace(`/projects/${projectId}`);
+      return;
     }
     setSt(s);
-    setG(await api<Gap | null>(`/api/projects/${projectId}/loop/gap`));
-  }, [projectId]);
+    setG(await api<GoalGap | null>(`/api/projects/${projectId}/loop/gap`));
+  }, [projectId, router]);
   useEffect(() => {
     load().catch((e) => setErr(e.message));
   }, [load]);
 
   if (err && !st) return <p className="error">{err}</p>;
-  if (!st?.active) return <p>Wczytuję…</p>;
+  if (!st?.active) return <p className="ss-load"><Loader2 className="spin" size={18} /> Wczytuję…</p>;
   const loop = st.active;
   const step = view ?? Math.min(loop.step, STEPS.length - 1);
   const S = STEPS[step];
@@ -116,7 +69,7 @@ export function LoopRunner({ projectId }: { projectId: string }) {
         return;
       }
       if (r.finished) {
-        router.push(`/projects/${projectId}?analiza=zakonczona`);
+        router.push(`/projects/${projectId}/raporty/${loop.id}`);
         return;
       }
       await load();
@@ -134,54 +87,41 @@ export function LoopRunner({ projectId }: { projectId: string }) {
     await load();
   };
   const props: StepProps = { projectId, st, g, val, set, reload: load, loopId: loop.id, saveDraft };
+  const nextLabel = step === STEPS.length - 1 ? "Zapisz raport i zakończ" : `Dalej: ${STEPS[step + 1].title}`;
 
   return (
-    <div className="lp">
-      <div className="lp-top">
-        <Link href={`/projects/${projectId}`} className="back-btn" title="Przerwij – wrócisz do tego kroku" aria-label="Przerwij"><Pause size={18} /></Link>
-        <ol className="lp-steps">
-          {STEPS.map((s, i) => {
-            const done = i < loop.step;
-            const open = i <= loop.step;
-            return (
-              <li key={s.key} className={`${i === step ? "on" : ""} ${done ? "done" : ""} ${open ? "" : "lock"}`}>
-                <button disabled={!open} onClick={() => open && saveDraft().then(() => go(i))} title={open ? s.title : "Najpierw zakończ wcześniejsze kroki"}>
-                  <span>{done ? <Check size={11} /> : open ? i + 1 : <Lock size={10} />}</span>
-                  {s.title}
-                </button>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
-      {step >= 2 && <GoalBar g={g} />}
-      <section className="lp-step">
-        <div className="lp-step-head">
-          <span className="lp-n">Krok {step + 1}</span>
-          <h1>{S.question}</h1>
+    <div className="ss">
+      <div className="ss-top">
+        <Link href={`/projects/${projectId}`} className="back-btn" title="Przerwij – wrócisz w to samo miejsce" aria-label="Przerwij"><Pause size={18} /></Link>
+        <div className="ss-prog" aria-label={`Postęp sesji: ${step + 1} z ${STEPS.length}`}>
+          {STEPS.map((s, i) => <i key={s.key} className={i < loop.step ? "done" : i === step ? "on" : ""} />)}
         </div>
+      </div>
+      <h1 className="ss-title">{S.title}</h1>
+      <section className="ss-body">
         {S.key === "cel" && <StepGoal {...props} />}
         {S.key === "predykcja" && <StepPredict {...props} />}
         {S.key === "rzeczywistosc" && <StepReality {...props} />}
         {S.key === "luka" && <StepGap {...props} />}
         {S.key === "kwota" && <StepMoney {...props} />}
         {S.key === "pytania" && <StepQuestions {...props} />}
+        {S.key === "analiza" && <StepAnalysis {...props} />}
         {S.key === "decyzja" && <StepDecision {...props} />}
         {S.key === "kalendarz" && <StepCalendar {...props} />}
         {S.key === "rozstrzygniecie" && <StepVerdict {...props} />}
-        {S.key === "wnioski" && <StepLearn {...props} />}
+        {S.key === "raport" && <StepReport {...props} />}
       </section>
       {miss.length > 0 && (
         <div className="lp-miss">
-          <b><CircleAlert size={16} /> Krok niewykonany – brakuje:</b>
+          <b><CircleAlert size={16} /> Brakuje:</b>
           <ul>{miss.map((m) => <li key={m}>{m}</li>)}</ul>
         </div>
       )}
       {err && <p className="error">{err}</p>}
       <div className="lp-nav">
-        {step > 0 ? <button className="btn" onClick={() => saveDraft().then(() => go(step - 1))}><ArrowLeft size={15} /> {STEPS[step - 1].title}</button> : <span />}
+        {step > 0 ? <button className="btn" onClick={() => saveDraft().then(() => go(step - 1))}><ArrowLeft size={15} /> Wstecz</button> : <span />}
         <button className="btn primary big" disabled={busy} onClick={next}>
-          {step === STEPS.length - 1 ? <><CircleCheck size={16} /> Zakończ sesję i wróć do celu</> : <>Zapisz i dalej: {STEPS[step + 1].title} <ArrowRight size={16} /></>}
+          {busy ? <Loader2 className="spin" size={16} /> : step === STEPS.length - 1 ? <CircleCheck size={16} /> : null} {nextLabel} {step < STEPS.length - 1 && <ArrowRight size={16} />}
         </button>
       </div>
     </div>
@@ -192,7 +132,7 @@ interface StepProps {
   projectId: string;
   loopId: string;
   st: LoopState;
-  g: Gap | null;
+  g: GoalGap | null;
   val: <T>(k: string, d: T) => T;
   set: (k: string, v: unknown) => void;
   reload: () => Promise<void>;
@@ -201,7 +141,13 @@ interface StepProps {
 
 const snapshotOf = (st: LoopState) => (st.active?.data.kwota?.snapshot ?? null) as EngineResult | null;
 
-/* ---------- Krok 1: Cel + zakres ---------- */
+/* ---------- 1. Cel i zakres ---------- */
+
+const PERIODS = [
+  { key: "miesiąc", icon: Calendar },
+  { key: "kwartał", icon: CalendarRange },
+  { key: "rok", icon: CalendarDays },
+] as const;
 
 function periodRange(p: string, base = new Date()): [string, string] {
   const y = base.getFullYear(), m = base.getMonth();
@@ -211,35 +157,54 @@ function periodRange(p: string, base = new Date()): [string, string] {
   return [f(new Date(y, m, 1)), f(new Date(y, m + 1, 0))];
 }
 
+/** Okres jako pasek z dzisiejszym dniem. */
+function PeriodBar({ from, to }: { from: string; to: string }) {
+  const a = Date.parse(`${from}T00:00:00`), b = Date.parse(`${to}T23:59:59`), now = Date.now();
+  const share = Math.max(0, Math.min(1, (now - a) / (b - a)));
+  return (
+    <div className="prd">
+      <div className="prd-track"><i style={{ width: `${share * 100}%` }} /><b style={{ left: `${share * 100}%` }} title="dziś" /></div>
+      <div className="prd-x"><span>{dayLabel(from)}</span><span>dziś</span><span>{dayLabel(to)}</span></div>
+    </div>
+  );
+}
+
 export function GoalForm({ projectId, last, onSaved, onCancel }: { projectId: string; last: LoopState["lastGoal"]; onSaved: () => void; onCancel?: () => void }) {
-  // Auto-uzupełnienie: ten sam typ okresu i ta sama kwota co ostatnio – na bieżący okres.
   const p0 = last?.period && ["miesiąc", "kwartał", "rok"].includes(last.period) ? last.period : "miesiąc";
   const [period, setPeriod] = useState(p0);
   const [[from, to], setRange] = useState(periodRange(p0));
-  const [target, setTarget] = useState(last ? String(Math.round(last.profit_target)) : "");
+  const [target, setTarget] = useState<number | null>(last ? Math.round(last.profit_target) : null);
+  const [dirty, setDirty] = useState(!last);
   const [err, setErr] = useState("");
   const save = async () => {
     setErr("");
     try {
-      await api(`/api/projects/${projectId}/goals`, "POST", { period, date_from: from, date_to: to, profit_target: Number(target.replace(/\s/g, "").replace(",", ".")) });
+      await api(`/api/projects/${projectId}/goals`, "POST", { period, date_from: from, date_to: to, profit_target: target });
+      setDirty(false);
       onSaved();
     } catch (x) {
       setErr((x as Error).message);
     }
   };
   return (
-    <div className="lp-card">
-      <label className="lp-l">Okres celu</label>
-      <div className="seg">
-        {["miesiąc", "kwartał", "rok"].map((p) => (
-          <button key={p} className={period === p ? "on" : ""} onClick={() => { setPeriod(p); setRange(periodRange(p)); }}>{p}</button>
+    <div className="gf">
+      <div className="gf-periods">
+        {PERIODS.map(({ key, icon: I }) => (
+          <button key={key} className={`tile ${period === key ? "on" : ""}`} onClick={() => { setPeriod(key); setRange(periodRange(key)); setDirty(true); }}>
+            <I size={22} /> {key}
+          </button>
         ))}
       </div>
-      <div className="row"><input type="date" value={from} onChange={(e) => setRange([e.target.value, to])} /> – <input type="date" value={to} onChange={(e) => setRange([from, e.target.value])} /></div>
-      <label className="lp-l">Cel profitu (zł) <Tip text="Profit po wszystkim = przychód netto − reklamy − koszty zmienne i stałe − podatek (z Ustawień klienta)." /></label>
-      <div className="money-input"><input inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} /><span>zł</span></div>
+      <PeriodBar from={from} to={to} />
+      <div className="gf-amount">
+        <span>Cel profitu</span>
+        <MoneyInput big value={target} onChange={(v) => { setTarget(v); setDirty(true); }} ariaLabel="Cel profitu" />
+      </div>
       {err && <p className="error">{err}</p>}
-      <div className="row"><button className="btn primary" disabled={!target.trim()} onClick={save}><Check size={15} /> Zapisz cel</button>{onCancel && <button className="btn" onClick={onCancel}>Anuluj</button>}</div>
+      <div className="row">
+        <button className={`btn primary ${dirty && target ? "pulse" : ""}`} disabled={!target} onClick={save}><Check size={15} /> Zapisz cel</button>
+        {onCancel && <button className="btn" onClick={onCancel}>Anuluj</button>}
+      </div>
     </div>
   );
 }
@@ -249,52 +214,66 @@ function ScopePicker({ projectId, st, reload }: { projectId: string; st: LoopSta
   const init = st.scope ?? st.economicsScope;
   const [camps, setCamps] = useState<string[]>(init.campaigns);
   const [prods, setProds] = useState<string[]>(init.products);
-  const [saved, setSaved] = useState(!!st.scope);
+  const [saving, setSaving] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     api<NonNullable<typeof lists>>(`/api/projects/${projectId}/loop/scope`).then(setLists).catch(() => {});
   }, [projectId]);
-  const toggle = (xs: string[], x: string, f: (v: string[]) => void) => { f(xs.includes(x) ? xs.filter((y) => y !== x) : [...xs, x]); setSaved(false); };
-  const save = async () => {
-    await api(`/api/projects/${projectId}/loop/scope`, "PUT", { campaigns: camps, products: prods });
-    setSaved(true);
-    await reload();
+  // pierwsze wejście: zapisz zakres od razu (nic nie trzeba zatwierdzać)
+  useEffect(() => {
+    if (!st.scope) api(`/api/projects/${projectId}/loop/scope`, "PUT", { campaigns: init.campaigns, products: init.products }).then(reload).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const persist = (c: string[], p: string[]) => {
+    setSaving(true);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      await api(`/api/projects/${projectId}/loop/scope`, "PUT", { campaigns: c, products: p });
+      setSaving(false);
+    }, 500);
   };
-  if (!lists) return <div className="lp-card"><p>Wczytuję kampanie i produkty…</p></div>;
-  const Pick = ({ title, tip, items, sel, setSel }: { title: string; tip: string; items: { name: string; sub: string }[]; sel: string[]; setSel: (v: string[]) => void }) => (
-    <div className="sc-col">
-      <div className="sc-head">
-        <b>{title} <Tip text={tip} /></b>
-        <button className={`chip ${sel.length === 0 ? "on" : ""}`} onClick={() => { setSel([]); setSaved(false); }}>wszystko</button>
+  if (!lists) return <div className="sc2"><p className="ss-load"><Loader2 className="spin" size={16} /> Wczytuję kampanie i produkty…</p></div>;
+  const Col = ({ title, items, sel, setSel, other }: { title: string; items: { name: string; sub: string }[]; sel: string[]; setSel: (v: string[]) => void; other: (v: string[]) => void }) => {
+    const names = items.map((i) => i.name);
+    const all = sel.length === 0;
+    const isOn = (n: string) => all || sel.includes(n);
+    const apply = (next: string[]) => {
+      const norm = next.length >= names.length && names.every((n) => next.includes(n)) ? [] : next;
+      setSel(norm);
+      other(norm);
+    };
+    const toggle = (n: string) => apply(all ? names.filter((x) => x !== n) : sel.includes(n) ? sel.filter((x) => x !== n) : [...sel, n]);
+    const count = all ? names.length : sel.filter((s) => names.includes(s)).length;
+    return (
+      <div className="sc2-col">
+        <div className="sc2-head">
+          <b>{title}</b>
+          <span className="sc2-count">{all ? "" : `${count} z ${names.length}`}</span>
+          <button className={`sc2-all ${all ? "on" : ""}`} onClick={() => apply(all ? [] : [])} disabled={all}>{all ? <><CircleCheck size={14} /> wszystkie</> : "zaznacz wszystkie"}</button>
+        </div>
+        <div className="sc2-grid">
+          {items.map((x) => (
+            <button key={x.name} className={`sc2-item ${isOn(x.name) ? "on" : ""}`} onClick={() => toggle(x.name)} aria-pressed={isOn(x.name)}>
+              <span className="sc2-check">{isOn(x.name) && <Check size={14} />}</span>
+              <span className="sc2-name">{x.name}</span>
+              <small>{x.sub}</small>
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="sc-list">
-        {items.map((x) => (
-          <label key={x.name} className={`sc-item ${sel.includes(x.name) ? "on" : ""}`}>
-            <input type="checkbox" checked={sel.includes(x.name)} onChange={() => toggle(sel, x.name, setSel)} />
-            <span>{x.name}</span><small>{x.sub}</small>
-          </label>
-        ))}
-        {sel.filter((s) => !items.some((x) => x.name === s)).map((s) => (
-          <label key={s} className="sc-item on old"><input type="checkbox" checked onChange={() => toggle(sel, s, setSel)} /><span>{s}</span><small>brak w ostatnich 60 dniach</small></label>
-        ))}
-      </div>
-    </div>
-  );
+    );
+  };
   return (
-    <div className="lp-card">
-      <h3>Z czego liczymy</h3>
-      <div className="sc">
-        <Pick title="Kampanie" tip="Koszty, wyświetlenia i kliknięcia tylko z zaznaczonych kampanii. Nic nie zaznaczone = wszystkie." items={lists.campaigns.map((c) => ({ name: c.name, sub: `${c.platform} · ${zl(c.spend)}` }))} sel={camps} setSel={setCamps} />
-        <Pick title="Produkty" tip="Zamówienia zawierające zaznaczone produkty (cała wartość zamówienia). Nic nie zaznaczone = wszystkie zamówienia." items={lists.products.map((p) => ({ name: p.name, sub: p.gross == null ? "" : zl(p.gross) }))} sel={prods} setSel={setProds} />
-      </div>
-      <div className="row">
-        <button className="btn primary" onClick={save}><Check size={15} /> Zatwierdź zakres</button>
-        {saved && <span className="saved"><CircleCheck size={15} /> zakres zapisany – zostanie na kolejne sesje</span>}
+    <div className="sc2">
+      <div className="sc2-title"><b>Z czego liczymy</b>{saving ? <span className="saving"><Loader2 className="spin" size={13} /> zapisuję</span> : <span className="saved"><CircleCheck size={14} /> zapisane</span>}</div>
+      <div className="sc2-cols">
+        <Col title="Kampanie" items={lists.campaigns.map((c) => ({ name: c.name, sub: zl(c.spend) }))} sel={camps} setSel={setCamps} other={(c) => persist(c, prods)} />
+        <Col title="Produkty" items={lists.products.map((p) => ({ name: p.name, sub: p.gross == null ? "" : zl(p.gross) }))} sel={prods} setSel={setProds} other={(p) => persist(camps, p)} />
       </div>
     </div>
   );
 }
 
-function StepGoal({ projectId, loopId, st, g, val, reload }: StepProps) {
+function StepGoal({ projectId, loopId, st, val, reload }: StepProps) {
   const [edit, setEdit] = useState(!st.goal);
   const ratings = val<Record<string, { effect?: string; carry?: boolean }>>("ratings", {});
   const rate = async (taskId: string, effect: string, carry = false) => {
@@ -302,17 +281,17 @@ function StepGoal({ projectId, loopId, st, g, val, reload }: StepProps) {
     await reload();
   };
   return (
-    <div className="lp-body">
+    <div className="ss-stack">
       {st.prev && st.prevActions.length > 0 && (
-        <div className="lp-card copper">
-          <h3><Flag size={16} /> Rozliczenie działań z poprzedniej sesji ({st.prev.finished_at})</h3>
+        <div className="card-s copper">
+          <h3><Flag size={16} /> Działania z poprzedniej sesji</h3>
           <ul className="lp-rate">
             {st.prevActions.map((a) => {
               const r = ratings[a.id];
               return (
                 <li key={a.id} className={r?.effect ? "rated" : ""}>
-                  <span className={`lp-done ${a.done ? "y" : "n"}`}>{a.done ? <CircleCheck size={15} /> : <X size={15} />} {a.done ? "zrobione" : "niezrobione"}</span>
-                  <span className="lp-rate-t">{a.title}<small>do {a.due}</small></span>
+                  <span className={`lp-done ${a.done ? "y" : "n"}`}>{a.done ? <CircleCheck size={15} /> : <X size={15} />}</span>
+                  <span className="lp-rate-t">{a.title}</span>
                   <span className="seg small">
                     {(a.done ? ["pomogło", "nie pomogło", "za wcześnie"] : ["porzucam", "przenoszę"]).map((e) => (
                       <button key={e} className={r?.effect === e ? "on" : ""} onClick={() => rate(a.id, e, e === "przenoszę")}>{e}</button>
@@ -324,262 +303,177 @@ function StepGoal({ projectId, loopId, st, g, val, reload }: StepProps) {
           </ul>
         </div>
       )}
-      {!edit && st.goal ? (
-        <div className="lp-card">
-          <div className="lp-goal">
-            <span><em>Cel profitu</em><b>{zl(st.goal.profit_target)}</b></span>
-            <span><em>Okres</em><b>{st.goal.period}: {st.goal.date_from} – {st.goal.date_to}</b></span>
-            <span><em>Tempo potrzebne</em><b>{zl(g?.needPerWeek)}/tydz. · {zl(g?.needPerDay)}/dz.</b></span>
+      <div className="card-s">
+        {!edit && st.goal ? (
+          <div className="gf-done">
+            <div><em>Cel profitu ({st.goal.period})</em><b>{zl(st.goal.profit_target)}</b></div>
+            <PeriodBar from={st.goal.date_from} to={st.goal.date_to} />
+            <button className="btn small" onClick={() => setEdit(true)}>Zmień</button>
           </div>
-          <button className="btn small" onClick={() => setEdit(true)}>Zmień cel</button>
-        </div>
-      ) : (
-        <GoalForm projectId={projectId} last={st.goal ?? st.lastGoal} onSaved={() => { setEdit(false); reload(); }} onCancel={st.goal ? () => setEdit(false) : undefined} />
-      )}
+        ) : (
+          <GoalForm projectId={projectId} last={st.goal ?? st.lastGoal} onSaved={() => { setEdit(false); reload(); }} onCancel={st.goal ? () => setEdit(false) : undefined} />
+        )}
+      </div>
       <ScopePicker projectId={projectId} st={st} reload={reload} />
     </div>
   );
 }
 
-/* ---------- Krok 2: Predykcja ---------- */
+/* ---------- 2. Predykcja ---------- */
 
-const STAGE_OPTIONS = [...METRICS.map((m) => ({ key: m.key as string, label: `${m.stage} (${m.label.split(" ")[0]})` })), { key: "żaden", label: "Żaden się nie pogorszył" }];
-const stageLabel = (k: string | null | undefined) => (k == null ? "brak danych" : STAGE_OPTIONS.find((o) => o.key === k)?.label ?? k);
+const STAGE_OPTIONS = [
+  { key: "cpm", icon: Eye }, { key: "ctr", icon: MousePointerClick }, { key: "cr", icon: ShoppingCart }, { key: "aov", icon: Wallet }, { key: "żaden", icon: CircleCheck },
+] as const;
 
-function StepPredict({ loopId, st, reload }: StepProps) {
+function StepPredict({ st, g, val, set }: StepProps) {
   const p = st.prediction;
-  const [profit, setProfit] = useState(p ? String(Math.round(p.profit_guess)) : "");
-  const [stage, setStage] = useState(p?.stage_guess ?? "");
-  const [err, setErr] = useState("");
-  const [ok, setOk] = useState(!!p);
-  const save = async () => {
-    setErr("");
-    try {
-      await api(`/api/loops/${loopId}/prediction`, "POST", { profit: Number(profit.replace(/\s/g, "").replace(",", ".")), stage });
-      setOk(true);
-      await reload();
-    } catch (x) {
-      setErr((x as Error).message);
-    }
-  };
+  const weekly = g ? (g.target / Math.max(1, g.totalDays)) * 7 : 5000;
+  const step = weekly > 20000 ? 500 : weekly > 2000 ? 100 : 10;
+  const min = -Math.ceil((weekly * 1.5) / step) * step;
+  const max = Math.ceil((weekly * 3) / step) * step;
+  const profit = val<number | null>("profit_guess", p?.profit_guess ?? null);
+  const stage = val<string>("stage_guess", p?.stage_guess ?? "");
+  const locked = (st.active?.step ?? 0) > 1;
   return (
-    <div className="lp-body">
-      <div className="lp-card">
-        <label className="lp-l">Ile wyniósł profit w ostatnim tygodniu (7 pełnych dni)?</label>
-        <div className="money-input"><input inputMode="decimal" value={profit} onChange={(e) => { setProfit(e.target.value); setOk(false); }} /><span>zł</span></div>
-        <label className="lp-l">Który etap lejka się pogorszył (ostatnie 7 dni vs poprzednie 7)?</label>
-        <div className="lever-grid">
-          {STAGE_OPTIONS.map((o) => (
-            <button key={o.key} className={`lever ${stage === o.key ? "on" : ""}`} onClick={() => { setStage(o.key); setOk(false); }}>
-              <b>{o.label}</b>{stage === o.key && <CircleCheck size={18} className="lever-ok" />}
+    <div className="ss-stack">
+      <div className="card-s pd">
+        <h3>Ile zarobiłeś na czysto w ostatnich 7 dniach?</h3>
+        <div className="pd-value">{profit == null ? "?" : `${formatAmount(Math.round(profit))} zł`}</div>
+        <input type="range" className="pd-slider" min={min} max={max} step={step} value={profit ?? 0} disabled={locked} onChange={(e) => set("profit_guess", Number(e.target.value))} aria-label="Profit tygodnia" />
+        <div className="pd-scale"><span>{formatAmount(min)} zł</span><span>0</span><span>{formatAmount(max)} zł</span></div>
+        {!locked && <div className="pd-exact"><span>albo wpisz</span><MoneyInput allowNegative value={profit} onChange={(v) => set("profit_guess", v)} ariaLabel="Profit tygodnia" /></div>}
+      </div>
+      <div className="card-s">
+        <h3>Co się pogorszyło w ostatnim tygodniu?</h3>
+        <div className="pd-stages">
+          {STAGE_OPTIONS.map(({ key, icon: I }) => (
+            <button key={key} disabled={locked} className={`tile ${stage === key ? "on" : ""}`} onClick={() => set("stage_guess", key)}>
+              <I size={26} />
+              <b>{key === "żaden" ? "Nic" : LEVER_NAMES[key].name}</b>
+              {key !== "żaden" && <small>{LEVER_NAMES[key].short}</small>}
             </button>
           ))}
         </div>
-        {err && <p className="error">{err}</p>}
-        <div className="row">
-          <button className="btn primary" disabled={!profit.trim() || !stage} onClick={save}><Check size={15} /> Zapisz predykcję</button>
-          {ok && <span className="saved"><CircleCheck size={15} /> zapisana – po przejściu dalej nie da się jej zmienić</span>}
-        </div>
       </div>
     </div>
   );
 }
 
-/* ---------- Krok 3: Rzeczywistość ---------- */
+/* ---------- 3. Wynik vs cel ---------- */
 
-interface Money { from: string; to: string; revenue: number; spend: number; profit: number; orders: number; variableCosts: number; fixedCosts: number; tax: number }
-interface Reality {
-  wide: Money; widePrev: Money; weeks: Money[]; days: Money[]; daily60: Money[];
-  events: { day: string; title: string }[];
-  gaps: string[];
-  sourceOf: { revenue: string | null; spend: string | null };
-}
+interface Money { from: string; to: string; profit: number }
+interface Reality { weeks: Money[]; days: Money[]; daily60: Money[]; gaps: string[] }
 
-function ProfitLine({ rows, events }: { rows: Money[]; events: { day: string; title: string }[] }) {
-  const w = 900, h = 180;
-  const vals = rows.map((r) => r.profit);
-  const min = Math.min(0, ...vals);
-  const top = Math.max(0, ...vals);
-  const span = top - min || 1;
-  const x = (i: number) => (i / Math.max(1, rows.length - 1)) * w;
-  const y = (v: number) => h - ((v - min) / span) * (h - 10) - 5;
+function GoalHero({ g }: { g: GoalGap }) {
   return (
-    <svg viewBox={`0 0 ${w} ${h + 18}`} width="100%" role="img" aria-label="Profit dzień po dniu">
-      <line x1={0} x2={w} y1={y(0)} y2={y(0)} stroke="var(--border)" />
-      {events.map((e) => {
-        const i = rows.findIndex((r) => r.from === e.day);
-        return i < 0 ? null : <g key={e.day + e.title}><line x1={x(i)} x2={x(i)} y1={0} y2={h} stroke="#c2683c" strokeDasharray="3 4" /><title>{e.day}: {e.title}</title></g>;
-      })}
-      <polyline points={rows.map((r, i) => `${x(i)},${y(r.profit)}`).join(" ")} fill="none" stroke="var(--accent)" strokeWidth={2.2} strokeLinejoin="round" />
-      <text x={0} y={h + 14} fontSize={11} fill="var(--muted)">{rows[0]?.from}</text>
-      <text x={w} y={h + 14} fontSize={11} fill="var(--muted)" textAnchor="end">{rows[rows.length - 1]?.from}</text>
-    </svg>
-  );
-}
-
-function MoneyTable({ rows, label }: { rows: Money[]; label: (r: Money) => string }) {
-  return (
-    <div className="tbl-wrap">
-      <table className="tbl lp-tbl">
-        <thead><tr><th /><th className="num">Profit</th><th className="num">Przychód</th><th className="num">Reklamy</th><th className="num">Zamówienia</th><th /></tr></thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.from}>
-              <td>{label(r)}</td>
-              <td className={`num b ${r.profit < 0 ? "neg" : ""}`}>{zl(r.profit)}</td>
-              <td className="num">{zl(r.revenue)}</td>
-              <td className="num">{zl(r.spend)}</td>
-              <td className="num">{num(r.orders)}</td>
-              <td><Arrow now={r.profit} prev={rows[i - 1]?.profit} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="gh">
+      <div className="gh-nums">
+        <div><em>Masz</em><b>{zl(g.achieved)}</b></div>
+        <div><em>Cel</em><b>{zl(g.target)}</b></div>
+        <div className={g.gap > 0 ? "miss" : "ok"}><em>{g.gap > 0 ? "Brakuje" : "Ponad cel"}</em><b>{zl(Math.abs(g.gap))}</b></div>
+        <div><em>Zostało dni</em><b>{g.left}</b></div>
+      </div>
+      <GoalChart g={g} />
     </div>
   );
 }
 
-function StepReality({ projectId, st, val, set }: StepProps) {
+function StepReality({ projectId, st, g }: StepProps) {
   const [r, setR] = useState<Reality | null>(null);
-  const [scale, setScale] = useState<"szeroka" | "srednia" | "waska">("szeroka");
+  const [scale, setScale] = useState<"dni60" | "tygodnie" | "dni14">("tygodnie");
   useEffect(() => {
     api<Reality>(`/api/projects/${projectId}/loop/reality`).then(setR).catch(() => {});
   }, [projectId]);
-  const reliable = val<boolean | null>("reliable", null);
   const p = st.prediction;
-  if (!r) return <p>Liczę profit z danych…</p>;
-  const W = r.wide, P = r.widePrev;
-  const err = p && p.profit_actual != null ? p.profit_guess - p.profit_actual : null;
+  const extra = p?.stage_actual && p.stage_actual !== "żaden" ? [`Wąskie gardło w ostatnim tygodniu: ${stageName(p.stage_actual)} – pogorszyło się najbardziej.`] : [];
   return (
-    <div className="lp-body">
-      {p && (
-        <div className="lp-card pr">
-          <h3>Twoja predykcja vs dane <small>({p.window_from} – {p.window_to})</small></h3>
-          <div className="pr-grid">
-            <div><em>Profit tygodnia</em><span>Ty: <b>{zl(p.profit_guess)}</b></span><span>Dane: <b>{zl(p.profit_actual)}</b></span><span className={`pr-diff ${err != null && Math.abs(err) <= Math.abs(p.profit_actual ?? 0) * 0.1 ? "ok" : "bad"}`}>różnica {zlSigned(err)}</span></div>
-            <div><em>Pogorszony etap</em><span>Ty: <b>{stageLabel(p.stage_guess)}</b></span><span>Dane: <b>{stageLabel(p.stage_actual)}</b></span>
-              <span className={`pr-diff ${p.stage_actual && p.stage_actual === p.stage_guess ? "ok" : "bad"}`}>{p.stage_actual == null ? "za mała próba" : p.stage_actual === p.stage_guess ? "trafione" : "nietrafione"}</span></div>
-          </div>
-        </div>
-      )}
-      {r.gaps.length > 0 && (
-        <div className="lp-card copper">
-          <h3><CircleAlert size={16} /> Luki w danych</h3>
-          <ul className="lp-gaps">{r.gaps.map((x) => <li key={x}>{x}</li>)}</ul>
-        </div>
-      )}
-      <div className="seg big">
-        {([["szeroka", "Do 2 mies."], ["srednia", "Tygodnie"], ["waska", "Dni"]] as const).map(([k, l]) => (
-          <button key={k} className={scale === k ? "on" : ""} onClick={() => setScale(k)}>{l}</button>
-        ))}
+    <div className="ss-stack">
+      <div className="card-s duo">
+        {g ? <GoalHero g={g} /> : <p>Brak celu – ustaw go w pierwszym kroku.</p>}
+        {p && <PredictionVs p={p} />}
       </div>
-      {scale === "szeroka" && (
-        <div className="lp-card">
-          <div className="lp-kpis">
-            <div><em>Profit 60 dni</em><b className={W.profit < 0 ? "neg" : ""}>{zl(W.profit)}</b><Arrow now={W.profit} prev={P.profit} /></div>
-            <div><em>Przychód</em><b>{zl(W.revenue)}</b><Arrow now={W.revenue} prev={P.revenue} /><small>{r.sourceOf.revenue ?? <span className="gap-tag">brak danych</span>}</small></div>
-            <div><em>Koszt reklam</em><b>{zl(W.spend)}</b><Arrow now={W.spend} prev={P.spend} invert /><small>{r.sourceOf.spend ?? <span className="gap-tag">brak danych</span>}</small></div>
-            <div><em>Pozostałe koszty</em><b>{zl(W.variableCosts + W.fixedCosts + W.tax)}</b><small>ustawienia klienta</small></div>
-          </div>
-          <ProfitLine rows={r.daily60} events={r.events} />
-          <p className="lp-legend"><i className="l-acc" /> profit dziennie <i className="l-cop" /> zdarzenie z osi czasu</p>
+      {r ? <DataGaps gaps={r.gaps} extra={extra} /> : null}
+      <div className="card-s">
+        <div className="seg">
+          {([["tygodnie", "Tydzień po tygodniu"], ["dni14", "Ostatnie 14 dni"], ["dni60", "60 dni dzień po dniu"]] as const).map(([k, l]) => (
+            <button key={k} className={scale === k ? "on" : ""} onClick={() => setScale(k)}>{l}</button>
+          ))}
         </div>
-      )}
-      {scale === "srednia" && <div className="lp-card"><MoneyTable rows={r.weeks} label={(m) => `${m.from.slice(5)} – ${m.to.slice(5)}`} /></div>}
-      {scale === "waska" && <div className="lp-card"><MoneyTable rows={r.days} label={(m) => new Date(`${m.from}T12:00:00`).toLocaleDateString("pl-PL", { weekday: "short", day: "numeric", month: "numeric" })} /></div>}
-      <div className="lp-card lp-decide">
-        <h3>Czy dane są wiarygodne?</h3>
-        <div className="seg big">
-          <button className={reliable === true ? "on" : ""} onClick={() => set("reliable", true)}><CircleCheck size={15} /> Tak, liczby się zgadzają</button>
-          <button className={reliable === false ? "on" : ""} onClick={() => set("reliable", false)}><X size={15} /> Nie</button>
-        </div>
-        {reliable === false && (
-          <p className="lp-stop"><CircleAlert size={16} /> Sesja stoi. Najpierw napraw pomiar w <Link href={`/projects/${projectId}/dane`}>Źródłach danych</Link>, potem wróć do tego kroku.</p>
+        <h3 className="ss-h3">Profit na czysto {scale === "tygodnie" ? "w każdym tygodniu" : "każdego dnia"}</h3>
+        {!r ? <p className="ss-load"><Loader2 className="spin" size={16} /> Liczę…</p> : (
+          <ProfitBars items={(scale === "tygodnie" ? r.weeks : scale === "dni14" ? r.days : r.daily60).map((m) => ({ label: dayLabel(m.from), value: m.profit }))} />
         )}
       </div>
     </div>
   );
 }
 
-/* ---------- Krok 4: Luka ---------- */
+/* ---------- 4. Luka ---------- */
 
-function StepGap({ g }: StepProps) {
-  if (!g) return <p>Brak celu – wróć do kroku 1.</p>;
+function StepGap({ st, g }: StepProps) {
+  if (!g) return <p>Brak celu – ustaw go w pierwszym kroku.</p>;
+  const p = st.prediction;
+  const extra = p?.stage_actual && p.stage_actual !== "żaden" ? [`Wąskie gardło w ostatnim tygodniu: ${stageName(p.stage_actual)}.`] : [];
+  const diff = g.pacePerDay != null && g.needFromNow != null ? g.pacePerDay - g.needFromNow : null;
   return (
-    <div className="lp-body">
-      <div className="lp-card">
-        <div className="lp-kpis big">
-          <div><em>Brakuje do celu</em><b className={g.gap > 0 ? "neg" : "pos"}>{zl(g.gap)}</b><small>{g.target ? `${pct(g.gap / g.target, 0)} celu` : ""}</small></div>
-          <div><em>Od dziś trzeba</em><b>{zl(g.needFromNow)}/dz.</b><small>{g.left} dni do końca okresu</small></div>
-          <div><em>Tempo obecne</em><b>{zl(g.pacePerDay)}/dz.</b><small>potrzebne średnio {zl(g.needPerDay)}/dz.</small></div>
-          <div><em>Różnica tempa</em><b className={(g.pacePerDay ?? 0) < (g.needFromNow ?? 0) ? "neg" : "pos"}>{g.needFromNow != null && g.pacePerDay != null ? `${zlSigned(g.pacePerDay - g.needFromNow)}/dz.` : "—"}</b><small>{g.needFromNow != null && g.pacePerDay != null ? `${zlSigned((g.pacePerDay - g.needFromNow) * 30)}/mies.` : ""}</small></div>
-          <div className="gb-ghost"><em>Prognoza (duch)</em><b>{zl(g.forecast)}</b><small>jeśli tempo się utrzyma</small></div>
+    <div className="ss-stack">
+      <div className="card-s gap-hero">
+        <div className={`gap-big ${g.gap > 0 ? "miss" : "ok"}`}>
+          <em>{g.gap > 0 ? "Brakuje do celu" : "Cel osiągnięty z nadwyżką"}</em>
+          <b>{zl(Math.abs(g.gap))}</b>
+          <span>{g.left} dni do końca okresu</span>
+        </div>
+        <div className="gap-pace">
+          <PaceBars pace={g.pacePerDay} need={g.needFromNow} />
+          {diff != null && (
+            <p className={`gap-diff ${diff < 0 ? "miss" : "ok"}`}>
+              {diff < 0 ? <>Codziennie brakuje <b>{zl(-diff)}</b> – miesięcznie to <b>{zl(-diff * 30)}</b>.</> : <>Robisz o <b>{zl(diff)}</b> dziennie więcej, niż trzeba.</>}
+            </p>
+          )}
         </div>
       </div>
-      {g.gaps.length > 0 && <div className="lp-card copper"><ul className="lp-gaps">{g.gaps.map((x) => <li key={x}>{x}</li>)}</ul></div>}
+      <DataGaps gaps={g.gaps} extra={extra} />
     </div>
   );
 }
 
-/* ---------- Krok 5: Kwota na stole ---------- */
+/* ---------- 5. Gdzie leżą pieniądze ---------- */
 
-function LeverValue({ v, r, low }: { v: number | null; r: [number, number] | null; low: boolean }) {
-  if (v == null) return <span className="gap-tag">brak danych</span>;
+function LeverDetail({ eng, k }: { eng: EngineResult; k: MetricKey }) {
+  const L = eng.ranking.levers.find((l) => l.key === k)!;
+  const N = LEVER_NAMES[k];
+  const unit = k === "cpm" ? { label: "1000 wyświetleń", v: eng.units.perMille } : k === "ctr" ? { label: "1 kliknięcie", v: eng.units.perClick } : { label: "1 zamówienie", v: eng.units.perOrder };
+  const plus10 = L.current != null ? improve(k, L.current, 0.1) : null;
+  const max = Math.max(L.current ?? 0, L.benchmark ?? 0) || 1;
   return (
-    <span className="lv-val">
-      <b>{low ? range(r) : `${zlSigned(v)}`}</b><small>/mies.</small>
-      {low && <span className="conf-low" title={`Środek: ${zlSigned(v)}`}><CircleAlert size={12} /> niska pewność</span>}
-    </span>
-  );
-}
-
-/** Mikroliczby etapu – każda z ekwiwalentem w zł/mies. */
-function StageDetail({ eng, k }: { eng: EngineResult; k: MetricKey }) {
-  const W = eng.window;
-  const b = eng.ranking.base;
-  const u = eng.units;
-  const budget = eng.ranking.budget;
-  const now = eng.ranking.profitNow;
-  const sens = (over: Partial<Record<MetricKey, number>>) => {
-    const p = modelProfit(budget, b, eng.econ, over);
-    return p == null || now == null ? null : p - now;
-  };
-  const cpc = b.cpm != null && b.ctr ? b.cpm / (1000 * b.ctr) : null;
-  const cpa = W.orders ? W.spend / W.orders : null;
-  const rows: Record<MetricKey, { label: string; value: string; eq: string; tip?: string }[]> = {
-    cpm: [
-      { label: "Wydatki (30 dni)", value: zl(W.spend), eq: "budżet stały w modelu" },
-      { label: "Wyświetlenia", value: num(W.impressions), eq: `1000 wyśw. = ${zl(u.perMille)}` },
-      { label: "CPM", value: fm("cpm", b.cpm), eq: `−10% = ${zlSigned(b.cpm == null ? null : sens({ cpm: improve("cpm", b.cpm, 0.1) }))}/mies.` },
-    ],
-    ctr: [
-      { label: "Kliknięcia w link", value: num(W.clicks), eq: `1 klik = ${zl(u.perClick)}` },
-      { label: "CTR", value: fm("ctr", b.ctr), eq: `+10% = ${zlSigned(b.ctr == null ? null : sens({ ctr: improve("ctr", b.ctr, 0.1) }))}/mies.` },
-      { label: "CPC", value: fm("cpm", cpc), eq: `−10% = ${zlSigned(b.cpm == null ? null : sens({ cpm: improve("cpm", b.cpm, 0.1) }))}/mies.`, tip: "CPC = CPM ÷ (1000 × CTR); −10% CPC przy tym samym CTR = −10% CPM." },
-    ],
-    cr: [
-      { label: "Zamówienia", value: num(W.orders), eq: `1 zamówienie = ${zl(u.perOrder)}` },
-      { label: "CR", value: fm("cr", b.cr), eq: `+10% = ${zlSigned(b.cr == null ? null : sens({ cr: improve("cr", b.cr, 0.1) }))}/mies.` },
-      { label: "Koszt zamówienia (CPA)", value: zl(cpa), eq: `−10% = ${zlSigned(b.cr == null ? null : sens({ cr: b.cr / 0.9 }))}/mies.`, tip: "CPA = wydatki ÷ zamówienia; −10% CPA przy stałym budżecie = +11% zamówień." },
-    ],
-    aov: [
-      { label: "Przychód netto (30 dni)", value: zl(W.net), eq: `1 zamówienie = ${zl(u.perOrder)}` },
-      { label: "AOV netto", value: fm("aov", b.aov), eq: `+10% = ${zlSigned(b.aov == null ? null : sens({ aov: improve("aov", b.aov, 0.1) }))}/mies.` },
-      { label: "LTV 30 ponad 1. zakup", value: eng.ltv.value == null ? "brak danych" : zl(eng.ltv.value), eq: eng.ltv.value == null ? "liczone z samego AOV" : `${eng.ltv.matured} klientów z pełnym oknem` },
-    ],
-  };
-  const i = METRICS.findIndex((m) => m.key === k);
-  const show = METRICS.filter((_, j) => Math.abs(j - i) <= 1);
-  return (
-    <div className="sd">
-      {show.map((m) => (
-        <div key={m.key} className={`sd-col ${m.key === k ? "on" : ""}`}>
-          <b>{m.stage}</b>
-          {rows[m.key].map((r) => (
-            <div key={r.label} className="sd-row"><span>{r.label}{r.tip && <Tip text={r.tip} />}</span><b>{r.value}</b><small>{r.eq}</small></div>
-          ))}
+    <div className="ld">
+      <div className="ld-card">
+        <h4>{N.short}: teraz vs najlepszy tydzień</h4>
+        <div className="ld-bars">
+          <div><span>Teraz</span><i style={{ width: `${((L.current ?? 0) / max) * 100}%` }} /><b>{fm(k, L.current)}</b></div>
+          <div><span>Najlepszy tydzień</span><i className="best" style={{ width: `${((L.benchmark ?? 0) / max) * 100}%` }} /><b>{fm(k, L.benchmark)}</b></div>
         </div>
-      ))}
+        {k === "cpm" && <small>Przy CPM niżej = lepiej.</small>}
+      </div>
+      <div className="ld-card hero">
+        <h4>Gdyby {N.short} wrócił do najlepszego tygodnia</h4>
+        {L.missing ? <p className="gap-tag">brak danych: {L.missing}</p> : L.lowConfidence ? (
+          <><b>{range(L.range)}</b><small>miesięcznie · mało danych, dlatego zakres zamiast jednej liczby</small></>
+        ) : (
+          <><b>{zlSigned(L.value)}</b><small>więcej profitu miesięcznie</small></>
+        )}
+      </div>
+      <div className="ld-card">
+        <h4>Mały krok: {N.short} lepszy o 10%</h4>
+        <p>{fm(k, L.current)} → {fm(k, plus10)}</p>
+        <b className="pos">{zlSigned(L.per10)} / mies.</b>
+      </div>
+      <div className="ld-card">
+        <h4>Ile jest warte</h4>
+        <p>{unit.label}</p>
+        <b>{zl(unit.v)}</b>
+        <small>profitu na czysto</small>
+      </div>
     </div>
   );
 }
@@ -588,13 +482,14 @@ function StepMoney({ loopId, st, reload }: StepProps) {
   const eng = snapshotOf(st);
   const guess = st.prediction?.lever_guess ?? null;
   const [pick, setPick] = useState("");
-  const [open, setOpen] = useState<MetricKey | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? null) as MetricKey | null;
-  const reveal = async () => {
+  const reveal = async (k: string) => {
+    setPick(k);
     setErr("");
     try {
-      await api(`/api/loops/${loopId}/lever`, "POST", { guess: pick });
+      await api(`/api/loops/${loopId}/lever`, "POST", { guess: k });
       await reload();
     } catch (x) {
       setErr((x as Error).message);
@@ -602,139 +497,164 @@ function StepMoney({ loopId, st, reload }: StepProps) {
   };
   if (!guess || !eng)
     return (
-      <div className="lp-body">
-        <div className="lp-card">
-          <label className="lp-l">Gdzie Twoim zdaniem jest największa dźwignia?</label>
-          <div className="lever-grid">
-            {METRICS.map((m) => (
-              <button key={m.key} className={`lever ${pick === m.key ? "on" : ""}`} onClick={() => setPick(m.key)}>
-                <span className="lever-dir">{m.better === "up" ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />} {m.stage}</span>
-                <b>{m.label}</b>{pick === m.key && <CircleCheck size={18} className="lever-ok" />}
-              </button>
-            ))}
+      <div className="ss-stack">
+        <div className="card-s">
+          <h3 className="ss-ask">Gdzie Twoim zdaniem leży najwięcej pieniędzy?</h3>
+          <div className="guess">
+            {METRICS.map((m) => {
+              const I = LEVER_ICON[m.key];
+              return (
+                <button key={m.key} className={`guess-tile ${pick === m.key ? "on" : ""}`} onClick={() => reveal(m.key)}>
+                  <I size={34} />
+                  <b>{LEVER_NAMES[m.key].name}</b>
+                  <small>{LEVER_NAMES[m.key].short}</small>
+                </button>
+              );
+            })}
           </div>
           {err && <p className="error">{err}</p>}
-          <div className="row"><button className="btn primary" disabled={!pick} onClick={reveal}><Sparkles size={15} /> Odpowiedz i pokaż ranking</button></div>
         </div>
       </div>
     );
   const top = eng.ranking.levers.find((l) => l.value != null);
-  const setFocus = async (k: MetricKey) => {
+  const setFocus = async (k: string) => {
     await api(`/api/loops/${loopId}/questions`, "POST", { focus: k });
     await reload();
   };
   return (
-    <div className="lp-body">
-      <div className={`lp-card pr ${top && top.key === guess ? "" : "copper"}`}>
-        <span>Twoja odpowiedź: <b>{METRICS.find((m) => m.key === guess)?.label}</b> · dane: <b>{top ? top.label : "brak danych"}</b> {top && (top.key === guess ? <span className="pr-diff ok">trafione</span> : <span className="pr-diff bad">nietrafione</span>)}</span>
+    <div className="ss-stack">
+      <div className={`guess-res ${top?.key === guess ? "hit" : "miss"}`}>
+        {top?.key === guess ? <CircleCheck size={22} /> : <X size={22} />}
+        <span>Twój typ: <b>{LEVER_NAMES[guess].name}</b></span>
+        <span>Dane: <b>{top ? LEVER_NAMES[top.key].name : "brak danych"}</b></span>
       </div>
-      {eng.gaps.length > 0 && <div className="lp-card copper"><ul className="lp-gaps">{eng.gaps.map((x) => <li key={x}>{x}</li>)}</ul></div>}
-      <div className="lp-card">
-        <p className="lp-sub">
-          Okno {eng.window.from} – {eng.window.to} · budżet {zl(eng.ranking.budget)}/mies. · model: profit po wszystkich kosztach{eng.ltv.value != null ? ", przychód = AOV + LTV 30" : ", przychód = AOV (brak LTV 30)"}
-          <Tip text="Założenia przy każdej pozycji: budżet stały, reszta lejka bez zmian, zmienia się tylko ta jedna metryka – do poziomu benchmarku." />
-        </p>
-        <div className="lv">
-          {eng.ranking.levers.map((l, i) => (
-            <div key={l.key} className={`lv-item ${open === l.key ? "open" : ""} ${focus === l.key ? "focus" : ""}`}>
-              <button className="lv-row" onClick={() => setOpen(open === l.key ? null : l.key)} aria-expanded={open === l.key}>
-                <span className="stage-n">{i + 1}</span>
-                <span className="lv-name"><b>{l.label}</b><small>{l.stage}</small></span>
-                <span className="lv-m"><small>teraz</small>{fm(l.key, l.current)}</span>
-                <span className="lv-m"><small>benchmark</small>{fm(l.key, l.benchmark)}</span>
-                <LeverValue v={l.value} r={l.range} low={l.lowConfidence} />
-                <ChevronDown size={16} className="lv-chev" />
-              </button>
-              {open === l.key && (
-                <div className="lv-detail">
-                  <p className="lp-sub">{l.missing ? <span className="gap-tag">brak danych: {l.missing}</span> : <>Benchmark: {l.benchmarkSource}. Zakres 90%: {range(l.range)}/mies.</>} · +10% poprawy = {zlSigned(l.per10)}/mies.</p>
-                  <StageDetail eng={eng} k={l.key} />
-                  {focus !== l.key && <button className="btn small" onClick={() => setFocus(l.key)}><Flag size={14} /> Pogłębiam tę dźwignię</button>}
-                </div>
-              )}
-              {focus === l.key && <span className="lv-flag"><Flag size={13} /> pogłębiamy</span>}
-            </div>
-          ))}
-        </div>
+      <div className="card-s">
+        <h3 className="ss-h3">Ile więcej profitu miesięcznie, gdyby każda rzecz wróciła do najlepszego tygodnia</h3>
+        <LeverBars levers={eng.ranking.levers} focus={focus} open={open} onPick={(k) => setOpen(open === k ? null : k)} />
+        {open && (
+          <>
+            <LeverDetail eng={eng} k={open as MetricKey} />
+            {focus !== open && <button className="btn" onClick={() => setFocus(open)}><Flag size={14} /> Tę dźwignię pogłębiamy</button>}
+          </>
+        )}
+        {!open && <p className="ss-hint">Kliknij pasek, żeby zobaczyć szczegóły.</p>}
       </div>
+      {eng.gaps.length > 0 && <DataGaps gaps={eng.gaps} />}
     </div>
   );
 }
 
-/* ---------- Krok 6: Pytania sokratejskie ---------- */
+/* ---------- 6. Pytania ---------- */
 
-function StepQuestions({ loopId, st, val, set, saveDraft, reload }: StepProps) {
-  const [qs, setQs] = useState<{ questions: string[]; focus: MetricKey | null } | null>(null);
-  const [claude, setClaude] = useState<string>((st.active?.data.pytania?.claude as string) ?? "");
-  const [busy, setBusy] = useState(false);
+function FocusHero({ eng, focus }: { eng: EngineResult | null; focus: MetricKey | null }) {
+  const L = eng?.ranking.levers.find((l) => l.key === focus);
+  if (!L || !focus) return null;
+  const I = LEVER_ICON[focus];
+  return (
+    <div className="fh">
+      <I size={26} />
+      <div><b>{LEVER_NAMES[focus].name}</b><span>{fm(focus, L.current)} → {fm(focus, L.benchmark)}</span></div>
+      <strong>{L.lowConfidence ? range(L.range) : zlSigned(L.value)}<small>/mies.</small></strong>
+    </div>
+  );
+}
+
+function StepQuestions({ loopId, st, val, set }: StepProps) {
+  const [qs, setQs] = useState<{ questions: string[]; focus: MetricKey | null; source: string | null; error: string | null } | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
-    api<{ questions: string[]; focus: MetricKey | null }>(`/api/loops/${loopId}/questions`).then(setQs).catch((e) => setErr(e.message));
+    api<NonNullable<typeof qs>>(`/api/loops/${loopId}/questions`).then(setQs).catch((e) => setErr(e.message));
   }, [loopId]);
   const answers = val<Record<string, string>>("answers", {});
+  if (!qs) return <p className="ss-load"><Loader2 className="spin" size={18} /> {err || "Claude układa pytania…"}</p>;
+  return (
+    <div className="ss-stack">
+      <FocusHero eng={snapshotOf(st)} focus={qs.focus} />
+      {qs.source === "dane" && <div className="dg"><div className="dg-head"><CircleAlert size={18} /> <b>Claude niedostępny – pytania z danych</b></div><ul><li>{qs.error}</li></ul></div>}
+      {qs.questions.map((q, i) => (
+        <div key={q} className="card-s qa">
+          <span className="qa-n">{i + 1}</span>
+          <div>
+            <p>{q}</p>
+            <textarea rows={2} value={answers[i] ?? ""} onChange={(e) => set("answers", { ...answers, [i]: e.target.value })} placeholder="1–2 zdania" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- 7. Analiza Claude ---------- */
+
+function StepAnalysis({ loopId, st, reload }: StepProps) {
+  const text = (st.active?.data.analiza?.text as string | undefined) ?? "";
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   const eng = snapshotOf(st);
-  if (!qs) return <p>{err || "Układam pytania…"}</p>;
-  const L = eng?.ranking.levers.find((l) => l.key === qs.focus);
-  const all = qs.questions.length > 0 && qs.questions.every((_, i) => (answers[i] ?? "").trim());
-  const ask = async () => {
+  const focus = (st.active?.data.pytania?.focus ?? null) as MetricKey | null;
+  const run = useCallback(async () => {
     setBusy(true);
     setErr("");
     try {
-      await saveDraft();
-      const r = await api<{ text: string }>(`/api/loops/${loopId}/claude`, "POST");
-      setClaude(r.text);
+      await api(`/api/loops/${loopId}/analysis`, "POST");
       await reload();
     } catch (x) {
       setErr((x as Error).message);
     } finally {
       setBusy(false);
     }
-  };
+  }, [loopId, reload]);
+  useEffect(() => {
+    if (!text) run();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const L = eng && focus ? eng.ranking.levers.find((l) => l.key === focus) : null;
+  const prev = eng && focus ? eng.metricsPrev[focus] : null;
+  const vals = L ? [prev, L.current, L.benchmark] : [];
+  const max = Math.max(0, ...vals.map((v) => v ?? 0)) || 1;
   return (
-    <div className="lp-body">
-      {L && (
-        <div className="lp-card pr">
-          <span><Flag size={14} /> <b>{L.label}</b> · teraz {fm(L.key, L.current)} · benchmark {fm(L.key, L.benchmark)} · <LeverValue v={L.value} r={L.range} low={L.lowConfidence} /></span>
+    <div className="ss-stack">
+      <FocusHero eng={eng} focus={focus} />
+      {L && focus && (
+        <div className="card-s">
+          <h3 className="ss-h3">{LEVER_NAMES[focus].short}: jak było, jak jest, do czego dążymy</h3>
+          <div className="an-bars">
+            {[["Poprzednie 30 dni", prev], ["Ostatnie 30 dni", L.current], ["Najlepszy tydzień", L.benchmark]].map(([l, v]) => (
+              <div key={l as string}><i style={{ height: `${(((v as number | null) ?? 0) / max) * 100}%` }} /><b>{fm(focus, v as number | null)}</b><span>{l as string}</span></div>
+            ))}
+          </div>
         </div>
       )}
-      {!qs.questions.length && <p className="lp-stop"><CircleAlert size={16} /> Brak dźwigni z danymi – wróć do kroku „Kwota na stole”.</p>}
-      {qs.questions.map((q, i) => (
-        <div key={q} className="lp-card">
-          <label className="lp-l">{i + 1}. {q}</label>
-          <textarea rows={2} value={answers[i] ?? ""} onChange={(e) => set("answers", { ...answers, [i]: e.target.value })} />
-        </div>
-      ))}
-      <div className="lp-card">
-        <div className="row">
-          <button className="btn" disabled={!all || busy} onClick={ask}><Sparkles size={15} /> {busy ? "Claude analizuje…" : claude ? "Pokaż analizę Claude ponownie" : "Pokaż analizę Claude"}</button>
-          {!all && <span className="lp-sub"><Lock size={13} /> najpierw Twoje odpowiedzi</span>}
-        </div>
-        {err && <p className="error">{err}</p>}
-        {claude && <div className="claude-box">{claude}</div>}
+      <div className="card-s claude">
+        <h3><Sparkles size={18} /> Analiza Claude</h3>
+        {busy && <p className="ss-load"><Loader2 className="spin" size={18} /> Claude czyta liczby i Twoje odpowiedzi…</p>}
+        {!busy && err && <><p className="error">{err}</p><button className="btn" onClick={run}><RotateCw size={15} /> Spróbuj ponownie</button></>}
+        {!busy && text && <RichText text={text} />}
       </div>
     </div>
   );
 }
 
-/* ---------- Krok 7: Decyzja = zlecenie ---------- */
+/* ---------- 8. Decyzja ---------- */
 
-function DecisionForm({ projectId, loopId, st, g, reload }: { projectId: string; loopId: string; st: LoopState; g: Gap | null; reload: () => Promise<void> }) {
+const ELEMENT_ICON: Record<string, typeof Megaphone> = { reklama: Megaphone, strona: Globe, VSL: Video, checkout: ShoppingCart, oferta: Gift, inne: MoreHorizontal };
+
+function DecisionForm({ projectId, loopId, st, g, reload }: { projectId: string; loopId: string; st: LoopState; g: GoalGap | null; reload: () => Promise<void> }) {
   const eng = snapshotOf(st);
   const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? "cr") as MetricKey;
   const L = eng?.ranking.levers.find((l) => l.key === focus);
-  const gapTxt = g ? `Luka do celu: ${zl(g.gap)}. ` : "";
-  const autoWhy = L
-    ? `${gapTxt}Kwota na stole: ${L.label} – ${L.value == null ? "brak danych" : L.lowConfidence ? `${range(L.range)}/mies. (niska pewność)` : `${zlSigned(L.value)}/mies.`} (teraz ${fm(L.key, L.current)}, benchmark ${fm(L.key, L.benchmark)}).`
-    : "";
+  const autoWhy = [
+    g && g.gap > 0 ? `Brakuje ${zl(g.gap)} do celu.` : "",
+    L ? `${LEVER_NAMES[focus].name}: ${L.lowConfidence ? range(L.range) : zlSigned(L.value)} miesięcznie na stole.` : "",
+  ].filter(Boolean).join(" ");
   const [kind, setKind] = useState<"zmiana" | typeof NO_CHANGE>("zmiana");
-  const [f, setF] = useState({ what: "", who: "", why: autoWhy, element: "reklama", metric: focus, to: "", check: plus(14), ad: "" });
+  const [f, setF] = useState({ what: "", who: "", why: autoWhy, element: "reklama", metric: focus as string, check: plus(14), ad: "" });
+  const [to, setTo] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const isRate = f.metric === "ctr" || f.metric === "cr";
-  const toNum = f.to.trim() ? Number(f.to.replace(",", ".")) / (isRate ? 100 : 1) : NaN;
-  const base = eng?.ranking.base;
-  const A = base?.[f.metric as MetricKey] ?? null;
+  const toNum = to == null ? NaN : to / (isRate ? 100 : 1);
+  const A = eng?.ranking.base[f.metric as MetricKey] ?? null;
   const expected = eng && Number.isFinite(toNum) ? hypothesisValue(eng.ranking.budget, eng.ranking.base, eng.econ, f.metric as MetricKey, toNum) : null;
-  const m = METRICS.find((x) => x.key === f.metric)!;
+  const ready = kind === NO_CHANGE ? !!f.why.trim() : !!(f.what.trim() && f.who.trim() && f.why.trim() && Number.isFinite(toNum));
   const save = async () => {
     setErr("");
     try {
@@ -747,138 +667,135 @@ function DecisionForm({ projectId, loopId, st, g, reload }: { projectId: string;
     }
   };
   return (
-    <div className="lp-card df">
+    <div className="ss-stack">
       <div className="seg big">
         <button className={kind === "zmiana" ? "on" : ""} onClick={() => setKind("zmiana")}>Zmieniam jedną rzecz</button>
         <button className={kind === NO_CHANGE ? "on" : ""} onClick={() => setKind(NO_CHANGE)}>Nic nie zmieniam</button>
       </div>
       {kind === "zmiana" && (
         <>
-          <label className="lp-l">Co – jedna konkretna zmiana</label>
-          <input value={f.what} onChange={(e) => setF({ ...f, what: e.target.value })} />
-          <label className="lp-l">Kto</label>
-          <input value={f.who} onChange={(e) => setF({ ...f, who: e.target.value })} />
+          <div className="card-s df2">
+            <label className="df2-l">Co zmieniasz?</label>
+            <input className="df2-what" value={f.what} onChange={(e) => setF({ ...f, what: e.target.value })} placeholder="Jedna konkretna zmiana" />
+            <label className="df2-l">Gdzie?</label>
+            <div className="df2-el">
+              {ELEMENTS.map((x) => {
+                const I = ELEMENT_ICON[x];
+                return <button key={x} className={`tile sm ${f.element === x ? "on" : ""}`} onClick={() => setF({ ...f, element: x })}><I size={20} /> {x}</button>;
+              })}
+            </div>
+            <label className="df2-l">Kto to zrobi?</label>
+            <input value={f.who} onChange={(e) => setF({ ...f, who: e.target.value })} placeholder="Imię albo rola" />
+          </div>
+          <div className="card-s hyp">
+            <h3>Hipoteza</h3>
+            <p className="hyp-if">Jeśli <b>{f.what || "…"}</b>, to</p>
+            <div className="hyp-metrics">
+              {METRICS.map((m) => {
+                const I = LEVER_ICON[m.key];
+                return <button key={m.key} className={`tile sm ${f.metric === m.key ? "on" : ""}`} onClick={() => { setF({ ...f, metric: m.key }); setTo(null); }}><I size={18} /> {LEVER_NAMES[m.key].short}</button>;
+              })}
+            </div>
+            <div className="hyp-ab">
+              <div className="hyp-a"><em>teraz</em><b>{fm(f.metric, A)}</b></div>
+              <ArrowRight size={28} />
+              <div className="hyp-b"><em>po zmianie</em><MoneyInput big value={to} onChange={setTo} unit={isRate ? "%" : "zł"} ariaLabel="Wartość po zmianie" /></div>
+            </div>
+            <div className={`hyp-val ${(expected ?? 0) < 0 ? "neg" : ""}`}>
+              <em>Wartość oczekiwana</em>
+              <b>{expected == null ? "—" : zlSigned(expected)}</b>
+              <small>miesięcznie</small>
+            </div>
+          </div>
         </>
       )}
-      <label className="lp-l">Dlaczego {kind === "zmiana" && <Tip text="Uzupełnione z luki i kwoty na stole – możesz dopisać." />}</label>
-      <textarea rows={3} value={f.why} onChange={(e) => setF({ ...f, why: e.target.value })} />
-      {kind === "zmiana" && (
-        <>
-          <label className="lp-l">Etap zmiany</label>
-          <div className="seg">{ELEMENTS.map((x) => <button key={x} className={f.element === x ? "on" : ""} onClick={() => setF({ ...f, element: x })}>{x}</button>)}</div>
-          <label className="lp-l">Hipoteza: jeśli {f.what || "…"}, to</label>
-          <div className="hy">
-            <select value={f.metric} onChange={(e) => setF({ ...f, metric: e.target.value as MetricKey, to: "" })}>
-              {METRICS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
-            </select>
-            <span>z <b>{fm(f.metric, A)}</b> do</span>
-            <div className="money-input"><input inputMode="decimal" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} aria-label="Wartość docelowa" /><span>{isRate ? "%" : "zł"}</span></div>
+      <div className="card-s df2">
+        <label className="df2-l">Dlaczego?</label>
+        <textarea rows={2} value={f.why} onChange={(e) => setF({ ...f, why: e.target.value })} />
+        <label className="df2-l">Kiedy sprawdzamy wynik?</label>
+        <div className="df2-dates">
+          {[7, 14, 30].map((n) => <button key={n} className={`tile sm ${f.check === plus(n) ? "on" : ""}`} onClick={() => setF({ ...f, check: plus(n) })}><CalendarDays size={18} /> za {n} dni</button>)}
+          <input type="date" value={f.check} min={plus(1)} onChange={(e) => setF({ ...f, check: e.target.value })} aria-label="Data sprawdzenia" />
+        </div>
+        {kind === "zmiana" && (
+          <div className="df2-test">
+            <Link href={`/projects/${projectId}/testy`} target="_blank" className="tile sm"><FlaskConical size={18} /> Utwórz test reklam</Link>
+            {st.adTests.length > 0 && (
+              <select value={f.ad} onChange={(e) => setF({ ...f, ad: e.target.value })} aria-label="Podepnij test reklam">
+                <option value="">Podepnij istniejący test…</option>
+                {st.adTests.map((a) => <option key={a.id} value={a.id}>{a.angle}</option>)}
+              </select>
+            )}
           </div>
-          <div className="hy-val">
-            <em>Wartość oczekiwana</em>
-            <b className={(expected ?? 0) < 0 ? "neg" : "pos"}>{expected == null ? "—" : `${zlSigned(expected)}/mies.`}</b>
-            <small>{m.label}: budżet stały, reszta lejka bez zmian</small>
-          </div>
-          {st.adTests.length > 0 && (
-            <label className="lp-mini">Test reklam do tej decyzji (opcjonalnie)
-              <select value={f.ad} onChange={(e) => setF({ ...f, ad: e.target.value })}><option value="">—</option>{st.adTests.map((a) => <option key={a.id} value={a.id}>{a.angle}</option>)}</select>
-            </label>
-          )}
-          <Link href={`/projects/${projectId}/testy`} className="btn small" target="_blank">Utwórz test w Testach reklam</Link>
-        </>
-      )}
-      <label className="lp-l">Data sprawdzenia</label>
-      <input type="date" value={f.check} min={plus(1)} onChange={(e) => setF({ ...f, check: e.target.value })} />
+        )}
+      </div>
       {err && <p className="error">{err}</p>}
-      <div className="row"><button className="btn primary" onClick={save}><Check size={15} /> Zapisz decyzję</button></div>
+      <button className={`btn primary big ${ready ? "pulse" : ""}`} disabled={!ready} onClick={save}><Check size={16} /> Zapisz decyzję</button>
     </div>
   );
 }
 
 function StepDecision({ projectId, loopId, st, g, reload }: StepProps) {
   const mine = st.decisions.find((d) => d.loop_id === loopId);
-  if (!mine) return <div className="lp-body"><DecisionForm projectId={projectId} loopId={loopId} st={st} g={g} reload={reload} /></div>;
+  if (!mine) return <DecisionForm projectId={projectId} loopId={loopId} st={st} g={g} reload={reload} />;
   return (
-    <div className="lp-body">
-      <DecisionCard d={mine} onDelete={async () => { if (confirm("Usunąć decyzję i zapisać inną?")) { await api(`/api/decisions/${mine.id}`, "DELETE"); await reload(); } }}>
-        <div className="row"><CopyBrief d={mine} /><span className="saved"><CircleCheck size={15} /> na osi czasu</span></div>
-      </DecisionCard>
-    </div>
+    <DecisionCard d={mine} onDelete={async () => { if (confirm("Usunąć decyzję i zapisać inną?")) { await api(`/api/decisions/${mine.id}`, "DELETE"); await reload(); } }}>
+      <div className="row"><CopyBrief d={mine} /></div>
+    </DecisionCard>
   );
 }
 
-/* ---------- Krok 8: Kalendarz + checklista ---------- */
+/* ---------- 9. Plan działań ---------- */
 
-function StepCalendar({ projectId, loopId, st, reload }: StepProps) {
+function StepCalendar({ loopId, st, reload }: StepProps) {
   const mine = st.decisions.find((d) => d.loop_id === loopId);
-  if (!mine) return <p>Brak decyzji – wróć do kroku 7.</p>;
+  if (!mine) return <p>Brak decyzji – wróć krok wstecz.</p>;
   return (
-    <div className="lp-body">
-      <DecisionCard d={mine}>
-        {mine.kind === NO_CHANGE ? <p className="lp-sub">Nic do wdrożenia. Sprawdzenie {mine.check_date} – pojawi się w kalendarzu.</p> : <DecisionTasks d={mine} reload={reload} />}
-        <div className="row"><CopyBrief d={mine} /><Link className="btn small" href={`/projects/${projectId}#kalendarz`} target="_blank">Kalendarz</Link></div>
-      </DecisionCard>
-    </div>
+    <DecisionCard d={mine}>
+      {mine.kind === NO_CHANGE ? null : <DecisionTasks d={mine} reload={reload} />}
+      <div className="row"><CopyBrief d={mine} /></div>
+    </DecisionCard>
   );
 }
 
-/* ---------- Krok 9: Rozstrzygnięcie ---------- */
+/* ---------- 10. Sprawdzenie decyzji ---------- */
 
 function StepVerdict({ loopId, st, reload }: StepProps) {
   const t = new Date().toISOString().slice(0, 10);
-  const waiting = st.decisions.filter((d) => !d.verdict && d.check_date > t);
+  const waiting = st.decisions.filter((d) => !d.verdict && d.check_date > t).sort((a, b) => a.check_date.localeCompare(b.check_date));
   const doneHere = st.decisions.filter((d) => d.verdict_loop_id === loopId);
   return (
-    <div className="lp-body">
+    <div className="ss-stack">
       {st.due.map((d) => <Verdict key={d.id} d={d} onDone={reload} />)}
       {doneHere.map((d) => (
-        <div key={d.id} className="lp-card"><span className="saved"><CircleCheck size={15} /> {d.what} – {d.verdict}{d.impact_month != null ? ` · ${zlSigned(d.impact_month)}/mies.${d.low_confidence ? " (niska pewność)" : ""}` : ""}</span></div>
+        <div key={d.id} className="card-s vd-done"><CircleCheck size={18} /> <b>{d.what}</b> <span className={`chip ${d.verdict === "tak" ? "on" : ""}`}>{d.verdict}</span>{d.impact_month != null && <span className={d.impact_month < 0 ? "neg" : "pos"}>{zlSigned(d.impact_month)}/mies.</span>}</div>
       ))}
-      {!st.due.length && !doneHere.length && <div className="lp-card"><span><CircleCheck size={16} /> Żadna decyzja nie czeka dziś na sprawdzenie.</span></div>}
       {waiting.length > 0 && (
-        <div className="lp-card">
-          <h3>Czekają na dzień sprawdzenia</h3>
-          <ul className="dc-waits">{waiting.map((d) => <Waiting key={d.id} d={d} />)}</ul>
+        <div className="card-s">
+          <h3 className="ss-h3">Czekają na swój termin</h3>
+          <ul className="wt">{waiting.map((d) => <li key={d.id}><Deadline date={d.check_date} /><b>{d.what}</b>{d.expected_month != null && <span className="pos">{zlSigned(d.expected_month)}/mies.</span>}</li>)}</ul>
         </div>
       )}
+      {!st.due.length && !doneHere.length && !waiting.length && <div className="card-s"><CircleCheck size={18} /> Nic do sprawdzenia.</div>}
     </div>
   );
 }
 
-/* ---------- Krok 10: Wnioski ---------- */
+/* ---------- 11. Raport ---------- */
 
-export function Counter({ c }: { c: LoopState["counter"] }) {
-  const trend = c.lastError != null && c.earlierError != null && Math.round(c.lastError) !== Math.round(c.earlierError) ? (c.lastError < c.earlierError ? "up" : "down") : null;
+function StepReport({ loopId, val, set }: StepProps) {
+  const [r, setR] = useState<ReportData | null>(null);
+  useEffect(() => {
+    api<ReportData>(`/api/loops/${loopId}/report`).then(setR).catch(() => {});
+  }, [loopId]);
   return (
-    <div className="cn">
-      <div><em>Decyzje z analityki <Tip text="Suma zweryfikowanych wpływów (zł/mies.) z rozstrzygniętych decyzji – bez „za mało danych”." /></em><b><span className="pos">{zlSigned(c.plus)}</span> / <span className="neg">{zlSigned(c.minus)}</span></b><small>{c.verifiedCount} zweryfikowanych</small></div>
-      <div><em>Trafność hipotez</em><b>{c.hitRate == null ? "—" : pct(c.hitRate, 0)}</b><small>{c.judged} rozstrzygniętych</small></div>
-      <div><em>Średni błąd predykcji profitu</em><b>{zl(c.meanError)}</b><small>{trend ? <span className={`lp-arrow ${trend}`}>{trend === "up" ? <ArrowDownRight size={13} /> : <ArrowUpRight size={13} />} ostatnio {zl(c.lastError)}</span> : `${c.predictions} predykcji`}</small></div>
-      <div><em>Trafione etapy / dźwignie</em><b>{c.stageHit == null ? "—" : pct(c.stageHit, 0)} / {c.leverHit == null ? "—" : pct(c.leverHit, 0)}</b></div>
+    <div className="ss-stack">
+      <div className="card-s">
+        <h3 className="ss-ask">Czego się nauczyłeś w tej sesji?</h3>
+        <textarea className="big-ta" rows={2} value={val("summary", "")} onChange={(e) => set("summary", e.target.value)} placeholder="Jedno zdanie" />
+      </div>
+      {!r ? <p className="ss-load"><Loader2 className="spin" size={18} /> Składam raport…</p> : <ReportView r={{ ...r, summary: val("summary", "") }} />}
     </div>
   );
 }
 
-function StepLearn({ st, g, val, set }: StepProps) {
-  const [filter, setFilter] = useState("");
-  const reg = st.learnings.filter((l) => !filter || `${l.stage} ${l.element} ${l.text}`.toLowerCase().includes(filter.toLowerCase()));
-  return (
-    <div className="lp-body">
-      <div className="lp-card">
-        <label className="lp-l">Czego się nauczyłeś w tej sesji? (1 zdanie)</label>
-        <textarea rows={2} value={val("summary", "")} onChange={(e) => set("summary", e.target.value)} />
-        <div className="lp-kpis">
-          <div><em>Profit w okresie celu</em><b>{zl(g?.achieved)}</b><small>z {zl(g?.target)}</small></div>
-          <div><em>Luka</em><b className={(g?.gap ?? 0) > 0 ? "neg" : ""}>{zl(g?.gap)}</b></div>
-        </div>
-      </div>
-      <div className="lp-card"><Counter c={st.counter} /></div>
-      <div className="lp-card">
-        <h3>Rejestr wniosków</h3>
-        <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Szukaj" aria-label="Szukaj" />
-        <ul className="lp-gaps">{reg.slice(0, 30).map((l) => <li key={l.id}><span className="tt-chips"><span>{l.stage || "—"}</span>{l.element && <span>{l.element}</span>}</span> {l.text}{l.profit_delta != null && <b> ({zlSigned(l.profit_delta)}/mies.)</b>} <small>{l.created_at}</small></li>)}</ul>
-        {!reg.length && <p>Brak wniosków.</p>}
-      </div>
-    </div>
-  );
-}
