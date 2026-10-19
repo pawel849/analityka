@@ -32,7 +32,7 @@ export async function askClaude(system: string, user: string, effort: "low" | "m
 /** Liczby sesji w zwięzłej postaci – jedyne źródło faktów dla Claude. */
 export function sessionFacts(eng: EngineResult, focus: string | null) {
   return {
-    okno: `${eng.window.from} – ${eng.window.to} (ostatnie 30 pełnych dni)`,
+    okno_analizy: `${eng.window.from} – ${eng.window.to}`,
     budzet_reklam_mies_zl: Math.round(eng.ranking.budget),
     profit_mies_z_modelu_zl: eng.ranking.profitNow == null ? null : Math.round(eng.ranking.profitNow),
     metryki_teraz: eng.ranking.base,

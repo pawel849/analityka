@@ -2,7 +2,7 @@
 // Dane per projekt (klient) – nic tu nie zależy od konkretnego klienta.
 import { newId, one, q } from "./db";
 import { loadSettings } from "./project-data";
-import { addDays, engine, gap, measure, predictionActuals, reality, today, type EngineResult, type GoalRow } from "./loop-data";
+import { addDays, defaultRange, engine, gap, measure, predictionActuals, reality, today, type EngineResult, type GoalRow, type Range } from "./loop-data";
 import { hypothesisValue, METRICS, verdictImpact, type Econ, type MetricKey, type Metrics } from "./levers";
 import { LEVER_NAMES, MEASURE_TASK, NO_CHANGE, phraseOk, STEPS, VERDICTS } from "./loop-def";
 import { ClaudeError, claudeAnalysis, claudeQuestions } from "./claude";
@@ -12,6 +12,20 @@ export * from "./loop-def";
 const j = <T>(v: unknown, d: T): T => (v == null ? d : typeof v === "string" ? (JSON.parse(v) as T) : (v as T));
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const VERSION = 3;
+
+/* ---------- Okres sesji ---------- */
+
+/** Okres, z którego sesja liczy (wybierany w kroku 1; domyślnie ostatnie 30 pełnych dni). */
+export function rangeOfData(data: Record<string, Record<string, unknown>>): Range {
+  const r = data.cel?.range as Range | undefined;
+  const ok = r && DAY.test(r.from) && DAY.test(r.to) && r.from <= r.to && r.to < today();
+  return ok ? { from: r.from, to: r.to } : defaultRange();
+}
+
+export async function sessionRange(projectId: string): Promise<Range> {
+  const r = await one<{ data: unknown }>("SELECT data FROM loops WHERE project_id = $1 AND finished_at IS NULL", [projectId]);
+  return r ? rangeOfData(j(r.data, {})) : defaultRange();
+}
 
 /* ---------- Cel ---------- */
 
@@ -177,6 +191,7 @@ export async function loopState(projectId: string) {
   const t = today();
   return {
     active, prev, goal, lastGoal: last, prevActions, prediction, learnings, adTests, decisions, counter: cnt,
+    range: active ? rangeOfData(active.data) : defaultRange(),
     scope: settings.analysisScope ?? null,
     economicsScope: settings.economicsScope,
     /** decyzje, których dzień sprawdzenia nadszedł, a nie ma rozstrzygnięcia (z każdej sesji) */
@@ -246,8 +261,15 @@ export async function saveStep(lid: string, step: number, patch: Record<string, 
   }
   // pól liczonych przez serwer (ranking, pytania, analiza Claude) nie da się nadpisać z przeglądarki
   const own = Object.fromEntries(Object.entries(patch).filter(([k]) => !(PROTECTED[key] ?? []).includes(k)));
+  if (key === "decyzja" && own.form && typeof own.form === "object") {
+    // decyzja zapisuje się przy „Dalej” (bez osobnego przycisku)
+    const exists = await one("SELECT id FROM decisions WHERE loop_id = $1", [lid]);
+    await createDecision(lid, { ...(own.form as Record<string, unknown>), replace: !!exists } as Parameters<typeof createDecision>[1]);
+    delete own.form;
+  }
   const merged = { ...data, [key]: { ...(data[key] ?? {}), ...own } };
   await q("UPDATE loops SET data = $2 WHERE id = $1", [lid, JSON.stringify(merged)]);
+  if (key === "cel" && own.range) await refreshAfterScope(projectId);
   if (!advance) return { missing: [] as string[] };
   const miss = await missing(lid, projectId, step, merged);
   if (miss.length) return { missing: miss };
@@ -276,13 +298,14 @@ export async function refreshAfterScope(projectId: string) {
   const open = await one<{ id: string; data: unknown }>("SELECT id, data FROM loops WHERE project_id = $1 AND finished_at IS NULL", [projectId]);
   if (!open) return;
   const data = j<LoopRow["data"]>(open.data, {});
+  const range = rangeOfData(data);
   const p = await predictionOf(open.id);
   if (p) {
-    const a = await predictionActuals(projectId);
+    const a = await predictionActuals(projectId, range.to);
     await q("UPDATE predictions SET window_from = $2, window_to = $3, profit_actual = $4, stage_actual = $5 WHERE loop_id = $1", [open.id, a.from, a.to, a.profit, a.stage]);
   }
   if (data.kwota?.snapshot) {
-    const eng = await engine(projectId);
+    const eng = await engine(projectId, range);
     const top = eng.ranking.levers.find((l) => l.value != null)?.key ?? null;
     if (p) await q("UPDATE predictions SET lever_actual = $2 WHERE loop_id = $1", [open.id, top]);
     await q("UPDATE loops SET data = $2 WHERE id = $1", [open.id, JSON.stringify({ ...data, kwota: { ...data.kwota, snapshot: eng } })]);
@@ -291,10 +314,10 @@ export async function refreshAfterScope(projectId: string) {
 
 /** Predykcja – zapisywana przed odsłonięciem danych; po przejściu dalej nie da się jej zmienić. */
 export async function savePrediction(lid: string, profitGuess: number, stageGuess: string) {
-  const { projectId } = await loopProject(lid);
+  const { projectId, data } = await loopProject(lid);
   if (!Number.isFinite(profitGuess)) throw new Error("Wpisz profit w zł");
   if (!stageGuess) throw new Error("Wybierz etap");
-  const a = await predictionActuals(projectId);
+  const a = await predictionActuals(projectId, rangeOfData(data).to);
   const old = await predictionOf(lid);
   await q("DELETE FROM predictions WHERE loop_id = $1", [lid]);
   await q(
@@ -316,7 +339,7 @@ export async function guessLever(lid: string, guess: string) {
     await q("UPDATE predictions SET lever_guess = $2 WHERE loop_id = $1", [lid, guess]);
     return;
   }
-  const eng = await engine(projectId);
+  const eng = await engine(projectId, rangeOfData(data));
   const top = eng.ranking.levers.find((l) => l.value != null)?.key ?? null;
   await q("UPDATE predictions SET lever_guess = $2, lever_actual = $3 WHERE loop_id = $1", [lid, guess, top]);
   // pogłębiamy dźwignię nr 1; gdy żadna nie ma danych – tę, którą wskazałeś
@@ -568,6 +591,9 @@ export async function rateAction(lid: string, taskId: string, effect: string, ca
 
 export interface ReportData {
   createdAt: string;
+  /** tytuł raportu (edytowalny) */
+  title: string;
+  range: Range;
   client: string;
   project: string;
   scope: { campaigns: string[]; products: string[] };
@@ -591,7 +617,7 @@ export interface ReportData {
 async function buildReport(lid: string, projectId: string, data: LoopRow["data"]): Promise<ReportData> {
   const [st, r, settings, names] = await Promise.all([
     loopState(projectId),
-    reality(projectId),
+    reality(projectId, rangeOfData(data).to),
     loadSettings(projectId),
     one<{ project: string; client: string }>("SELECT p.name AS project, c.name AS client FROM projects p JOIN clients c ON c.id = p.client_id WHERE p.id = $1", [projectId]),
   ]);
@@ -600,6 +626,8 @@ async function buildReport(lid: string, projectId: string, data: LoopRow["data"]
   const ans = (data.pytania?.answers ?? {}) as Record<string, string>;
   return {
     createdAt: new Date().toISOString(),
+    title: `Raport – ${names?.client ?? ""} – ${new Date().toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" })}`,
+    range: rangeOfData(data),
     client: names?.client ?? "",
     project: names?.project ?? "",
     scope: settings.analysisScope ?? settings.economicsScope,
@@ -652,7 +680,7 @@ export async function listReports(projectId: string) {
     const rep = j<ReportData>(r.report, {} as ReportData);
     const top = rep.engine?.ranking.levers.find((l) => l.value != null);
     return {
-      id: r.id, date: r.finished_at,
+      id: r.id, date: r.finished_at, title: rep.title ?? null,
       profit: rep.gap?.achieved ?? null, target: rep.goal?.profit_target ?? null,
       decision: rep.decision?.what ?? null, expected: rep.decision?.expected_month ?? null,
       lever: top ? { key: top.key, value: top.value } : null,
@@ -666,6 +694,13 @@ export async function getReport(lid: string) {
     [lid],
   );
   return r?.report ? { projectId: r.project_id, report: j<ReportData>(r.report, {} as ReportData), shareToken: r.share_token } : null;
+}
+
+/** Zmiana tytułu raportu. */
+export async function renameReport(lid: string, title: string) {
+  const t = title.trim().slice(0, 200);
+  if (!t) throw new Error("Wpisz tytuł");
+  await q("UPDATE loops SET data = jsonb_set(data, '{report,title}', to_jsonb($2::text)) WHERE id = $1 AND finished_at IS NOT NULL", [lid, t]);
 }
 
 /** Link tylko do odczytu dla klienta (tworzony na żądanie). */

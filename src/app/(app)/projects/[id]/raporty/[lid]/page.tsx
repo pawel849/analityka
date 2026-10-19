@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { ReportActions } from "@/components/loop/ReportActions";
+import { ReportActions, ReportTitle } from "@/components/loop/ReportActions";
 import { ReportView } from "@/components/loop/ReportView";
 import { getReport } from "@/lib/loop";
 
@@ -22,7 +22,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           <ReportActions lid={lid} />
         </div>
       </header>
-      <ReportView r={r.report} />
+      <ReportView r={r.report} title={<ReportTitle lid={lid} initial={r.report.title || `Raport – ${r.report.client} – ${new Date(r.report.createdAt).toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" })}`} />} />
     </>
   );
 }

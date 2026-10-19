@@ -1,5 +1,10 @@
 import { guarded, json, type Params } from "@/lib/api";
+import { sessionRange } from "@/lib/loop";
 import { reality } from "@/lib/loop-data";
 
 export const dynamic = "force-dynamic";
-export const GET = guarded(async (_req, { params }: Params<"id">) => json(await reality((await params).id)));
+/** Wynik w okresie sesji (koniec okresu = koniec wykresów). */
+export const GET = guarded(async (_req, { params }: Params<"id">) => {
+  const { id } = await params;
+  return json(await reality(id, (await sessionRange(id)).to));
+});

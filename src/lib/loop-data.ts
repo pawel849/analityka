@@ -114,8 +114,8 @@ function dataGaps(c: Ctx, sources: SourceStatus[], to: string): string[] {
 }
 
 /** Krok 2: te same liczby w trzech skalach + źródła + zdarzenia z osi czasu. */
-export async function reality(projectId: string) {
-  const t = today();
+export async function reality(projectId: string, end?: string) {
+  const t = end && end < today() ? end : today();
   const wideFrom = addDays(t, -59);
   const c = await ctx(projectId, addDays(wideFrom, -60));
   const sources = await dataSources(projectId);
@@ -279,13 +279,20 @@ export interface EngineResult {
 }
 
 /** Ranking dźwigni: okno bieżące = ostatnie 30 pełnych dni; benchmark = najlepsze 7 dni z 60 (albo cele z ustawień). */
-export async function engine(projectId: string): Promise<EngineResult> {
-  const end = addDays(today(), -1);
+export interface Range { from: string; to: string }
+
+/** Domyślny okres sesji: ostatnie 30 pełnych dni. */
+export const defaultRange = (): Range => ({ from: addDays(today(), -30), to: addDays(today(), -1) });
+
+export async function engine(projectId: string, range: Range = defaultRange()): Promise<EngineResult> {
+  const end = range.to;
+  const len = daysBetween(range.from, range.to);
   const from60 = addDays(end, -59);
-  const c = await ctx(projectId, from60);
-  const days = dailyAgg(c, from60, end);
-  const window = sumDays(days, addDays(end, -29), end);
-  const prev = sumDays(days, from60, addDays(end, -30));
+  const histFrom = [from60, addDays(range.from, -len)].sort()[0];
+  const c = await ctx(projectId, histFrom);
+  const days = dailyAgg(c, histFrom, end);
+  const window = sumDays(days, range.from, end);
+  const prev = sumDays(days, addDays(range.from, -len), addDays(range.from, -1));
   const th = { minClicks: c.s.session.minClicks, minOrders: c.s.session.minOrders };
   const ltv = ltvExtra(c, end);
   const econ = econOf(c, money(c, window.from, window.to), ltv.value);
@@ -323,8 +330,7 @@ export async function measure(projectId: string, from: string, to: string) {
 }
 
 /** Prawdziwe wartości do porównania z predykcją: profit ostatnich 7 pełnych dni i etap, który się pogorszył. */
-export async function predictionActuals(projectId: string) {
-  const end = addDays(today(), -1);
+export async function predictionActuals(projectId: string, end = addDays(today(), -1)) {
   const c = await ctx(projectId, addDays(end, -13));
   const days = dailyAgg(c, addDays(end, -13), end);
   const last = sumDays(days, addDays(end, -6), end);

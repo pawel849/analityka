@@ -1,7 +1,9 @@
 "use client";
 
-import { CircleCheck, Eye, Flag, MessageCircleQuestion, MousePointerClick, ShoppingCart, Sparkles, Target, Trophy, Wallet } from "lucide-react";
+import { Fragment, useState } from "react";
+import { ChevronDown, CircleCheck, Eye, Flag, MessageCircleQuestion, MousePointerClick, ShoppingCart, Sparkles, Target, Trophy, Wallet } from "lucide-react";
 import { LEVER_NAMES } from "@/lib/loop-def";
+import { improve, type MetricKey } from "@/lib/levers";
 import type { ReportData } from "@/lib/loop";
 import { DecisionCard, Deadline } from "./Decisions";
 import { DataGaps, dayLabel, fm, GoalChart, PaceBars, pct, ProfitBars, range, RichText, zl, zlSigned, type GoalGap } from "./ui";
@@ -51,7 +53,7 @@ export function PredictionVs({ p }: { p: NonNullable<ReportData["prediction"]> }
 }
 
 /** Dźwignie jako paski w zł/mies. */
-export function LeverBars({ levers, focus, onPick, open, guess }: { levers: NonNullable<ReportData["engine"]>["ranking"]["levers"]; focus?: string | null; onPick?: (k: string) => void; open?: string | null; guess?: string | null }) {
+export function LeverBars({ levers, focus, onPick, open, guess, detail }: { levers: NonNullable<ReportData["engine"]>["ranking"]["levers"]; focus?: string | null; onPick?: (k: string) => void; open?: string | null; guess?: string | null; detail?: (k: string) => React.ReactNode }) {
   const max = Math.max(1, ...levers.map((l) => (l.lowConfidence && l.range ? l.range[1] : l.value ?? 0)));
   return (
     <div className="lb">
@@ -59,7 +61,8 @@ export function LeverBars({ levers, focus, onPick, open, guess }: { levers: NonN
         const v = l.value ?? 0;
         const Tag = onPick ? "button" : "div";
         return (
-          <Tag key={l.key} className={`lb-row ${focus === l.key ? "focus" : ""} ${open === l.key ? "open" : ""} ${guess === l.key ? "guess" : ""} ${i === 0 && l.value != null ? "top" : ""}`} {...(onPick ? { onClick: () => onPick(l.key) } : {})}>
+          <Fragment key={l.key}>
+          <Tag className={`lb-row ${focus === l.key ? "focus" : ""} ${open === l.key ? "open" : ""} ${guess === l.key ? "guess" : ""} ${i === 0 && l.value != null ? "top" : ""}`} {...(onPick ? { onClick: () => onPick(l.key) } : {})}>
             <span className="lb-n">{i + 1}</span>
             <span className="lb-name">{LEVER_NAMES[l.key].name}<small>{LEVER_NAMES[l.key].short}{guess === l.key && <em className="lb-tag you">Twój typ</em>}{i === 0 && l.value != null && <em className="lb-tag top">Dane: nr 1</em>}</small></span>
             <span className="lb-track">
@@ -72,9 +75,45 @@ export function LeverBars({ levers, focus, onPick, open, guess }: { levers: NonN
             </span>
             <span className="lb-val">{l.value == null ? "" : l.lowConfidence ? <>{range(l.range)}<small>mało danych</small></> : <>{zlSigned(l.value)}<small>/mies.</small></>}</span>
             {focus === l.key && <Flag size={15} className="lb-flag" />}
+            {onPick && <ChevronDown size={16} className="lb-chev" />}
           </Tag>
+          {open === l.key && detail && <div className="lb-detail">{detail(l.key)}</div>}
+          </Fragment>
         );
       })}
+    </div>
+  );
+}
+
+const better = (k: string, a: number, b: number) => (k === "cpm" ? a <= b : a >= b);
+
+/** Szczegóły dźwigni: ile warta jednostka, teraz vs najlepszy tydzień (kolorami), zysk z powrotu i z +10%. */
+export function LeverDetail({ eng, k }: { eng: NonNullable<ReportData["engine"]>; k: MetricKey }) {
+  const L = eng.ranking.levers.find((l) => l.key === k)!;
+  const N = LEVER_NAMES[k];
+  const unit = k === "cpm" ? { label: "1000 wyświetleń", v: eng.units.perMille } : k === "ctr" ? { label: "1 kliknięcie", v: eng.units.perClick } : { label: "1 zamówienie", v: eng.units.perOrder };
+  const plus10 = L.current != null ? improve(k, L.current, 0.1) : null;
+  const max = Math.max(L.current ?? 0, L.benchmark ?? 0) || 1;
+  const ok = L.current != null && L.benchmark != null && better(k, L.current, L.benchmark);
+  const diff = L.current != null && L.benchmark ? Math.abs(L.current / L.benchmark - 1) : null;
+  return (
+    <div className="ld2">
+      <div className="ld2-cmp">
+        <h4>{N.name} ({N.short}): teraz vs najlepszy tydzień</h4>
+        <div className="ld2-bars">
+          <div className={`ld2-bar ${ok ? "good" : "bad"}`}><span>Teraz</span><div><i style={{ width: `${((L.current ?? 0) / max) * 100}%` }} /></div><b>{fm(k, L.current)}</b></div>
+          <div className="ld2-bar best"><span>Najlepszy tydzień</span><div><i style={{ width: `${((L.benchmark ?? 0) / max) * 100}%` }} /></div><b>{fm(k, L.benchmark)}</b></div>
+        </div>
+        {diff != null && <p className={ok ? "pos" : "neg"}>{ok ? "Teraz jest tak dobrze jak w najlepszym tygodniu albo lepiej." : `Teraz jest o ${Math.round(diff * 100)}% gorzej niż w najlepszym tygodniu${k === "cpm" ? " (przy CPM niżej = lepiej)" : ""}.`}</p>}
+      </div>
+      <div className="ld2-cards">
+        <div className="ld-card unit"><h4>Ile jest warte {unit.label}</h4><b>{zl(unit.v)}</b><small>profitu na czysto</small></div>
+        <div className="ld-card hero">
+          <h4>Gdyby {N.short} wrócił do najlepszego tygodnia</h4>
+          {L.missing ? <p>brak danych: {L.missing}</p> : L.lowConfidence ? <><b>{range(L.range)}</b><small>miesięcznie · mało danych, dlatego zakres</small></> : <><b>{zlSigned(L.value)}</b><small>więcej profitu miesięcznie</small></>}
+        </div>
+        <div className="ld-card"><h4>Mały krok: {N.short} lepszy o 10%</h4><p>{fm(k, L.current)} → {fm(k, plus10)}</p><b className="pos">{zlSigned(L.per10)} / mies.</b></div>
+      </div>
     </div>
   );
 }
@@ -89,21 +128,20 @@ function Section({ icon: I, title, children }: { icon: typeof Target; title: str
 }
 
 /** Raport z sesji – od góry do dołu, liczby zamrożone w dniu sesji. */
-export function ReportView({ r }: { r: ReportData }) {
+export function ReportView({ r, title }: { r: ReportData; title?: React.ReactNode }) {
   const g = r.gap as unknown as GoalGap | null;
   const eng = r.engine;
-  const scope = (xs: string[], all: string) => (xs.length ? xs.join(", ") : all);
+  const [open, setOpen] = useState<string | null>(null);
+  const dateTxt = new Date(r.createdAt).toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" });
   return (
     <article className="rp">
       <header className="rp-head">
-        <span>{r.client}</span>
-        <h1>{r.project}</h1>
-        <p>Raport z sesji analitycznej · {new Date(r.createdAt).toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" })}</p>
-        <p className="rp-scope">Kampanie: {scope(r.scope.campaigns, "wszystkie")} · Produkty: {scope(r.scope.products, "wszystkie")}</p>
+        {title ?? <h1>{r.title || `Raport – ${r.client} – ${dateTxt}`}</h1>}
+        {r.range && <p>Okres: {dayLabel(r.range.from)} – {dayLabel(r.range.to)} {r.range.to.slice(0, 4)}</p>}
       </header>
 
       {r.decision && (
-        <Section icon={Flag} title="Decyzja">
+        <Section icon={Flag} title="Najważniejszy punkt">
           <DecisionCard d={r.decision} />
         </Section>
       )}
@@ -134,26 +172,25 @@ export function ReportView({ r }: { r: ReportData }) {
 
       {eng && (
         <Section icon={Sparkles} title="Gdzie leżą pieniądze">
-          <LeverBars levers={eng.ranking.levers} focus={r.focus} guess={r.prediction?.lever_guess} />
           <div className="rp-units">
             <span>1 zamówienie = <b>{zl(eng.units.perOrder)}</b> profitu</span>
             <span>1 kliknięcie = <b>{zl(eng.units.perClick)}</b></span>
             <span>1000 wyświetleń = <b>{zl(eng.units.perMille)}</b></span>
           </div>
-          <table className="tbl rp-tbl">
-            <thead><tr><th /><th className="num">Teraz</th><th className="num">Najlepszy tydzień</th><th className="num">+10% =</th></tr></thead>
-            <tbody>
-              {eng.ranking.levers.map((l) => (
-                <tr key={l.key}><td>{LEVER_NAMES[l.key].name} ({LEVER_NAMES[l.key].short})</td><td className="num">{fm(l.key, l.current)}</td><td className="num">{fm(l.key, l.benchmark)}</td><td className="num">{zlSigned(l.per10)}/mies.</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <LeverBars levers={eng.ranking.levers} focus={r.focus} guess={r.prediction?.lever_guess} open={open} onPick={(k) => setOpen(open === k ? null : k)} detail={(k) => <LeverDetail eng={eng} k={k as MetricKey} />} />
         </Section>
       )}
 
       {r.questions.length > 0 && (
         <Section icon={MessageCircleQuestion} title="Pytania i odpowiedzi">
-          <ol className="rp-qa">{r.questions.map((x, i) => <li key={i}><p>{x.q}</p><blockquote>{x.a}</blockquote></li>)}</ol>
+          <div className="chat">
+            {r.questions.map((x, i) => (
+              <Fragment key={i}>
+                <div className="chat-q"><span>{i + 1}</span><p>{x.q}</p></div>
+                <div className="chat-a"><p>{x.a}</p></div>
+              </Fragment>
+            ))}
+          </div>
         </Section>
       )}
 
@@ -180,16 +217,17 @@ export function ReportView({ r }: { r: ReportData }) {
       )}
 
       {r.summary && (
-        <Section icon={CircleCheck} title="Wniosek">
-          <p className="rp-summary">{r.summary}</p>
-        </Section>
+        <section className="rp-lesson">
+          <CircleCheck size={26} />
+          <div><em>Wniosek</em><p>{r.summary}</p></div>
+        </section>
       )}
 
       <Section icon={Trophy} title="Licznik efektów">
         <div className="rp-kpis">
-          <div><em>Zweryfikowane decyzje</em><b><span className="pos">{zlSigned(r.counter.plus)}</span> / <span className="neg">{zlSigned(r.counter.minus)}</span></b></div>
-          <div><em>Trafność hipotez</em><b>{pct(r.counter.hitRate)}</b></div>
-          <div><em>Średni błąd predykcji</em><b>{zl(r.counter.meanError)}</b></div>
+          <div><em>Zweryfikowane decyzje</em><b><span className="pos">{zlSigned(r.counter.plus)}</span> / <span className="neg">{zlSigned(r.counter.minus)}</span></b><small>ile zł miesięcznie zarobiły (+) i straciły (−) decyzje, które już sprawdziłeś</small></div>
+          <div><em>Trafność hipotez</em><b>{pct(r.counter.hitRate)}</b><small>w ilu sprawdzonych decyzjach miałeś rację</small></div>
+          <div><em>Średni błąd predykcji</em><b>{zl(r.counter.meanError)}</b><small>o ile średnio myliłeś się, zgadując profit tygodnia – im mniej, tym lepsza intuicja</small></div>
         </div>
       </Section>
     </article>

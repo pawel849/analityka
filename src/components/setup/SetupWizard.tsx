@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../forms";
 import { ApiConnections } from "../ApiConnections";
-import { openHelp } from "../help/HelpCenter";
 import { LEGACY_TABS, projectHref } from "@/lib/nav";
 import { matchesPage } from "@/lib/analysis";
 import { TOTAL_LABELS } from "@/lib/analysis";
@@ -156,7 +155,6 @@ export function SetupWizard({ projectId, origin, trackingKey, initial }: { proje
         </div>
         <div className="row">
           {saving && <span className="hint">Zapisuję…</span>}
-          <button className="btn small" onClick={() => openHelp("ask")}>Mam pytanie</button>
           <button
             className="btn small"
             title="Wrócisz do niego z menu po lewej: „Przewodnik konfiguracji”"
@@ -833,8 +831,6 @@ function StepDone({
     ["Kolejny lejek", "Inna oferta tego klienta – dodaj w Mapach lejków.", tab("lejki")],
     ["Zapisy z newslettera", "MailerLite / GetResponse → webhook (Źródła danych → Webhook).", tab("integracje")],
     ["Dane testowe do nauki", "Symulowany ruch po mapie, żeby poćwiczyć analizę.", tab("integracje")],
-    ["Samouczek edytora mapy", "Interaktywne oprowadzenie po mapie.", () => openHelp("tours")],
-    ["Zapytaj asystenta", "Pytanie o dowolną funkcję aplikacji.", () => openHelp("ask")],
     ["Google Ads przez API", "Planowane – na razie import CSV.", "", true],
     ["Google Analytics 4 / PostHog", "Planowane.", "", true],
     ["Statystyki e-maili (otwarcia, kliknięcia)", "Planowane.", "", true],

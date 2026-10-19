@@ -37,6 +37,19 @@ export function Deadline({ date, done }: { date: string; done?: boolean }) {
   );
 }
 
+/** Termin sprawdzenia jako wyraźny baner. */
+export function BigDeadline({ date, done }: { date: string; done?: boolean }) {
+  const n = daysTo(date);
+  const when = done ? "rozstrzygnięta" : n > 1 ? `za ${n} dni` : n === 1 ? "jutro" : n === 0 ? "dziś" : `${-n} dni po terminie`;
+  return (
+    <div className={`bdl ${done ? "done" : n <= 0 ? "due" : ""}`}>
+      <CalendarClock size={26} />
+      <div><em>Sprawdzamy wynik</em><b>{new Date(`${date}T12:00:00`).toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</b></div>
+      <span>{when}</span>
+    </div>
+  );
+}
+
 /** Hipoteza jako centrum: A → B. */
 export function HypothesisLine({ d }: { d: Decision }) {
   if (!d.metric) return null;
@@ -56,10 +69,10 @@ export function DecisionCard({ d, onDelete, children }: { d: Decision; onDelete?
   return (
     <div className="dc">
       <div className="dc-top">
-        <Deadline date={d.check_date} done={!!d.verdict} />
+        <h3 className="dc-what">{d.kind === NO_CHANGE ? "Nic nie zmieniam" : d.what}</h3>
         {onDelete && <button className="icon-btn danger" title="Usuń decyzję" aria-label="Usuń decyzję" onClick={onDelete}><Trash2 size={15} /></button>}
       </div>
-      <h3 className="dc-what">{d.kind === NO_CHANGE ? "Nic nie zmieniam" : d.what}</h3>
+      <BigDeadline date={d.check_date} done={!!d.verdict} />
       {d.kind !== NO_CHANGE && (
         <div className="dc-hero">
           <div className="dc-val"><em>Stawka</em><b>{zlSigned(d.expected_month)}</b><small>miesięcznie</small></div>
@@ -70,7 +83,7 @@ export function DecisionCard({ d, onDelete, children }: { d: Decision; onDelete?
         {d.who && <span><User size={14} /> {d.who}</span>}
         {d.element && <span>{d.element}</span>}
       </div>
-      <p className="dc-why">{d.why}</p>
+      <div className="dc-why"><em>Dlaczego taka decyzja</em><p>{d.why}</p></div>
       {children}
     </div>
   );

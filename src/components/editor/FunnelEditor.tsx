@@ -36,7 +36,6 @@ import { getNodesBounds, getViewportForBounds } from "@xyflow/react";
 import { toPng } from "html-to-image";
 import { ExplorePanel } from "./ExplorePanel";
 import { MetricsBar } from "./MetricsBar";
-import { openHelp } from "../help/HelpCenter";
 import { KindIcon } from "./icons";
 import { Compass, LayoutGrid, ListChecks, NotebookPen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
@@ -758,7 +757,6 @@ function Editor({ funnel, project, client, readOnly = false, analysisUrl }: Edit
                 <p className="hint">Przeciągnij elementy z lewego panelu i połącz je strzałkami (od kropki po prawej do kropki po lewej).</p>
                 <div className="row" style={{ justifyContent: "center" }}>
                   <button className="btn primary" onClick={() => setShowTemplates(true)}>Zacznij od szablonu</button>
-                  {!readOnly && <button className="btn" onClick={() => openHelp("tours")}>Samouczek</button>}
                 </div>
               </div>
             </div>

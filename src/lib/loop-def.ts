@@ -1,7 +1,7 @@
 // Definicje sesji analitycznej – bez zależności od bazy (używane też w przeglądarce).
 
 export const STEPS = [
-  { key: "cel", title: "Cel i zakres" },
+  { key: "cel", title: "Okres, cel i zakres" },
   { key: "predykcja", title: "Twoja predykcja" },
   { key: "rzeczywistosc", title: "Wynik vs cel" },
   { key: "luka", title: "Luka" },

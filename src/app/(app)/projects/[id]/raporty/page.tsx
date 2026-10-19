@@ -39,8 +39,9 @@ export default async function ReportsPage({ params }: { params: Promise<{ id: st
           <Link key={r.id} href={`/projects/${id}/raporty/${r.id}`} className="rl-item">
             <span className="rl-date"><b>{new Date(`${r.date}T12:00:00`).getDate()}</b>{new Date(`${r.date}T12:00:00`).toLocaleDateString("pl-PL", { month: "short", year: "numeric" })}</span>
             <span className="rl-main">
-              <b>{r.decision ?? "Bez decyzji"}</b>
+              <b>{r.title ?? r.decision ?? "Raport"}</b>
               <span>
+                {r.decision && <>{r.decision} · </>}
                 {r.target != null && <>profit {zl(r.profit)} z {zl(r.target)}</>}
                 {r.lever && <> · <Flag size={12} /> {LEVER_NAMES[r.lever.key].name}</>}
               </span>

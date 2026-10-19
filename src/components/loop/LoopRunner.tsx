@@ -5,15 +5,16 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Calendar, CalendarDays, CalendarRange, Check, CircleAlert, CircleCheck, Eye, FlaskConical, Flag, Gift, Globe, Loader2,
-  Megaphone, MousePointerClick, MoreHorizontal, Package, Pause, Pencil, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
+  Megaphone, MousePointerClick, MoreHorizontal, Package, Pause, Pencil, Square, Target, CalendarClock, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
 } from "lucide-react";
 import { api } from "../forms";
-import { hypothesisValue, improve, METRICS, modelProfit, type MetricKey } from "@/lib/levers";
+import { hypothesisValue, METRICS, modelProfit, type MetricKey } from "@/lib/levers";
 import { ELEMENTS, LEVER_NAMES, NO_CHANGE, STEPS } from "@/lib/loop-def";
 import type { LoopState, ReportData } from "@/lib/loop";
 import type { EngineResult } from "@/lib/loop-data";
 import { DecisionCard, DecisionTasks, CopyBrief, Deadline, Verdict } from "./Decisions";
-import { LeverBars, PredictionVs, ReportView, stageName } from "./ReportView";
+import { daysTo } from "./ui";
+import { LeverBars, LeverDetail, PredictionVs, ReportView, stageName } from "./ReportView";
 import {
   DataGaps, dayLabel, fm, formatAmount, GoalChart, MoneyInput, PaceBars, plus, ProfitBars, range, RichText, zl, zlSigned, type GoalGap,
 } from "./ui";
@@ -292,6 +293,64 @@ function ScopePicker({ projectId, st, reload }: { projectId: string; st: LoopSta
   );
 }
 
+/* okres sesji (z jakiego czasu raport) */
+const isoD = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function presetRanges(): { key: string; label: string; from: string; to: string }[] {
+  const now = new Date();
+  const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const back = (n: number) => isoD(new Date(y.getFullYear(), y.getMonth(), y.getDate() - n + 1));
+  const dow = (now.getDay() + 6) % 7; // pon = 0
+  const lastMon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow - 7);
+  const lastSun = new Date(lastMon.getFullYear(), lastMon.getMonth(), lastMon.getDate() + 6);
+  const pmFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const pmTo = new Date(now.getFullYear(), now.getMonth(), 0);
+  return [
+    { key: "7", label: "Ostatnie 7 dni", from: back(7), to: isoD(y) },
+    { key: "14", label: "Ostatnie 14 dni", from: back(14), to: isoD(y) },
+    { key: "30", label: "Ostatnie 30 dni", from: back(30), to: isoD(y) },
+    { key: "pw", label: "Poprzedni tydzień", from: isoD(lastMon), to: isoD(lastSun) },
+    { key: "pm", label: "Poprzedni miesiąc", from: isoD(pmFrom), to: isoD(pmTo) },
+  ];
+}
+
+function RangePicker({ loopId, st, reload }: { loopId: string; st: LoopState; reload: () => Promise<void> }) {
+  const presets = presetRanges();
+  const r = st.range;
+  const hit = presets.find((p) => p.from === r.from && p.to === r.to);
+  const [custom, setCustom] = useState(!hit);
+  const [c, setC] = useState(r);
+  const [busy, setBusy] = useState(false);
+  const save = async (range: { from: string; to: string }) => {
+    setBusy(true);
+    await api(`/api/loops/${loopId}`, "PATCH", { step: 0, patch: { range }, advance: false });
+    await reload();
+    setBusy(false);
+  };
+  const yesterday = presets[0].to;
+  const len = Math.round((Date.parse(`${r.to}T12:00:00`) - Date.parse(`${r.from}T12:00:00`)) / 864e5) + 1;
+  return (
+    <div className="card-s rng">
+      <h3><CalendarRange size={20} /> Z jakiego okresu robimy raport?</h3>
+      <div className="rng-big">
+        <b>{dayLabel(r.from)} – {dayLabel(r.to)}</b>
+        <span>{len} {len === 1 ? "dzień" : "dni"}{busy && <Loader2 className="spin" size={14} />}</span>
+      </div>
+      <div className="rng-presets">
+        {presets.map((p) => <button key={p.key} className={`tile sm ${!custom && hit?.key === p.key ? "on" : ""}`} onClick={() => { setCustom(false); save(p); }}>{p.label}</button>)}
+        <button className={`tile sm ${custom ? "on" : ""}`} onClick={() => setCustom(true)}>Własny</button>
+      </div>
+      {custom && (
+        <div className="rng-custom">
+          <input type="date" value={c.from} max={c.to} onChange={(e) => setC({ ...c, from: e.target.value })} aria-label="Od" />
+          <span>–</span>
+          <input type="date" value={c.to} min={c.from} max={yesterday} onChange={(e) => setC({ ...c, to: e.target.value })} aria-label="Do" />
+          <button className="btn primary" disabled={!c.from || !c.to || c.from > c.to || c.to > yesterday} onClick={() => save(c)}><Check size={15} /> Ustaw</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StepGoal({ projectId, loopId, st, val, reload }: StepProps) {
   const [edit, setEdit] = useState(!st.goal);
   const ratings = val<Record<string, { effect?: string; carry?: boolean }>>("ratings", {});
@@ -322,6 +381,7 @@ function StepGoal({ projectId, loopId, st, val, reload }: StepProps) {
           </ul>
         </div>
       )}
+      <RangePicker loopId={loopId} st={st} reload={reload} />
       <div className="card-s">
         {!edit && st.goal ? (
           <div className="gf-done">
@@ -356,14 +416,14 @@ function StepPredict({ st, g, val, set }: StepProps) {
   return (
     <div className="ss-stack">
       <div className="card-s pd">
-        <h3>Ile zarobiłeś na czysto w ostatnich 7 dniach?</h3>
+        <h3>Ile zarobiłeś na czysto w 7 dniach do {dayLabel(st.range.to)}?</h3>
         <div className="pd-value">{profit == null ? "?" : `${formatAmount(Math.round(profit))} zł`}</div>
         <input type="range" className="pd-slider" min={min} max={max} step={step} value={profit ?? 0} disabled={locked} onChange={(e) => set("profit_guess", Number(e.target.value))} aria-label="Profit tygodnia" />
         <div className="pd-scale"><span>{formatAmount(min)} zł</span><span>0</span><span>{formatAmount(max)} zł</span></div>
         {!locked && <div className="pd-exact"><span>albo wpisz</span><MoneyInput allowNegative value={profit} onChange={(v) => set("profit_guess", v)} ariaLabel="Profit tygodnia" /></div>}
       </div>
       <div className="card-s">
-        <h3>Co się pogorszyło w ostatnim tygodniu?</h3>
+        <h3>Co się pogorszyło w tym tygodniu (vs tydzień wcześniej)?</h3>
         <div className="pd-stages">
           {STAGE_OPTIONS.map(({ key, icon: I }) => (
             <button key={key} disabled={locked} className={`tile ${stage === key ? "on" : ""}`} onClick={() => set("stage_guess", key)}>
@@ -452,45 +512,6 @@ function StepGap({ st, g }: StepProps) {
 
 /* ---------- 5. Gdzie leżą pieniądze ---------- */
 
-function LeverDetail({ eng, k }: { eng: EngineResult; k: MetricKey }) {
-  const L = eng.ranking.levers.find((l) => l.key === k)!;
-  const N = LEVER_NAMES[k];
-  const unit = k === "cpm" ? { label: "1000 wyświetleń", v: eng.units.perMille } : k === "ctr" ? { label: "1 kliknięcie", v: eng.units.perClick } : { label: "1 zamówienie", v: eng.units.perOrder };
-  const plus10 = L.current != null ? improve(k, L.current, 0.1) : null;
-  const max = Math.max(L.current ?? 0, L.benchmark ?? 0) || 1;
-  return (
-    <div className="ld">
-      <div className="ld-card unit">
-        <h4>Ile jest warte</h4>
-        <p>{unit.label}</p>
-        <b>{zl(unit.v)}</b>
-        <small>profitu na czysto</small>
-      </div>
-      <div className="ld-card">
-        <h4>{N.short}: teraz vs najlepszy tydzień</h4>
-        <div className="ld-bars">
-          <div><span>Teraz</span><i style={{ width: `${((L.current ?? 0) / max) * 100}%` }} /><b>{fm(k, L.current)}</b></div>
-          <div><span>Najlepszy tydzień</span><i className="best" style={{ width: `${((L.benchmark ?? 0) / max) * 100}%` }} /><b>{fm(k, L.benchmark)}</b></div>
-        </div>
-        {k === "cpm" && <small>Przy CPM niżej = lepiej.</small>}
-      </div>
-      <div className="ld-card hero">
-        <h4>Gdyby {N.short} wrócił do najlepszego tygodnia</h4>
-        {L.missing ? <p className="gap-tag">brak danych: {L.missing}</p> : L.lowConfidence ? (
-          <><b>{range(L.range)}</b><small>miesięcznie · mało danych, dlatego zakres zamiast jednej liczby</small></>
-        ) : (
-          <><b>{zlSigned(L.value)}</b><small>więcej profitu miesięcznie</small></>
-        )}
-      </div>
-      <div className="ld-card">
-        <h4>Mały krok: {N.short} lepszy o 10%</h4>
-        <p>{fm(k, L.current)} → {fm(k, plus10)}</p>
-        <b className="pos">{zlSigned(L.per10)} / mies.</b>
-      </div>
-    </div>
-  );
-}
-
 function StepMoney({ loopId, st, reload }: StepProps) {
   const eng = snapshotOf(st);
   const guess = st.prediction?.lever_guess ?? null;
@@ -547,13 +568,13 @@ function StepMoney({ loopId, st, reload }: StepProps) {
       <div className="card-s">
         <h3 className="ss-h3">Ile więcej profitu miesięcznie, gdyby każda rzecz wróciła do najlepszego tygodnia</h3>
         <div className="guess-mini"><span>Twój typ:</span>{METRICS.map((m) => { const I = LEVER_ICON[m.key]; return <button key={m.key} className={`tile sm ${guess === m.key ? "on" : ""}`} onClick={() => reveal(m.key)}><I size={16} /> {LEVER_NAMES[m.key].short}</button>; })}</div>
-        <LeverBars levers={eng.ranking.levers} focus={focus} open={open} guess={guess} onPick={(k) => setOpen(open === k ? null : k)} />
-        {open && (
-          <>
-            <LeverDetail eng={eng} k={open as MetricKey} />
-            {focus !== open && <button className="btn" onClick={() => setFocus(open)}><Flag size={14} /> Tę dźwignię pogłębiamy</button>}
-          </>
-        )}
+        <LeverBars levers={eng.ranking.levers} focus={focus} open={open} guess={guess} onPick={(k) => setOpen(open === k ? null : k)}
+          detail={(k) => (
+            <>
+              <LeverDetail eng={eng} k={k as MetricKey} />
+              {focus !== k && <button className="btn" onClick={() => setFocus(k)}><Flag size={14} /> Tę dźwignię pogłębiamy</button>}
+            </>
+          )} />
       </div>
       {eng.gaps.length > 0 && <DataGaps gaps={eng.gaps} />}
     </div>
@@ -672,7 +693,8 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
 
 const ELEMENT_ICON: Record<string, typeof Megaphone> = { reklama: Megaphone, strona: Globe, VSL: Video, checkout: ShoppingCart, oferta: Gift, inne: MoreHorizontal };
 
-function DecisionForm({ projectId, loopId, st, g, reload, edit, onCancel }: { projectId: string; loopId: string; st: LoopState; g: GoalGap | null; reload: () => Promise<void>; edit?: LoopState["decisions"][number]; onCancel?: () => void }) {
+/** Formularz decyzji – zapisuje się przy „Dalej” (pola trafiają do szkicu kroku). */
+function DecisionForm({ projectId, st, g, edit, onCancel, setForm }: { projectId: string; st: LoopState; g: GoalGap | null; edit?: LoopState["decisions"][number]; onCancel?: () => void; setForm: (v: unknown) => void }) {
   const eng = snapshotOf(st);
   const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? "cr") as MetricKey;
   const L = eng?.ranking.levers.find((l) => l.key === focus);
@@ -685,24 +707,16 @@ function DecisionForm({ projectId, loopId, st, g, reload, edit, onCancel }: { pr
     ? { what: edit.kind === NO_CHANGE ? "" : edit.what, who: edit.who, why: edit.why, element: edit.element || "reklama", metric: (edit.metric ?? focus) as string, check: edit.check_date, ad: edit.ad_test_id ?? "" }
     : { what: "", who: "", why: autoWhy, element: "reklama", metric: focus as string, check: plus(14), ad: "" });
   const [to, setTo] = useState<number | null>(edit?.to_value != null ? Math.round(edit.to_value * (edit.metric === "ctr" || edit.metric === "cr" ? 100 : 1) * 100) / 100 : null);
-  const [err, setErr] = useState("");
   const isRate = f.metric === "ctr" || f.metric === "cr";
   const toNum = to == null ? NaN : to / (isRate ? 100 : 1);
   const A = eng?.ranking.base[f.metric as MetricKey] ?? null;
   const expected = eng && Number.isFinite(toNum) ? hypothesisValue(eng.ranking.budget, eng.ranking.base, eng.econ, f.metric as MetricKey, toNum) : null;
-  const ready = kind === NO_CHANGE ? !!f.why.trim() : !!(f.what.trim() && f.who.trim() && f.why.trim() && Number.isFinite(toNum));
-  const save = async () => {
-    setErr("");
-    try {
-      await api(`/api/loops/${loopId}/decision`, "POST", kind === NO_CHANGE
-        ? { kind, why: f.why, who: f.who, check_date: f.check, replace: !!edit }
-        : { kind, what: f.what, who: f.who, why: f.why, element: f.element, metric: f.metric, to_value: toNum, check_date: f.check, ad_test_id: f.ad || null, replace: !!edit });
-      await reload();
-      onCancel?.();
-    } catch (x) {
-      setErr((x as Error).message);
-    }
-  };
+  useEffect(() => {
+    setForm(kind === NO_CHANGE
+      ? { kind, why: f.why, who: f.who, check_date: f.check }
+      : { kind, what: f.what, who: f.who, why: f.why, element: f.element, metric: f.metric, to_value: Number.isFinite(toNum) ? toNum : null, check_date: f.check, ad_test_id: f.ad || null });
+  }, [kind, f, toNum]); // eslint-disable-line react-hooks/exhaustive-deps
+  const n = daysTo(f.check);
   return (
     <div className="ss-stack">
       <div className="seg big">
@@ -746,39 +760,41 @@ function DecisionForm({ projectId, loopId, st, g, reload, edit, onCancel }: { pr
           </div>
         </>
       )}
-      <div className="card-s df2">
-        <label className="df2-l">Dlaczego?</label>
+      <div className="card-s why">
+        <h3><Target size={20} /> Dlaczego?</h3>
         <textarea rows={2} value={f.why} onChange={(e) => setF({ ...f, why: e.target.value })} />
-        <label className="df2-l">Kiedy sprawdzamy wynik?</label>
+      </div>
+      <div className="card-s when">
+        <h3><CalendarClock size={20} /> Kiedy sprawdzamy wynik?</h3>
+        <div className="when-big">
+          <b>{new Date(`${f.check}T12:00:00`).toLocaleDateString("pl-PL", { weekday: "long", day: "numeric", month: "long" })}</b>
+          <span>{n > 1 ? `za ${n} dni` : n === 1 ? "jutro" : "dziś"}</span>
+        </div>
         <div className="df2-dates">
-          {[7, 14, 30].map((n) => <button key={n} className={`tile sm ${f.check === plus(n) ? "on" : ""}`} onClick={() => setF({ ...f, check: plus(n) })}><CalendarDays size={18} /> za {n} dni</button>)}
+          {[7, 14, 30].map((d) => <button key={d} className={`tile sm ${f.check === plus(d) ? "on" : ""}`} onClick={() => setF({ ...f, check: plus(d) })}><CalendarDays size={18} /> za {d} dni</button>)}
           <input type="date" value={f.check} min={plus(1)} onChange={(e) => setF({ ...f, check: e.target.value })} aria-label="Data sprawdzenia" />
         </div>
-        {kind === "zmiana" && (
-          <div className="df2-test">
-            <Link href={`/projects/${projectId}/testy`} target="_blank" className="tile sm"><FlaskConical size={18} /> Utwórz test reklam</Link>
-            {st.adTests.length > 0 && (
-              <select value={f.ad} onChange={(e) => setF({ ...f, ad: e.target.value })} aria-label="Podepnij test reklam">
-                <option value="">Podepnij istniejący test…</option>
-                {st.adTests.map((a) => <option key={a.id} value={a.id}>{a.angle}</option>)}
-              </select>
-            )}
-          </div>
-        )}
       </div>
-      {err && <p className="error">{err}</p>}
-      <div className="row">
-        <button className={`btn primary big ${ready ? "pulse" : ""}`} disabled={!ready} onClick={save}><Check size={16} /> Zapisz decyzję</button>
-        {onCancel && <button className="btn" onClick={onCancel}>Anuluj</button>}
-      </div>
+      {kind === "zmiana" && (
+        <div className="df2-test">
+          <Link href={`/projects/${projectId}/testy`} target="_blank" className="tile sm"><FlaskConical size={18} /> Utwórz test reklam</Link>
+          {st.adTests.length > 0 && (
+            <select value={f.ad} onChange={(e) => setF({ ...f, ad: e.target.value })} aria-label="Podepnij test reklam">
+              <option value="">Podepnij istniejący test…</option>
+              {st.adTests.map((a) => <option key={a.id} value={a.id}>{a.angle}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+      {onCancel && <div className="row"><button className="btn" onClick={() => { setForm(undefined); onCancel(); }}>Anuluj edycję</button></div>}
     </div>
   );
 }
 
-function StepDecision({ projectId, loopId, st, g, reload }: StepProps) {
+function StepDecision({ projectId, loopId, st, g, set }: StepProps) {
   const mine = st.decisions.find((d) => d.loop_id === loopId);
   const [editing, setEditing] = useState(false);
-  if (!mine || editing) return <DecisionForm projectId={projectId} loopId={loopId} st={st} g={g} reload={reload} edit={mine} onCancel={mine ? () => setEditing(false) : undefined} />;
+  if (!mine || editing) return <DecisionForm projectId={projectId} st={st} g={g} edit={mine} setForm={(v) => set("form", v)} onCancel={mine ? () => setEditing(false) : undefined} />;
   return (
     <DecisionCard d={mine}>
       <div className="row"><button className="btn" onClick={() => setEditing(true)}><Pencil size={15} /> Edytuj</button><CopyBrief d={mine} /></div>
@@ -814,7 +830,7 @@ function StepVerdict({ loopId, st, reload }: StepProps) {
       {waiting.length > 0 && (
         <div className="card-s">
           <h3 className="ss-h3">Czekają na swój termin</h3>
-          <ul className="wt">{waiting.map((d) => <li key={d.id}><Deadline date={d.check_date} /><b>{d.what}</b>{d.expected_month != null && <span className="pos">{zlSigned(d.expected_month)}/mies.</span>}</li>)}</ul>
+          <ul className="wt">{waiting.map((d) => <li key={d.id}><Square size={20} className="wt-box" /><b>{d.what}</b>{d.expected_month != null && <span className="pos">{zlSigned(d.expected_month)}/mies.</span>}<Deadline date={d.check_date} /></li>)}</ul>
         </div>
       )}
       {!st.due.length && !doneHere.length && !waiting.length && <div className="card-s"><CircleCheck size={18} /> Nic do sprawdzenia.</div>}
