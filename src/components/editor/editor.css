@@ -1,19 +1,19 @@
 /* ===== Edytor lejka: dwa motywy ===== */
 .fe {
-  --fe-bg: #f3f1ea;
-  --fe-grid: #c8dccf;
-  --fe-panel: #fbfaf6;
-  --fe-panel-border: #cfe0d6;
-  --fe-ink: #0a3326;
-  --fe-ink-2: #2f5a4a;
-  --fe-muted: #6f8a7f;
-  --fe-node: #fffdf7;
-  --fe-node-border: #0b4a37;
-  --fe-edge: #0b4a37;
-  --fe-accent: #0b6e4f;
-  --fe-chip: #e3f2ea;
-  --fe-good: #1f8a63;
-  --fe-bad: #b5532a;
+  --fe-bg: #0f1412;
+  --fe-grid: #1f2a25;
+  --fe-panel: #151c19;
+  --fe-panel-border: #26312c;
+  --fe-ink: #eef4f1;
+  --fe-ink-2: #b7c4bd;
+  --fe-muted: #8a9a92;
+  --fe-node: #18201c;
+  --fe-node-border: #2f8f68;
+  --fe-edge: #3fa47c;
+  --fe-accent: #1fd38a;
+  --fe-chip: rgba(31, 211, 138, .13);
+  --fe-good: #2ee69a;
+  --fe-bad: #ff8a5c;
   display: grid;
   grid-template-columns: 270px 1fr 300px;
   grid-template-rows: auto 1fr auto;
@@ -22,26 +22,26 @@
   color: var(--fe-ink);
 }
 .fe.mode-analyze {
-  --fe-bg: #0b1210;
+  --fe-bg: #0a0f0d;
   --fe-grid: #1a2a24;
   --fe-panel: #111b18;
   --fe-panel-border: #22352e;
-  --fe-ink: #e3f2ea;
+  --fe-ink: rgba(31, 211, 138, .13);
   --fe-ink-2: #a9c4b8;
-  --fe-muted: #6f8a7f;
+  --fe-muted: #8a9a92;
   --fe-node: #14211d;
   --fe-node-border: #2b4a3f;
   --fe-edge: #4b7466;
-  --fe-accent: #6dbd98;
+  --fe-accent: #2ee69a;
   --fe-chip: #1c2e28;
-  --fe-good: #6dbd98;
-  --fe-bad: #e08a5e;
+  --fe-good: #2ee69a;
+  --fe-bad: #ff8a5c;
 }
 .fe input, .fe select, .fe textarea {
   background: var(--fe-node); color: var(--fe-ink); border-color: var(--fe-panel-border);
 }
 .fe .btn { background: var(--fe-node); color: var(--fe-ink); border-color: var(--fe-panel-border); }
-.fe .btn.primary { background: var(--fe-accent); color: #fff; border-color: var(--fe-accent); }
+.fe .btn.primary { background: var(--fe-accent); color: #06210f; border-color: var(--fe-accent); }
 .fe .hint { color: var(--fe-muted); }
 
 .fe-toolbar {
@@ -59,7 +59,7 @@
 .mode-switch button {
   font: inherit; font-size: 13px; padding: 6px 14px; border: 0; cursor: pointer; background: transparent; color: var(--fe-ink-2);
 }
-.mode-switch button.on { background: var(--fe-accent); color: #fff; }
+.mode-switch button.on { background: var(--fe-accent); color: #06210f; }
 
 .fe-palette, .fe-side {
   background: var(--fe-panel); overflow-y: auto; padding: 12px;
@@ -78,7 +78,7 @@
 
 .abbr {
   display: inline-grid; place-items: center; min-width: 26px; height: 22px; padding: 0 4px; border-radius: 5px;
-  font-family: var(--mono); font-size: 10px; font-weight: 700; color: #fff;
+  font-family: var(--mono); font-size: 10px; font-weight: 700; color: #06210f;
 }
 .cat-source { --node-accent: var(--cat-source); }
 .cat-page { --node-accent: var(--cat-page); }
@@ -176,10 +176,10 @@
 .pthumb .pt-btn-text { fill: #fff; font-family: var(--font); font-size: 5.5px; font-weight: 700; letter-spacing: .04em; }
 
 /* Cel konwersji */
-.fnode.is-goal { border-color: #0b6e4f; }
+.fnode.is-goal { border-color: #1fd38a; }
 .goal-badge {
   position: absolute; top: -11px; right: 8px; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
-  background: #c8e6d6; color: #0a3326; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: rgba(31, 211, 138, .25); color: #eef4f1; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* Zakładki panelu węzła */
@@ -225,7 +225,7 @@
   width: 32px; height: 32px; border-radius: 8px; border: 0; background: transparent; color: var(--fe-ink-2); font-size: 18px; line-height: 1; cursor: pointer;
 }
 .fe-rail button:hover { background: var(--fe-chip); }
-.fe-rail button.on { background: var(--fe-accent); color: #fff; }
+.fe-rail button.on { background: var(--fe-accent); color: #06210f; }
 .pal-search { width: 100%; margin-bottom: 8px; }
 .meta-notes { width: 100%; min-height: 60vh; resize: vertical; }
 .explore-sec { margin-top: 10px; }
@@ -322,7 +322,7 @@
 .pal-tile:hover { background: var(--fe-node); }
 .pal-label { font-size: 10.5px; line-height: 1.2; text-align: center; color: var(--fe-ink-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .pal-icon {
-  width: 40px; height: 40px; display: grid; place-items: center; background: var(--node-accent); color: #fff;
+  width: 40px; height: 40px; display: grid; place-items: center; background: var(--node-accent); color: #06210f;
   font-family: var(--mono); font-size: 11px; font-weight: 700;
 }
 /* Kształty: źródło = koło, strona = zaokrąglony kwadrat, akcja = romb */

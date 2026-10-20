@@ -26,7 +26,7 @@ interface Econ {
 // Paleta kategorii (zwalidowana, stała kolejność – kolor idzie za kategorią, nie za pozycją).
 export const SERIES = GREEN_SERIES;
 const REVENUE = GREEN[700];
-const SPEND = "#c2683c";
+const SPEND = "#ff8a5c";
 
 const money = (v: number | null | undefined, cur: string) =>
   v == null || !Number.isFinite(v) ? "—" : `${v.toLocaleString("pl-PL", { maximumFractionDigits: 0 })} ${cur}`;

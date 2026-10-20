@@ -47,8 +47,8 @@ function Chart({ series, events, cur, selected }: { series: MonthRow[]; events: 
   return (
     <div style={{ position: "relative" }}>
       <div className="row" style={{ gap: 14, marginBottom: 4 }}>
-        <span className="hint"><i style={{ display: "inline-block", width: 14, height: 2, background: "#0b6e4f", verticalAlign: "middle" }} /> przychód brutto</span>
-        <span className="hint"><i style={{ display: "inline-block", width: 14, height: 2, background: "#c2683c", verticalAlign: "middle" }} /> wydatki reklamowe</span>
+        <span className="hint"><i style={{ display: "inline-block", width: 14, height: 2, background: "#1fd38a", verticalAlign: "middle" }} /> przychód brutto</span>
+        <span className="hint"><i style={{ display: "inline-block", width: 14, height: 2, background: "#ff8a5c", verticalAlign: "middle" }} /> wydatki reklamowe</span>
         <span className="hint"><i style={{ display: "inline-block", width: 2, height: 10, background: "var(--muted)", verticalAlign: "middle" }} /> zdarzenie</span>
       </div>
       <svg viewBox={`0 0 ${w} ${h + 20}`} width="100%" role="img" aria-label="Przychód i wydatki miesięcznie ze zdarzeniami">
@@ -59,8 +59,8 @@ function Chart({ series, events, cur, selected }: { series: MonthRow[]; events: 
           const on = selected === e.id;
           return <line key={e.id} x1={x(i)} x2={x(i)} y1={0} y2={h} stroke={on ? "var(--accent)" : "var(--muted)"} strokeWidth={on ? 2 : 1} strokeDasharray={on ? undefined : "3 3"} opacity={on ? 1 : 0.6} />;
         })}
-        <polyline points={path("gross")} fill="none" stroke="#0b6e4f" strokeWidth={2} strokeLinejoin="round" />
-        <polyline points={path("spend")} fill="none" stroke="#c2683c" strokeWidth={2} strokeLinejoin="round" />
+        <polyline points={path("gross")} fill="none" stroke="#1fd38a" strokeWidth={2} strokeLinejoin="round" />
+        <polyline points={path("spend")} fill="none" stroke="#ff8a5c" strokeWidth={2} strokeLinejoin="round" />
         {series.map((r, i) => (
           <rect key={r.month} x={i * step} y={0} width={step} height={h} fill="transparent" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
         ))}

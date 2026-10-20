@@ -44,7 +44,7 @@ export function FunnelThumb({ graph }: { graph: { nodes?: TNode[]; edges?: TEdge
         if (!a || !b) return null;
         const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
         const dx = Math.max(40, Math.abs(x2 - x1) / 2);
-        return <path key={i} d={`M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`} fill="none" stroke="#9aa3b2" strokeWidth={4} />;
+        return <path key={i} d={`M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`} fill="none" stroke="#5d6b64" strokeWidth={4} />;
       })}
       {nodes.map((n) => {
         const b = boxes.get(n.id)!;
@@ -54,9 +54,9 @@ export function FunnelThumb({ graph }: { graph: { nodes?: TNode[]; edges?: TEdge
         const c = COLORS[cat ?? ""] ?? "#7b8392";
         return (
           <g key={n.id}>
-            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={12} fill="#fff" stroke={c} strokeWidth={5} />
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={12} fill="#18201c" stroke={c} strokeWidth={5} />
             <rect x={b.x} y={b.y} width={b.w} height={18} rx={9} fill={c} />
-            <rect x={b.x + 18} y={b.y + 36} width={b.w * 0.6} height={12} rx={6} fill="#dfe3ea" />
+            <rect x={b.x + 18} y={b.y + 36} width={b.w * 0.6} height={12} rx={6} fill="#2a3530" />
           </g>
         );
       })}

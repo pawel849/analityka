@@ -1,22 +1,22 @@
 // Jedna paleta aplikacji: odcienie butelkowej zieleni (od najciemniejszego).
 export const GREEN = {
-  900: "#0a3326",
-  800: "#0b4a37",
-  700: "#0b6e4f", // butelkowa zieleń – kolor główny
-  600: "#1f8a63",
-  500: "#3fa47c",
-  400: "#6dbd98",
-  300: "#9fd3b8",
-  200: "#c8e6d6",
-  100: "#e3f2ea",
-  50: "#f2f9f5",
+  900: "#0f8a5a",
+  800: "#12a46a",
+  700: "#1fd38a", // szmaragd – kolor główny (ciemny motyw)
+  600: "#2ee69a",
+  500: "#6fe3b2",
+  400: "#5fcf9c",
+  300: "#9ff0cb",
+  200: "#1d4a37",
+  100: "#17352a",
+  50: "#132a21",
 } as const;
 
 /** Serie wykresów i kategorie – kolejne odcienie zieleni, kontrastowe względem siebie. */
-export const GREEN_SERIES = [GREEN[700], "#c2683c", GREEN[400], GREEN[900], "#e3a582", GREEN[300], GREEN[600], "#9a4a24"];
+export const GREEN_SERIES = [GREEN[700], "#ff8a5c", GREEN[300], GREEN[900], "#ffc2a6", GREEN[500], GREEN[800], "#e0663a"];
 
-export const COPPER = "#c2683c";
-export const CREAM = "#f5f1e8";
+export const COPPER = "#ff8a5c";
+export const CREAM = "#0f1412";
 
 /** Kolory rodzajów elementów mapy. */
 export const CATEGORY_GREEN = { source: GREEN[900], page: GREEN[700], action: GREEN[500], offline: COPPER } as const;
