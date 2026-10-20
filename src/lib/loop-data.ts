@@ -114,10 +114,11 @@ function dataGaps(c: Ctx, sources: SourceStatus[], to: string): string[] {
 }
 
 /** Krok 2: te same liczby w trzech skalach + źródła + zdarzenia z osi czasu. */
-export async function reality(projectId: string, end?: string) {
+export async function reality(projectId: string, end?: string, range?: { from: string; to: string }) {
   const t = end && end < today() ? end : today();
   const wideFrom = addDays(t, -59);
-  const c = await ctx(projectId, addDays(wideFrom, -60));
+  const len = range ? daysBetween(range.from, range.to) : 0;
+  const c = await ctx(projectId, [addDays(wideFrom, -60), range ? addDays(range.from, -len) : wideFrom].sort()[0]);
   const sources = await dataSources(projectId);
   const wide = money(c, wideFrom, t);
   const widePrev = money(c, addDays(wideFrom, -60), addDays(wideFrom, -1));
@@ -131,8 +132,13 @@ export async function reality(projectId: string, end?: string) {
     "SELECT to_char(day, 'YYYY-MM-DD') AS day, title, type FROM timeline_events WHERE project_id = $1 AND day >= $2::date ORDER BY day",
     [projectId, wideFrom],
   );
+  // okres sesji (wybrany w kroku 1): suma, poprzedni okres tej samej długości, dzień po dniu (do 92 dni)
+  const period = range ? money(c, range.from, range.to) : null;
+  const periodPrev = range ? money(c, addDays(range.from, -len), addDays(range.from, -1)) : null;
+  const periodDays = range && len <= 92 ? Array.from({ length: len }, (_, i) => money(c, addDays(range.from, i), addDays(range.from, i))) : [];
   return {
     today: t,
+    range: range ?? null, period, periodPrev, periodDays,
     wide, widePrev, weeks, days, daily60, events, sources,
     gaps: dataGaps(c, sources, t),
     lastOrder: c.lastOrder, lastAd: c.lastAd,
@@ -330,11 +336,14 @@ export async function measure(projectId: string, from: string, to: string) {
 }
 
 /** Prawdziwe wartości do porównania z predykcją: profit ostatnich 7 pełnych dni i etap, który się pogorszył. */
-export async function predictionActuals(projectId: string, end = addDays(today(), -1)) {
-  const c = await ctx(projectId, addDays(end, -13));
-  const days = dailyAgg(c, addDays(end, -13), end);
-  const last = sumDays(days, addDays(end, -6), end);
-  const prev = sumDays(days, addDays(end, -13), addDays(end, -7));
+/** Prawdziwe wartości do predykcji: profit w okresie sesji i etap, który się pogorszył (okres vs tyle samo dni wcześniej). */
+export async function predictionActuals(projectId: string, range: { from: string; to: string }) {
+  const len = daysBetween(range.from, range.to);
+  const pFrom = addDays(range.from, -len);
+  const c = await ctx(projectId, pFrom);
+  const days = dailyAgg(c, pFrom, range.to);
+  const last = sumDays(days, range.from, range.to);
+  const prev = sumDays(days, pFrom, addDays(range.from, -1));
   const th = { minClicks: c.s.session.minClicks, minOrders: c.s.session.minOrders };
-  return { from: addDays(end, -6), to: end, profit: money(c, addDays(end, -6), end).profit, stage: worstStage(last, prev, th), last, prev };
+  return { from: range.from, to: range.to, profit: money(c, range.from, range.to).profit, stage: worstStage(last, prev, th), last, prev };
 }

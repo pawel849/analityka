@@ -6,5 +6,6 @@ export const dynamic = "force-dynamic";
 /** Wynik w okresie sesji (koniec okresu = koniec wykresów). */
 export const GET = guarded(async (_req, { params }: Params<"id">) => {
   const { id } = await params;
-  return json(await reality(id, (await sessionRange(id)).to));
+  const range = await sessionRange(id);
+  return json(await reality(id, range.to, range));
 });

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Calendar, CalendarDays, CalendarRange, Check, CircleAlert, CircleCheck, Eye, FlaskConical, Flag, Gift, Globe, Loader2,
-  Megaphone, MousePointerClick, MoreHorizontal, Package, Pause, Pencil, Square, Target, CalendarClock, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
+  Megaphone, MousePointerClick, MoreHorizontal, Package, Pause, Pencil, Square, Target, CalendarClock, ArrowUpRight, ArrowDownRight, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
 } from "lucide-react";
 import { api } from "../forms";
 import { hypothesisValue, METRICS, modelProfit, type MetricKey } from "@/lib/levers";
@@ -406,7 +406,8 @@ const STAGE_OPTIONS = [
 
 function StepPredict({ st, g, val, set }: StepProps) {
   const p = st.prediction;
-  const weekly = g ? (g.target / Math.max(1, g.totalDays)) * 7 : 5000;
+  const rangeDays = Math.round((Date.parse(`${st.range.to}T12:00:00`) - Date.parse(`${st.range.from}T12:00:00`)) / 864e5) + 1;
+  const weekly = g ? (g.target / Math.max(1, g.totalDays)) * rangeDays : 5000;
   const step = weekly > 20000 ? 500 : weekly > 2000 ? 100 : 10;
   const min = -Math.ceil((weekly * 1.5) / step) * step;
   const max = Math.ceil((weekly * 3) / step) * step;
@@ -416,14 +417,14 @@ function StepPredict({ st, g, val, set }: StepProps) {
   return (
     <div className="ss-stack">
       <div className="card-s pd">
-        <h3>Ile zarobiłeś na czysto w 7 dniach do {dayLabel(st.range.to)}?</h3>
+        <h3>Ile zarobiłeś na czysto od {dayLabel(st.range.from)} do {dayLabel(st.range.to)} ({rangeDays} dni)?</h3>
         <div className="pd-value">{profit == null ? "?" : `${formatAmount(Math.round(profit))} zł`}</div>
         <input type="range" className="pd-slider" min={min} max={max} step={step} value={profit ?? 0} disabled={locked} onChange={(e) => set("profit_guess", Number(e.target.value))} aria-label="Profit tygodnia" />
         <div className="pd-scale"><span>{formatAmount(min)} zł</span><span>0</span><span>{formatAmount(max)} zł</span></div>
         {!locked && <div className="pd-exact"><span>albo wpisz</span><MoneyInput allowNegative value={profit} onChange={(v) => set("profit_guess", v)} ariaLabel="Profit tygodnia" /></div>}
       </div>
       <div className="card-s">
-        <h3>Co się pogorszyło w tym tygodniu (vs tydzień wcześniej)?</h3>
+        <h3>Co się pogorszyło w tym okresie (vs tyle samo dni wcześniej)?</h3>
         <div className="pd-stages">
           {STAGE_OPTIONS.map(({ key, icon: I }) => (
             <button key={key} disabled={locked} className={`tile ${stage === key ? "on" : ""}`} onClick={() => set("stage_guess", key)}>
@@ -441,11 +442,13 @@ function StepPredict({ st, g, val, set }: StepProps) {
 /* ---------- 3. Wynik vs cel ---------- */
 
 interface Money { from: string; to: string; profit: number }
-interface Reality { weeks: Money[]; days: Money[]; daily60: Money[]; gaps: string[] }
+interface Reality { weeks: Money[]; days: Money[]; daily60: Money[]; gaps: string[]; period: (Money & { revenue: number; spend: number; orders: number }) | null; periodPrev: Money | null; periodDays: Money[] }
 
 function GoalHero({ g }: { g: GoalGap }) {
+  const name = g.goal.period === "miesiąc" ? new Date(`${g.goal.date_from}T12:00:00`).toLocaleDateString("pl-PL", { month: "long" }) : `${dayLabel(g.goal.date_from)} – ${dayLabel(g.goal.date_to)}`;
   return (
     <div className="gh">
+      <h3 className="gh-title"><Target size={18} /> Cel: {name}</h3>
       <div className="gh-nums">
         <div><em>Masz</em><b>{zl(g.achieved)}</b></div>
         <div><em>Cel</em><b>{zl(g.target)}</b></div>
@@ -459,14 +462,27 @@ function GoalHero({ g }: { g: GoalGap }) {
 
 function StepReality({ projectId, st, g }: StepProps) {
   const [r, setR] = useState<Reality | null>(null);
-  const [scale, setScale] = useState<"dni60" | "tygodnie" | "dni14">("tygodnie");
+  const [scale, setScale] = useState<"okres" | "dni60" | "tygodnie">("okres");
   useEffect(() => {
     api<Reality>(`/api/projects/${projectId}/loop/reality`).then(setR).catch(() => {});
   }, [projectId]);
   const p = st.prediction;
-  const extra = p?.stage_actual && p.stage_actual !== "żaden" ? [`Wąskie gardło w ostatnim tygodniu: ${stageName(p.stage_actual)} – pogorszyło się najbardziej.`] : [];
+  const extra = p?.stage_actual && p.stage_actual !== "żaden" ? [`Wąskie gardło: ${stageName(p.stage_actual)}`] : [];
+  const P = r?.period, PP = r?.periodPrev;
+  const ch = P && PP && PP.profit ? (P.profit - PP.profit) / Math.abs(PP.profit) : null;
   return (
     <div className="ss-stack">
+      {P && (
+        <div className="card-s per">
+          <div className="per-head"><CalendarRange size={20} /><b>Okres raportu: {dayLabel(st.range.from)} – {dayLabel(st.range.to)}</b></div>
+          <div className="per-kpis">
+            <div className="main"><em>Profit na czysto</em><b className={P.profit < 0 ? "neg" : ""}>{zl(P.profit)}</b>{ch != null && <span className={ch >= 0 ? "pos" : "neg"}>{ch >= 0 ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />} {Math.abs(Math.round(ch * 100))}% vs poprzedni okres</span>}</div>
+            <div><em>Przychód</em><b>{zl(P.revenue)}</b></div>
+            <div><em>Reklamy</em><b>{zl(P.spend)}</b></div>
+            <div><em>Zamówienia</em><b>{P.orders}</b></div>
+          </div>
+        </div>
+      )}
       <div className="card-s duo">
         {g ? <GoalHero g={g} /> : <p>Brak celu – ustaw go w pierwszym kroku.</p>}
         {p && <PredictionVs p={p} />}
@@ -474,13 +490,13 @@ function StepReality({ projectId, st, g }: StepProps) {
       {r ? <DataGaps gaps={r.gaps} extra={extra} /> : null}
       <div className="card-s">
         <div className="seg">
-          {([["tygodnie", "Tydzień po tygodniu"], ["dni14", "Ostatnie 14 dni"], ["dni60", "60 dni dzień po dniu"]] as const).map(([k, l]) => (
+          {([["okres", "Okres raportu dzień po dniu"], ["tygodnie", "Tydzień po tygodniu"], ["dni60", "60 dni dzień po dniu"]] as const).map(([k, l]) => (
             <button key={k} className={scale === k ? "on" : ""} onClick={() => setScale(k)}>{l}</button>
           ))}
         </div>
         <h3 className="ss-h3">Profit na czysto {scale === "tygodnie" ? "w każdym tygodniu" : "każdego dnia"}</h3>
         {!r ? <p className="ss-load"><Loader2 className="spin" size={16} /> Liczę…</p> : (
-          <ProfitBars items={(scale === "tygodnie" ? r.weeks : scale === "dni14" ? r.days : r.daily60).map((m) => ({ label: dayLabel(m.from), value: m.profit }))} />
+          <ProfitBars items={(scale === "tygodnie" ? r.weeks : scale === "okres" ? (r.periodDays.length ? r.periodDays : r.days) : r.daily60).map((m) => ({ label: dayLabel(m.from), value: m.profit }))} />
         )}
       </div>
     </div>
@@ -492,18 +508,16 @@ function StepReality({ projectId, st, g }: StepProps) {
 function StepGap({ st, g }: StepProps) {
   if (!g) return <p>Brak celu – ustaw go w pierwszym kroku.</p>;
   const p = st.prediction;
-  const extra = p?.stage_actual && p.stage_actual !== "żaden" ? [`Wąskie gardło w ostatnim tygodniu: ${stageName(p.stage_actual)}.`] : [];
+  const extra = p?.stage_actual && p.stage_actual !== "żaden" ? [`Wąskie gardło: ${stageName(p.stage_actual)}`] : [];
   return (
     <div className="ss-stack">
-      <div className="card-s gap-hero">
-        <div className={`gap-big ${g.gap > 0 ? "miss" : "ok"}`}>
-          <em>{g.gap > 0 ? "Brakuje do celu" : "Cel osiągnięty z nadwyżką"}</em>
-          <b>{zl(Math.abs(g.gap))}</b>
-          <span>{g.left} dni do końca okresu</span>
+      <div className="card-s">
+        <div className="gap-row">
+          <div className={`gap-chip ${g.gap > 0 ? "miss" : "ok"}`}><em>{g.gap > 0 ? "Brakuje" : "Ponad cel"}</em><b>{zl(Math.abs(g.gap))}</b></div>
+          <div className="gap-chip"><em>Zostało</em><b>{g.left} dni</b></div>
+          <div className={`gap-chip ${(g.pacePerDay ?? 0) < (g.needFromNow ?? 0) ? "miss" : "ok"}`}><em>Robisz / trzeba dziennie</em><b>{zl(g.pacePerDay)} / {zl(g.needFromNow)}</b></div>
         </div>
-        <div className="gap-pace">
-          <PaceBars pace={g.pacePerDay} need={g.needFromNow} />
-        </div>
+        <GoalChart g={g} />
       </div>
       <DataGaps gaps={g.gaps} extra={extra} />
     </div>
@@ -568,6 +582,8 @@ function StepMoney({ loopId, st, reload }: StepProps) {
     }
   }
   const anyLow = eng.ranking.levers.some((l) => l.key in over && l.lowConfidence);
+  // mnożniki przychodu przy stałym budżecie: CPM niżej = więcej wyświetleń; reszta wyżej = więcej
+  const mults = eng.ranking.levers.filter((l) => l.key in over && l.current).map((l) => ({ key: l.key, f: l.key === "cpm" ? (l.current as number) / over[l.key]! : over[l.key]! / (l.current as number) }));
   const setFocus = async (k: string) => {
     await api(`/api/loops/${loopId}/questions`, "POST", { focus: k });
     await reload();
@@ -577,8 +593,17 @@ function StepMoney({ loopId, st, reload }: StepProps) {
       <div className="tot">
         <div className="tot-head">
           <Sparkles size={22} />
-          <div><em>Gdyby wszystko poniżej wróciło do najlepszych tygodni</em><b>{total == null ? "brak danych" : `${zlSigned(total)} / mies.`}</b>{anyLow && <small>mało danych w części pomiarów – liczba orientacyjna</small>}</div>
+          <div><em>Gdyby wszystko poniżej wróciło do najlepszych tygodni</em><b>{total == null ? "brak danych" : `${zlSigned(total)} / mies.`}</b>{anyLow && <small>mało danych – liczba orientacyjna</small>}</div>
         </div>
+        {mults.length > 1 && (
+          <div className="mul">
+            <span className="mul-t">Poprawy się mnożą</span>
+            {mults.map((m, i) => (
+              <span key={m.key} className="mul-x">{i > 0 && <X size={14} />}<span className="mul-c">{(() => { const I = LEVER_ICON[m.key]; return <I size={15} />; })()} {LEVER_NAMES[m.key].short} <b>×{m.f.toLocaleString("pl-PL", { maximumFractionDigits: 2 })}</b></span></span>
+            ))}
+            <span className="mul-eq">= <b>×{mults.reduce((a, m) => a * m.f, 1).toLocaleString("pl-PL", { maximumFractionDigits: 2 })}</b> przychodu</span>
+          </div>
+        )}
         {steps.length > 0 && total != null && total > 0 && (
           <div className="wf">
             {steps.map((x) => (
@@ -589,7 +614,6 @@ function StepMoney({ loopId, st, reload }: StepProps) {
                 <small>osobno {zlSigned(x.alone)}</small>
               </div>
             ))}
-            <p>Kroki dodają się do łącznej kwoty. Są większe niż „osobno”, bo poprawy się mnożą: więcej kliknięć × więcej zakupów × większy koszyk.</p>
           </div>
         )}
       </div>
@@ -631,24 +655,38 @@ function FocusHero({ eng, focus }: { eng: EngineResult | null; focus: MetricKey 
 function StepQuestions({ loopId, st, val, set }: StepProps) {
   const [qs, setQs] = useState<{ questions: string[]; focus: MetricKey | null; source: string | null; error: string | null } | null>(null);
   const [err, setErr] = useState("");
+  const [i, setI] = useState(0);
   useEffect(() => {
     api<NonNullable<typeof qs>>(`/api/loops/${loopId}/questions`).then(setQs).catch((e) => setErr(e.message));
   }, [loopId]);
   const answers = val<Record<string, string>>("answers", {});
   if (!qs) return <p className="ss-load center"><Loader2 className="spin" size={18} /> {err || "Claude układa pytania…"}</p>;
+  const n = qs.questions.length;
+  const left = qs.questions.filter((_, k) => !(answers[k] ?? "").trim()).length;
+  const q = qs.questions[Math.min(i, n - 1)];
   return (
     <div className="ss-stack ss-center">
       <FocusHero eng={snapshotOf(st)} focus={qs.focus} />
-      {qs.source === "dane" && <div className="dg"><div className="dg-head"><CircleAlert size={18} /> <b>Claude niedostępny – pytania z danych</b></div><ul><li>{qs.error}</li></ul></div>}
-      {qs.questions.map((q, i) => (
-        <div key={q} className="card-s qa">
-          <span className="qa-n">{i + 1}</span>
-          <div>
-            <p>{q}</p>
-            <textarea rows={2} value={answers[i] ?? ""} onChange={(e) => set("answers", { ...answers, [i]: e.target.value })} placeholder="1–2 zdania" />
+      {qs.source === "dane" && <div className="q-warn"><CircleAlert size={16} /> Claude niedostępny – pytania z danych</div>}
+      {n > 0 && (
+        <>
+          <div className="q-prog">
+            {qs.questions.map((_, k) => (
+              <button key={k} className={`${k === i ? "on" : ""} ${(answers[k] ?? "").trim() ? "done" : ""}`} onClick={() => setI(k)} aria-label={`Pytanie ${k + 1}`}>{(answers[k] ?? "").trim() ? <Check size={13} /> : k + 1}</button>
+            ))}
+            <span>{left ? `zostało ${left} ${left === 1 ? "pytanie" : "pytania"}` : "wszystkie odpowiedzi gotowe"}</span>
           </div>
-        </div>
-      ))}
+          <div className="q-card" key={i}>
+            <span className="q-n">Pytanie {i + 1} z {n}</span>
+            <p>{q}</p>
+            <textarea rows={3} value={answers[i] ?? ""} onChange={(e) => set("answers", { ...answers, [i]: e.target.value })} placeholder="1–2 zdania" autoFocus />
+            <div className="q-nav">
+              <button className="btn" disabled={i === 0} onClick={() => setI(i - 1)}><ArrowLeft size={15} /> Poprzednie</button>
+              {i < n - 1 && <button className={`btn primary ${(answers[i] ?? "").trim() ? "pulse" : ""}`} onClick={() => setI(i + 1)}>Następne <ArrowRight size={15} /></button>}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

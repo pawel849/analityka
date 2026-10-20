@@ -24,14 +24,14 @@ export function PredictionVs({ p }: { p: NonNullable<ReportData["prediction"]> }
   const YouI = STAGE_ICON[p.stage_guess] ?? CircleCheck;
   const DataI = p.stage_actual ? STAGE_ICON[p.stage_actual] ?? CircleCheck : null;
   const sentence = p.stage_actual == null
-    ? "Za mało danych z ostatnich dwóch tygodni, żeby ocenić etapy."
+    ? "Za mało danych w tym okresie, żeby ocenić etapy."
     : p.stage_actual === "żaden"
       ? "Według danych żaden etap nie pogorszył się wyraźnie (o więcej niż 5%)."
       : `Według danych najbardziej pogorszyło się: ${stageName(p.stage_actual)}.`;
   return (
     <div className="pv2">
       <div className="pv2-sec">
-        <h4>Profit ostatnich 7 dni</h4>
+        <h4>Profit {p.window_from && p.window_to ? `${dayLabel(p.window_from)} – ${dayLabel(p.window_to)}` : "w okresie"}</h4>
         <div className="pv2-scale">
           <div className="pv2-track">
             <i className="pv2-zero" style={{ left: pos(0) }} />
@@ -118,6 +118,23 @@ export function LeverDetail({ eng, k }: { eng: NonNullable<ReportData["engine"]>
   );
 }
 
+/** Interaktywna mapa lejka osadzona w raporcie (aktualne dane, tylko podgląd). */
+function MapsEmbed({ maps }: { maps: { name: string; href: string }[] }) {
+  const [i, setI] = useState(0);
+  const m = maps[Math.min(i, maps.length - 1)];
+  return (
+    <div className="mp">
+      <div className="mp-bar">
+        {maps.length > 1 && maps.map((x, k) => <button key={x.href} className={`tile sm ${k === i ? "on" : ""}`} onClick={() => setI(k)}><Workflow size={16} /> {x.name}</button>)}
+        {maps.length === 1 && <b><Workflow size={16} /> {m.name}</b>}
+        <a href={m.href} target="_blank" rel="noreferrer" className="btn small"><ExternalLink size={14} /> Pełny ekran</a>
+      </div>
+      <iframe key={m.href} src={m.href} title={`Mapa lejka: ${m.name}`} className="mp-frame no-print" loading="lazy" />
+      <p className="mp-print">Mapa interaktywna dostępna w wersji online raportu.</p>
+    </div>
+  );
+}
+
 function Section({ icon: I, title, children }: { icon: typeof Target; title: string; children: React.ReactNode }) {
   return (
     <section className="rp-sec">
@@ -146,6 +163,24 @@ export function ReportView({ r, title, maps }: { r: ReportData; title?: React.Re
         </Section>
       )}
 
+      {maps && maps.length > 0 && (
+        <Section icon={MapIcon} title="Mapa lejka – na żywo">
+          <MapsEmbed maps={maps} />
+        </Section>
+      )}
+
+      {r.reality.period && (
+        <Section icon={Target} title="Okres raportu">
+          <div className="rp-kpis">
+            <div><em>Profit na czysto</em><b className={r.reality.period.profit < 0 ? "neg" : "pos"}>{zl(r.reality.period.profit)}</b>{r.reality.periodPrev && <small>poprzedni okres: {zl(r.reality.periodPrev.profit)}</small>}</div>
+            <div><em>Przychód</em><b>{zl(r.reality.period.revenue)}</b></div>
+            <div><em>Reklamy</em><b>{zl(r.reality.period.spend)}</b></div>
+            <div><em>Zamówienia</em><b>{r.reality.period.orders}</b></div>
+          </div>
+          {r.reality.periodDays?.length > 0 && <ProfitBars items={r.reality.periodDays.map((m) => ({ label: dayLabel(m.from), value: m.profit }))} />}
+        </Section>
+      )}
+
       {g && (
         <Section icon={Target} title="Cel i wynik">
           <div className="rp-kpis">
@@ -169,16 +204,6 @@ export function ReportView({ r, title, maps }: { r: ReportData; title?: React.Re
         <h3 className="rp-sub">Profit tygodniowo (8 tygodni)</h3>
         <ProfitBars items={r.reality.weeks.map((w) => ({ label: dayLabel(w.from), value: w.profit }))} />
       </Section>
-
-      {maps && maps.length > 0 && (
-        <Section icon={MapIcon} title="Mapa lejka">
-          <div className="rp-maps">
-            {maps.map((m) => (
-              <a key={m.href} href={m.href} target="_blank" rel="noreferrer" className="rp-map"><Workflow size={26} /><b>{m.name}</b><span>Otwórz mapę z aktualnymi danymi <ExternalLink size={14} /></span></a>
-            ))}
-          </div>
-        </Section>
-      )}
 
       {eng && (
         <Section icon={Sparkles} title="Gdzie leżą pieniądze">

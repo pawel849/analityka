@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CircleCheck, Eye, Megaphone, Plug, Repeat, ShoppingCart, TrendingDown, Wallet } from "lucide-react";
+import { AlertTriangle, Check, CircleCheck, Eye, Megaphone, Plug, Repeat, ShoppingCart, TrendingDown, Wallet } from "lucide-react";
 
 /* ---------- formatowanie ---------- */
 
@@ -79,30 +79,53 @@ export interface GoalGap {
   gaps: string[];
 }
 
+/** Wykres celu: profit narastająco, gdzie powinieneś być dziś, ile dni zostało i ile brakuje na koniec. */
 export function GoalChart({ g }: { g: GoalGap }) {
-  const w = 640, h = 220, pad = 8;
-  const n = g.totalDays;
-  const vals = [0, g.target, ...g.series.map((s) => s.cum), g.forecast ?? 0];
+  const w = 720, h = 280, pl = 10, pr = 120, pt = 34, pb = 26;
+  const n = Math.max(2, g.totalDays);
+  const last = g.series.length - 1;
+  const now = last >= 0 ? g.series[last].cum : 0;
+  const ideal = g.target * (Math.max(1, g.elapsed) / n);
+  const fc = g.forecast;
+  const vals = [0, g.target, now, ideal, fc ?? 0, ...g.series.map((s) => s.cum)];
   const max = Math.max(...vals) * 1.08 || 1;
   const min = Math.min(0, ...vals);
-  const x = (i: number) => pad + (i / Math.max(1, n - 1)) * (w - pad * 2);
-  const y = (v: number) => h - pad - ((v - min) / (max - min || 1)) * (h - pad * 2);
-  const last = g.series.length - 1;
-  const actual = g.series.map((s, i) => `${x(i)},${y(s.cum)}`).join(" ");
+  const x = (i: number) => pl + (i / (n - 1)) * (w - pl - pr);
+  const y = (v: number) => pt + (1 - (v - min) / (max - min || 1)) * (h - pt - pb);
+  const xi = x(Math.max(0, last));
+  const behind = ideal - now;
+  const short = fc != null ? g.target - fc : null;
+  const lbl = (v: number) => zl(v);
   return (
-    <figure className="gc">
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label="Profit narastająco vs cel">
-        <line x1={pad} x2={w - pad} y1={y(0)} y2={y(0)} className="gc-zero" />
-        <line x1={pad} x2={w - pad} y1={y(g.target)} y2={y(g.target)} className="gc-target" />
+    <figure className="gc2">
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img" aria-label="Postęp do celu">
+        {/* zostało dni */}
+        {g.left > 0 && <rect x={xi} y={pt - 10} width={x(n - 1) - xi} height={h - pt - pb + 10} className="gc2-left" rx={8} />}
+        {g.left > 0 && <text x={(xi + x(n - 1)) / 2} y={pt + 6} textAnchor="middle" className="gc2-days">zostało {g.left} dni</text>}
+        <line x1={pl} x2={x(n - 1)} y1={y(0)} y2={y(0)} className="gc-zero" />
         <line x1={x(0)} y1={y(0)} x2={x(n - 1)} y2={y(g.target)} className="gc-path" />
-        {last >= 0 && g.forecast != null && <line x1={x(last)} y1={y(g.series[last].cum)} x2={x(n - 1)} y2={y(g.forecast)} className="gc-ghost" />}
-        {last >= 0 && <polyline points={actual} className="gc-actual" />}
-        {last >= 0 && <circle cx={x(last)} cy={y(g.series[last].cum)} r={5} className="gc-dot" />}
-        <text x={w - pad} y={y(g.target) - 6} textAnchor="end" className="gc-lbl">cel {zl(g.target)}</text>
+        {last >= 0 && fc != null && <line x1={xi} y1={y(now)} x2={x(n - 1)} y2={y(fc)} className="gc-ghost" />}
+        {last >= 0 && <polyline points={g.series.map((s, i) => `${x(i)},${y(s.cum)}`).join(" ")} className="gc-actual" />}
+        {/* dziś: jesteś vs powinno być */}
+        {last >= 0 && behind > 0 && <line x1={xi} x2={xi} y1={y(ideal)} y2={y(now)} className="gc2-gap" />}
+        {last >= 0 && <circle cx={xi} cy={y(ideal)} r={6} className="gc2-ideal" />}
+        {last >= 0 && <circle cx={xi} cy={y(now)} r={7} className="gc-dot" />}
+        {last >= 0 && <text x={xi - 10} y={y(ideal) - 10} textAnchor="end" className="gc2-t ideal">powinno być {lbl(ideal)}</text>}
+        {last >= 0 && <text x={xi - 10} y={y(now) + 20} textAnchor="end" className="gc2-t now">jesteś tu {lbl(now)}</text>}
+        {/* koniec okresu: cel vs prognoza */}
+        <circle cx={x(n - 1)} cy={y(g.target)} r={7} className="gc2-target" />
+        <text x={x(n - 1) + 12} y={y(g.target) + 4} className="gc2-t target">cel {lbl(g.target)}</text>
+        {fc != null && <circle cx={x(n - 1)} cy={y(fc)} r={5} className="gc2-fc" />}
+        {short != null && short > 0 && (
+          <>
+            <line x1={x(n - 1) + 4} x2={x(n - 1) + 4} y1={y(g.target)} y2={y(fc!)} className="gc2-gap" />
+            <text x={x(n - 1) + 12} y={(y(g.target) + y(fc!)) / 2 + 4} className="gc2-t miss">brakuje {lbl(short)}</text>
+          </>
+        )}
       </svg>
       <figcaption className="gc-legend">
         <span><i className="k-actual" /> Twój profit</span>
-        <span><i className="k-path" /> Tempo potrzebne do celu</span>
+        <span><i className="k-path" /> Tempo do celu</span>
         <span><i className="k-ghost" /> Jeśli utrzymasz tempo</span>
       </figcaption>
     </figure>
@@ -156,38 +179,51 @@ export function ProfitBars({ items, height = 170 }: { items: { label: string; va
   );
 }
 
-/** Luki w danych – każda jako karta: co nie działa i co to znaczy dla liczb. */
-function gapCard(t: string): { icon: typeof AlertTriangle; title: string; detail: string; effect: string } {
-  if (/Koszty reklam są tylko do/.test(t)) return { icon: Megaphone, title: "Koszty reklam nieaktualne", detail: t.replace(/ – późniejsze.*/, "."), effect: "profit zawyżony o nowsze wydatki" };
-  if (/Brak kosztów reklam/.test(t)) return { icon: Megaphone, title: "Brak kosztów reklam", detail: "Nie ma żadnych danych o wydatkach.", effect: "profit zawyżony o całe wydatki" };
-  if (/Brak zamówień/.test(t)) return { icon: ShoppingCart, title: "Brak zamówień", detail: "Nie ma żadnych zamówień w danych.", effect: "przychód = 0" };
-  if (/kosztów stałych i zmiennych/.test(t)) return { icon: Wallet, title: "Brak kosztów stałych i zmiennych", detail: "Ustawienia klienta → Koszty.", effect: "profit liczony tylko po reklamach i podatku" };
-  if (/LTV 30/.test(t)) return { icon: Repeat, title: "Brak LTV 30", detail: "Żaden klient nie ma jeszcze pełnych 30 dni.", effect: "wartość zakupu = sam koszyk" };
-  if (/wyświetlenia i kliknięcia/.test(t)) return { icon: Eye, title: "Brak wyświetleń i kliknięć", detail: "W wybranych kampaniach nie ma tych danych.", effect: "CPM i CTR nie do policzenia" };
-  if (/Wąskie gardło/.test(t)) return { icon: TrendingDown, title: "Wąskie gardło", detail: t.replace(/^Wąskie gardło[^:]*:\s*/, ""), effect: "tu spadło najbardziej" };
-  const i = t.indexOf(":");
-  return { icon: Plug, title: i > 0 ? t.slice(0, i) : "Problem ze źródłem danych", detail: i > 0 ? t.slice(i + 1).trim() : t, effect: "dane z tego źródła mogą być niepełne" };
-}
+const GAP_CATS: { key: string; icon: typeof AlertTriangle; label: string; test: RegExp; effect: string; always?: boolean }[] = [
+  { key: "sprzedaz", icon: ShoppingCart, label: "Sprzedaż", test: /WooCommerce|zamówie/i, effect: "przychód niepełny", always: true },
+  { key: "reklamy", icon: Megaphone, label: "Reklamy", test: /reklam|Meta/i, effect: "profit zawyżony", always: true },
+  { key: "koszty", icon: Wallet, label: "Koszty firmy", test: /kosztów stałych/i, effect: "profit zawyżony", always: true },
+  { key: "ruch", icon: Eye, label: "Kliknięcia", test: /wyświetlenia i kliknięcia/i, effect: "brak CPM i CTR" },
+  { key: "ltv", icon: Repeat, label: "Dokupienia", test: /LTV/i, effect: "liczę sam koszyk" },
+];
 
+/** Luki w danych jako tablica statusów: ikona, ✓ albo !, szczegóły po kliknięciu. */
 export function DataGaps({ gaps, extra }: { gaps: string[]; extra?: string[] }) {
-  const all = [...(extra ?? []), ...gaps];
-  if (!all.length)
-    return <div className="dg ok"><CircleCheck size={20} /> <b>Dane kompletne</b> – liczymy wszystko.</div>;
+  const [open, setOpen] = useState<string | null>(null);
+  const used = new Set<string>();
+  const tiles = GAP_CATS.map((c) => {
+    const hits = gaps.filter((g) => !used.has(g) && c.test.test(g));
+    hits.forEach((h) => used.add(h));
+    return { ...c, hits };
+  }).filter((c) => c.always || c.hits.length);
+  const rest = gaps.filter((g) => !used.has(g));
+  if (rest.length) tiles.push({ key: "inne", icon: Plug, label: "Inne źródła", test: /./, effect: "dane niepełne", hits: rest });
+  const bad = tiles.filter((t) => t.hits.length).length;
+  const sel = tiles.find((t) => t.key === open);
   return (
-    <div className="dg2">
-      <div className="dg2-head"><AlertTriangle size={22} /> <b>Luki w danych</b><span>{all.length}</span><small>liczby poniżej mogą się różnić od rzeczywistości</small></div>
-      <div className="dg2-grid">
-        {all.map((x) => {
-          const c = gapCard(x);
-          const I = c.icon;
+    <div className={`ds ${bad ? "bad" : "ok"}`}>
+      <div className="ds-head">
+        {bad ? <AlertTriangle size={20} /> : <CircleCheck size={20} />}
+        <b>{bad ? "Luki w danych" : "Dane kompletne"}</b>
+        <span className="ds-score">{tiles.length - bad}/{tiles.length} OK</span>
+      </div>
+      <div className="ds-tiles">
+        {tiles.map((t) => {
+          const I = t.icon;
+          const ok = !t.hits.length;
           return (
-            <div key={x} className={`dg2-card ${/Wąskie/.test(x) ? "bn" : ""}`}>
-              <span className="dg2-ic"><I size={20} /></span>
-              <div><b>{c.title}</b><p>{c.detail}</p><em>{c.effect}</em></div>
-            </div>
+            <button key={t.key} className={`ds-t ${ok ? "ok" : "bad"} ${open === t.key ? "on" : ""}`} onClick={() => setOpen(ok || open === t.key ? null : t.key)} disabled={ok}>
+              <span className="ds-ic"><I size={22} /><i>{ok ? <Check size={12} /> : "!"}</i></span>
+              <b>{t.label}</b>
+              <small>{ok ? "OK" : t.effect}</small>
+            </button>
           );
         })}
+        {(extra ?? []).map((x) => (
+          <div key={x} className="ds-t bn"><span className="ds-ic"><TrendingDown size={22} /></span><b>Wąskie gardło</b><small>{x.replace(/^Wąskie gardło[^:]*:\s*/, "").replace(/ –.*$/, "").replace(/\.$/, "")}</small></div>
+        ))}
       </div>
+      {sel && <ul className="ds-detail">{sel.hits.map((h) => <li key={h}>{h}</li>)}</ul>}
     </div>
   );
 }

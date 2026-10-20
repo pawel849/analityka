@@ -301,7 +301,7 @@ export async function refreshAfterScope(projectId: string) {
   const range = rangeOfData(data);
   const p = await predictionOf(open.id);
   if (p) {
-    const a = await predictionActuals(projectId, range.to);
+    const a = await predictionActuals(projectId, range);
     await q("UPDATE predictions SET window_from = $2, window_to = $3, profit_actual = $4, stage_actual = $5 WHERE loop_id = $1", [open.id, a.from, a.to, a.profit, a.stage]);
   }
   if (data.kwota?.snapshot) {
@@ -317,7 +317,7 @@ export async function savePrediction(lid: string, profitGuess: number, stageGues
   const { projectId, data } = await loopProject(lid);
   if (!Number.isFinite(profitGuess)) throw new Error("Wpisz profit w zł");
   if (!stageGuess) throw new Error("Wybierz etap");
-  const a = await predictionActuals(projectId, rangeOfData(data).to);
+  const a = await predictionActuals(projectId, rangeOfData(data));
   const old = await predictionOf(lid);
   await q("DELETE FROM predictions WHERE loop_id = $1", [lid]);
   await q(
@@ -599,7 +599,7 @@ export interface ReportData {
   scope: { campaigns: string[]; products: string[] };
   goal: GoalRow | null;
   gap: Awaited<ReturnType<typeof gap>> | null;
-  reality: Pick<Awaited<ReturnType<typeof reality>>, "wide" | "widePrev" | "weeks" | "days" | "daily60" | "gaps" | "events">;
+  reality: Pick<Awaited<ReturnType<typeof reality>>, "wide" | "widePrev" | "weeks" | "days" | "daily60" | "gaps" | "events" | "period" | "periodPrev" | "periodDays">;
   prediction: Prediction | null;
   engine: EngineResult | null;
   focus: string | null;
@@ -617,7 +617,7 @@ export interface ReportData {
 async function buildReport(lid: string, projectId: string, data: LoopRow["data"]): Promise<ReportData> {
   const [st, r, settings, names] = await Promise.all([
     loopState(projectId),
-    reality(projectId, rangeOfData(data).to),
+    reality(projectId, rangeOfData(data).to, rangeOfData(data)),
     loadSettings(projectId),
     one<{ project: string; client: string }>("SELECT p.name AS project, c.name AS client FROM projects p JOIN clients c ON c.id = p.client_id WHERE p.id = $1", [projectId]),
   ]);
@@ -633,7 +633,7 @@ async function buildReport(lid: string, projectId: string, data: LoopRow["data"]
     scope: settings.analysisScope ?? settings.economicsScope,
     goal: st.goal,
     gap: g,
-    reality: { wide: r.wide, widePrev: r.widePrev, weeks: r.weeks, days: r.days, daily60: r.daily60, gaps: r.gaps, events: r.events },
+    reality: { wide: r.wide, widePrev: r.widePrev, weeks: r.weeks, days: r.days, daily60: r.daily60, gaps: r.gaps, events: r.events, period: r.period, periodPrev: r.periodPrev, periodDays: r.periodDays },
     prediction: st.prediction,
     engine: (data.kwota?.snapshot as EngineResult | undefined) ?? null,
     focus: (data.pytania?.focus as string | undefined) ?? null,
@@ -735,5 +735,5 @@ export async function reportByToken(token: string) {
 /** Mapy lejków projektu (do raportu wewnętrznego). */
 export async function projectMaps(projectId: string) {
   const rows = await q<{ id: string; name: string }>("SELECT id, name FROM funnels WHERE project_id = $1 ORDER BY updated_at DESC", [projectId]);
-  return rows.map((m) => ({ name: m.name, href: `/funnels/${m.id}` }));
+  return rows.map((m) => ({ name: m.name, href: `/mapa/${m.id}` }));
 }
