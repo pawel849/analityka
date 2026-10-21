@@ -1,6 +1,8 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { one, q } from "./db";
+import { currentUser } from "./auth";
+import { clientIdsOf, viewerCanClient } from "./access";
 import type { SetupState } from "./setup";
 
 export interface ProjectContext {
@@ -20,15 +22,17 @@ export const loadProject = cache(async (id: string): Promise<ProjectContext | nu
      FROM projects p JOIN clients c ON c.id = p.client_id WHERE p.id = $1`,
     [id],
   );
-  if (!p) return null;
+  if (!p || !(await viewerCanClient(p.client_id))) return null;
   return { ...p, setup: (typeof p.setup === "string" ? JSON.parse(p.setup) : p.setup ?? {}) as SetupState };
 });
 
 /** Wszyscy klienci i projekty – do przełącznika. */
 export const loadSwitcher = cache(async () => {
+  const ids = await clientIdsOf((await currentUser())!);
   const rows = await q<{ client_id: string; client_name: string; project_id: string | null; project_name: string | null }>(
     `SELECT c.id AS client_id, c.name AS client_name, p.id AS project_id, p.name AS project_name
-     FROM clients c LEFT JOIN projects p ON p.client_id = c.id ORDER BY c.created_at, p.created_at`,
+     FROM clients c LEFT JOIN projects p ON p.client_id = c.id WHERE $1::text[] IS NULL OR c.id = ANY($1) ORDER BY c.created_at, p.created_at`,
+    [ids],
   );
   const out: { id: string; name: string; projects: { id: string; name: string }[] }[] = [];
   for (const r of rows) {

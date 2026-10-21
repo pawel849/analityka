@@ -1,11 +1,11 @@
-import { isAuthed } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
 import { databaseEnvName, q } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 /** Diagnostyka wdrożenia (po zalogowaniu): zmienne środowiskowe i połączenie z bazą. Nie zwraca wartości sekretów. */
 export async function GET() {
-  if (!(await isAuthed())) return Response.json({ error: "Zaloguj się, aby zobaczyć diagnostykę" }, { status: 401 });
+  if (!(await isAdmin())) return Response.json({ error: "Zaloguj się, aby zobaczyć diagnostykę" }, { status: 401 });
   const dbVar = databaseEnvName();
   const related = Object.keys(process.env).filter((k) => /(^|_)(DATABASE|POSTGRES|NEON)|^PG[A-Z]/.test(k)).sort();
   let database: { ok: boolean; error?: string; tables?: number } = { ok: false };

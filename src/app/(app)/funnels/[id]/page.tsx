@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { one } from "@/lib/db";
+import { viewerCanClient } from "@/lib/access";
 import { FunnelEditor, type EditorProps } from "@/components/editor/FunnelEditor";
 
 export default async function FunnelPage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,7 +19,7 @@ export default async function FunnelPage({ params }: { params: Promise<{ id: str
      FROM funnels f JOIN projects p ON p.id = f.project_id JOIN clients c ON c.id = p.client_id WHERE f.id = $1`,
     [id],
   );
-  if (!row) notFound();
+  if (!row || !(await viewerCanClient(row.client_id))) notFound();
   const graph = typeof row.graph === "string" ? JSON.parse(row.graph) : row.graph;
   return (
     <FunnelEditor

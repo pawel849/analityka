@@ -2,8 +2,10 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { ArrowLeft, Bot } from "lucide-react";
 import { AiAccessPanel } from "@/components/AiAccessPanel";
+import { requireAdmin } from "@/lib/auth";
 
 export default async function AiPage() {
+  await requireAdmin();
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
   return (

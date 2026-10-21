@@ -352,5 +352,19 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS decision_id TEXT;
 ALTER TABLE winning_elements ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'reklama';
 ALTER TABLE winning_elements ADD COLUMN IF NOT EXISTS decision_id TEXT;
 ALTER TABLE winning_elements ADD COLUMN IF NOT EXISTS profit_month DOUBLE PRECISION;
-ALTER TABLE loops ADD COLUMN IF NOT EXISTS share_token TEXT
+ALTER TABLE loops ADD COLUMN IF NOT EXISTS share_token TEXT;
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  pw_hash TEXT,
+  invite_hash TEXT,
+  invite_expires TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS client_members (
+  client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (client_id, user_id)
+)
 `;

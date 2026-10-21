@@ -1,10 +1,15 @@
 import { q } from "@/lib/db";
+import { currentUser } from "@/lib/auth";
+import { clientIdsOf } from "@/lib/access";
 import { ClientsHome, type HomeClient } from "@/components/home/ClientsHome";
 
 export default async function ClientsPage() {
+  const user = (await currentUser())!;
+  const ids = await clientIdsOf(user);
   const rows = await q<{ client_id: string; client_name: string; project_id: string | null; project_name: string | null }>(
     `SELECT c.id AS client_id, c.name AS client_name, p.id AS project_id, p.name AS project_name
-     FROM clients c LEFT JOIN projects p ON p.client_id = c.id ORDER BY c.created_at, p.created_at`,
+     FROM clients c LEFT JOIN projects p ON p.client_id = c.id WHERE $1::text[] IS NULL OR c.id = ANY($1) ORDER BY c.created_at, p.created_at`,
+    [ids],
   );
   const clients: HomeClient[] = [];
   for (const r of rows) {
@@ -14,7 +19,7 @@ export default async function ClientsPage() {
   }
   return (
     <main className="page">
-      <ClientsHome clients={clients} />
+      <ClientsHome clients={clients} admin={user.admin} />
     </main>
   );
 }

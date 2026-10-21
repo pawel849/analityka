@@ -1,7 +1,12 @@
 import { body, guarded, json } from "@/lib/api";
 import { newId, one, q } from "@/lib/db";
+import { currentUser } from "@/lib/auth";
+import { clientIdsOf } from "@/lib/access";
 
-export const GET = guarded(async () => json(await q("SELECT * FROM clients ORDER BY created_at")));
+export const GET = guarded(async () => {
+  const ids = await clientIdsOf((await currentUser())!);
+  return json(ids ? await q("SELECT * FROM clients WHERE id = ANY($1) ORDER BY created_at", [ids]) : await q("SELECT * FROM clients ORDER BY created_at"));
+});
 
 export const POST = guarded(async (req) => {
   const { name, notes } = await body<{ name?: string; notes?: string }>(req);

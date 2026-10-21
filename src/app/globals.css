@@ -102,6 +102,7 @@ table.tbl th { color: var(--muted); font-weight: 500; }
 
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
 .login-card { width: 100%; max-width: 340px; display: grid; gap: 12px; }
+.login-form { display: grid; gap: 12px; }
 
 @media (max-width: 640px) {
   .shell-header { flex-wrap: wrap; }
@@ -2024,3 +2025,22 @@ button.lb-row:hover { border-color: var(--accent-mid); }
 .q-card textarea { width: 100%; font: inherit; font-size: 16px; padding: 12px 14px; border-radius: 18px; border: 1.5px solid var(--border); resize: vertical; }
 .q-nav { display: flex; justify-content: space-between; }
 .fh2-v b { white-space: nowrap; } .fh2 { grid-template-columns: 1fr auto 1fr; }
+
+/* Dostęp osób do klienta */
+.cc-head .ppl-btn { opacity: 1; color: var(--accent); }
+.ppl { width: min(560px, 100%); display: grid; gap: 14px; }
+.ppl-title { margin: 0; font-size: 18px; }
+.ppl-add { display: flex; gap: 8px; }
+.ppl-add input { flex: 1; min-width: 0; }
+.ppl-link { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 16px; background: var(--accent-soft); border: 1.5px solid var(--accent); color: var(--accent); }
+.ppl-link div { display: grid; gap: 4px; min-width: 0; color: var(--text); }
+.ppl-link code { font-size: 12.5px; overflow-wrap: anywhere; color: var(--accent-bright); }
+.ppl-link small { color: var(--text-2); font-size: 12px; }
+.ppl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ppl-list li { display: grid; grid-template-columns: auto 1fr auto auto auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 14px; background: var(--surface-2); }
+.ppl-list .avatar { background: var(--accent); }
+.ppl-mail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ppl-st { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--copper-ink); }
+.ppl-st.on { color: var(--accent); }
+.ppl-list .ppl-empty { display: block; color: var(--muted); text-align: center; }
+@media (max-width: 520px) { .ppl-list li { grid-template-columns: auto 1fr auto auto; } .ppl-st { display: none; } .ppl-link { grid-template-columns: 1fr; } }

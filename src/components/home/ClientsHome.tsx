@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Compass, Hammer, Pencil, Plus, Trash2, Workflow, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Compass, Hammer, Pencil, Plus, Trash2, Users, Workflow, X } from "lucide-react";
 import { api } from "../forms";
 import { Tip } from "../Tip";
+import { PeopleModal } from "./People";
 import { GREEN } from "@/lib/palette";
 
 export interface HomeClient {
@@ -137,9 +138,10 @@ function AddClient({ highlight, onCreated }: { highlight: boolean; onCreated: (c
   );
 }
 
-export function ClientsHome({ clients }: { clients: HomeClient[] }) {
+export function ClientsHome({ clients, admin }: { clients: HomeClient[]; admin: boolean }) {
   const router = useRouter();
   const [wizard, setWizard] = useState<HomeClient | null>(null);
+  const [people, setPeople] = useState<HomeClient | null>(null);
   const [busy, setBusy] = useState(false);
   const remove = async (url: string, text: string) => {
     if (!window.confirm(text)) return;
@@ -181,15 +183,22 @@ export function ClientsHome({ clients }: { clients: HomeClient[] }) {
               <button className="icon-btn" disabled={busy} title="Zmień nazwę" aria-label={`Zmień nazwę ${c.name}`} onClick={() => rename(`/api/clients/${c.id}`, c.name)}>
                 <Pencil size={15} />
               </button>
-              <button
-                className="icon-btn danger"
-                disabled={busy}
-                title="Usuń klienta"
-                aria-label={`Usuń klienta ${c.name}`}
-                onClick={() => remove(`/api/clients/${c.id}`, `Usunąć klienta „${c.name}” razem z ${c.projects.length} lejkami i wszystkimi danymi? Nie da się tego cofnąć.`)}
-              >
-                <Trash2 size={16} />
-              </button>
+              {admin && (
+                <button className="icon-btn ppl-btn" title="Dostęp dla osób" aria-label={`Dostęp do ${c.name}`} onClick={() => setPeople(c)}>
+                  <Users size={16} />
+                </button>
+              )}
+              {admin && (
+                <button
+                  className="icon-btn danger"
+                  disabled={busy}
+                  title="Usuń klienta"
+                  aria-label={`Usuń klienta ${c.name}`}
+                  onClick={() => remove(`/api/clients/${c.id}`, `Usunąć klienta „${c.name}” razem z ${c.projects.length} lejkami i wszystkimi danymi? Nie da się tego cofnąć.`)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
             </div>
             <div className="cc-projects">
               {c.projects.map((p) => (
@@ -219,9 +228,10 @@ export function ClientsHome({ clients }: { clients: HomeClient[] }) {
             </button>
           </div>
         ))}
-        <AddClient highlight={!clients.length} onCreated={(c) => { router.refresh(); setWizard(c); }} />
+        {admin && <AddClient highlight={!clients.length} onCreated={(c) => { router.refresh(); setWizard(c); }} />}
       </div>
       {wizard && <NewFunnelWizard client={wizard} onClose={() => setWizard(null)} />}
+      {people && <PeopleModal client={people} onClose={() => setPeople(null)} />}
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { isAuthed } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
 import { runAllSyncs } from "@/lib/sync/run";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const maxDuration = 60;
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
-  const ok = secret ? req.headers.get("authorization") === `Bearer ${secret}` : await isAuthed();
+  const ok = secret ? req.headers.get("authorization") === `Bearer ${secret}` : await isAdmin();
   if (!ok) return Response.json({ error: "Brak autoryzacji" }, { status: 401 });
   return Response.json({ results: await runAllSyncs() });
 }
