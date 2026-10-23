@@ -62,7 +62,7 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   periods: [],
   costs: { incomeTaxRate: 19, variableCostRates: [], monthlyFixed: 0 },
   economicsScope: { campaigns: [], products: [] },
-  session: { minClicks: 100, minOrders: 10, benchmark: "best7", targets: {} },
+  session: { minClicks: 100, minOrders: 10, benchmark: "best7", targets: {}, emailUtm: "mail|newsletter|mailerlite" },
 };
 
 export interface SessionSettings {
@@ -72,7 +72,11 @@ export interface SessionSettings {
   /** best7 = najlepsze okno 7 dni z ostatnich 60 (spełniające próg); targets = wartości docelowe poniżej. */
   benchmark: "best7" | "targets";
   targets: { cpm?: number; ctr?: number; cr?: number; aov?: number };
+  /** Zamówienie jest „z maila”, gdy utm_source lub utm_medium zawiera któryś fragment (oddzielone „|”). */
+  emailUtm: string;
 }
+
+export const DEFAULT_EMAIL_UTM = "mail|newsletter|mailerlite";
 
 function mergeSession(v: unknown): SessionSettings {
   const r = (v && typeof v === "object" ? v : {}) as Partial<SessionSettings>;
@@ -80,7 +84,8 @@ function mergeSession(v: unknown): SessionSettings {
   const t = (r.targets ?? {}) as Record<string, unknown>;
   const targets: SessionSettings["targets"] = {};
   for (const k of ["cpm", "ctr", "cr", "aov"] as const) if (typeof t[k] === "number" && Number.isFinite(t[k]) && (t[k] as number) > 0) targets[k] = t[k] as number;
-  return { minClicks: pos(r.minClicks, 100), minOrders: pos(r.minOrders, 10), benchmark: r.benchmark === "targets" ? "targets" : "best7", targets };
+  const emailUtm = typeof r.emailUtm === "string" && r.emailUtm.trim() ? r.emailUtm.trim().slice(0, 300) : DEFAULT_EMAIL_UTM;
+  return { minClicks: pos(r.minClicks, 100), minOrders: pos(r.minOrders, 10), benchmark: r.benchmark === "targets" ? "targets" : "best7", targets, emailUtm };
 }
 
 export function mergeSettings(raw: unknown): ProjectSettings {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Check, CircleCheck, Eye, Megaphone, Plug, Repeat, ShoppingCart, TrendingDown, Wallet } from "lucide-react";
+import { Mail, AlertTriangle, Check, CircleCheck, Eye, Megaphone, Plug, Repeat, ShoppingCart, TrendingDown, Wallet } from "lucide-react";
 
 /* ---------- formatowanie ---------- */
 
@@ -10,8 +10,14 @@ const int = (n: number) => String(Math.abs(Math.round(n))).replace(/\B(?=(\d{3})
 export const zl = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : `${v < 0 && Math.round(v) !== 0 ? "−" : ""}${int(v)} zł`);
 export const zlSigned = (v: number | null | undefined) =>
   v == null || !Number.isFinite(v) ? "—" : Math.round(v) === 0 ? "0 zł" : `${v > 0 ? "+" : "−"}${int(v)} zł`;
+const RATE = new Set(["ctr", "cr", "e_open", "e_ctor", "e_cr"]);
+export const isRateKey = (key: string | null | undefined) => !!key && RATE.has(key);
 export const fm = (key: string | null | undefined, v: number | null | undefined) =>
-  v == null || !Number.isFinite(v) ? "—" : key === "ctr" || key === "cr" ? `${(v * 100).toLocaleString("pl-PL", { maximumFractionDigits: 2 })}%` : `${formatAmount(Math.round(v * 100) / 100)} zł`;
+  v == null || !Number.isFinite(v) ? "—"
+  : isRateKey(key) ? `${(v * 100).toLocaleString("pl-PL", { maximumFractionDigits: 2 })}%`
+  : key === "e_list" ? `${formatAmount(Math.round(v))} os.`
+  : key === "e_freq" ? `${v.toLocaleString("pl-PL", { maximumFractionDigits: 1 })} / mies.`
+  : `${formatAmount(Math.round(v * 100) / 100)} zł`;
 export const pct = (v: number | null | undefined, dd = 0) => (v == null || !Number.isFinite(v) ? "—" : `${(v * 100).toLocaleString("pl-PL", { maximumFractionDigits: dd })}%`);
 export const range = (r: [number, number] | null | undefined) => (r ? `${zlSigned(r[0])} … ${zlSigned(r[1])}` : "—");
 export const plus = (n: number) => new Date(Date.now() + n * 86400_000).toISOString().slice(0, 10);
@@ -180,6 +186,7 @@ export function ProfitBars({ items, height = 170 }: { items: { label: string; va
 }
 
 const GAP_CATS: { key: string; icon: typeof AlertTriangle; label: string; test: RegExp; effect: string; always?: boolean }[] = [
+  { key: "maile", icon: Mail, label: "Maile", test: /maila|maili/i, effect: "brak zł z maili" },
   { key: "sprzedaz", icon: ShoppingCart, label: "Sprzedaż", test: /WooCommerce|zamówie/i, effect: "przychód niepełny", always: true },
   { key: "reklamy", icon: Megaphone, label: "Reklamy", test: /reklam|Meta/i, effect: "profit zawyżony", always: true },
   { key: "koszty", icon: Wallet, label: "Koszty firmy", test: /kosztów stałych/i, effect: "profit zawyżony", always: true },

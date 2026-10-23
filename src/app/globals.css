@@ -1519,7 +1519,7 @@ button.lb-row:hover { border-color: var(--accent-mid); }
 .hyp-if { margin: 0; font-size: 19px; }
 .hyp-metrics { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .hyp .tile { background: transparent; color: #e8fff4; border-color: rgba(255, 255, 255, .25); }
-.hyp .tile.on { background: var(--accent-soft); color: #0f6b4a; border-color: #e8fff4; }
+.hyp .tile.on { background: #e8fff4; color: #06210f; border-color: #e8fff4; font-weight: 800; }
 .hyp-ab { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
 .hyp-a, .hyp-b { display: grid; gap: 4px; justify-items: center; }
 .hyp-a em, .hyp-b em, .hyp-val em { font-style: normal; font-size: 12.5px; color: var(--accent-mid); }
@@ -2044,3 +2044,21 @@ button.lb-row:hover { border-color: var(--accent-mid); }
 .ppl-st.on { color: var(--accent); }
 .ppl-list .ppl-empty { display: block; color: var(--muted); text-align: center; }
 @media (max-width: 520px) { .ppl-list li { grid-template-columns: auto 1fr auto auto; } .ppl-st { display: none; } .ppl-link { grid-template-columns: 1fr; } }
+
+/* Gdzie leżą pieniądze: kategorie */
+.cb { display: grid; gap: 14px; }
+.cb-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.cb-tile { display: grid; justify-items: start; gap: 6px; padding: 14px; border-radius: 18px; border: 2px solid var(--border); background: var(--surface); font: inherit; color: var(--text); text-align: left; cursor: pointer; transition: transform .15s, border-color .15s; }
+.cb-tile:hover { transform: translateY(-2px); border-color: var(--accent-mid); }
+.cb-tile.on { border-color: var(--accent); background: var(--accent-softer); }
+.cb-tile.nodata .cb-ic { background: var(--surface-2); color: var(--muted); }
+.cb-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); }
+.cb-tile b { font-size: 15.5px; }
+.cb-v { font-size: 22px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.cb-v small { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 3px; }
+.cb-tags { display: flex; gap: 4px; flex-wrap: wrap; min-height: 18px; }
+.cb-tags .lb-tag { margin-left: 0; }
+.cb-miss { margin: 0; font-size: 13px; color: var(--text-2); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hyp-metrics.sub { margin-top: -4px; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, .2); }
+.hyp-cat { margin: 4px 0; font-size: 16px; }
+@media (max-width: 720px) { .cb-tiles { grid-template-columns: repeat(2, 1fr); } }

@@ -16,6 +16,13 @@ export interface WooOrder {
   billing?: { email?: string };
   line_items?: { name?: string; quantity?: number; total?: string; total_tax?: string }[];
   coupon_lines?: { code?: string }[];
+  meta_data?: { key?: string; value?: unknown }[];
+}
+
+/** Źródło zamówienia z „Order Attribution” WooCommerce (pola meta _wc_order_attribution_*), gdy sklep je zapisuje. */
+function attribution(o: WooOrder, field: string): string {
+  const m = (o.meta_data ?? []).find((x) => x.key === `_wc_order_attribution_${field}`);
+  return typeof m?.value === "string" ? m.value.slice(0, 200) : "";
 }
 
 /** Ten sam skrót co w imporcie CSV (SHA-256, pierwsze 8 bajtów hex). */
@@ -46,6 +53,9 @@ export function wooOrderToRow(o: WooOrder, paidStatuses: string[]): OrderIn | nu
       price: li.total == null ? null : Math.round(((Number(li.total) || 0) + (Number(li.total_tax) || 0)) * 100) / 100,
     })),
     coupon: (o.coupon_lines ?? []).map((c) => c.code ?? "").filter(Boolean).join(","),
+    utm_source: attribution(o, "utm_source"),
+    utm_medium: attribution(o, "utm_medium"),
+    utm_campaign: attribution(o, "utm_campaign"),
   };
 }
 

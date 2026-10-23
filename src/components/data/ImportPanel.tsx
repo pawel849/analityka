@@ -6,6 +6,7 @@ import {
   fieldsFor,
   hashEmail,
   normalizeAds,
+  normalizeEmails,
   normalizeOrders,
   PRESETS,
   type ImportKind,
@@ -75,7 +76,9 @@ export function ImportPanel({ projectId }: { projectId: string }) {
     if (!csv) return null;
     return kind === "ads"
       ? normalizeAds(csv.rows, map)
-      : normalizeOrders(csv.rows, map, { paidStatuses, productSeparator: separator });
+      : kind === "emails"
+        ? normalizeEmails(csv.rows, map)
+        : normalizeOrders(csv.rows, map, { paidStatuses, productSeparator: separator });
   }, [csv, map, kind, paidStatuses, separator]);
 
   const missing = fields.filter((f) => f.required && map[f.key] == null);
@@ -106,7 +109,7 @@ export function ImportPanel({ projectId }: { projectId: string }) {
         importId = r.import_id;
         setMsg(`Zaimportowano ${Math.min(i + CHUNK, all.length)} / ${all.length}…`);
       }
-      setMsg(`Gotowe: ${all.length} ${kind === "ads" ? "wierszy reklam" : "zamówień"}. Pominięto ${normalized.skipped}.`);
+      setMsg(`Gotowe: ${all.length} ${kind === "ads" ? "wierszy reklam" : kind === "emails" ? "wysyłek" : "zamówień"}. Pominięto ${normalized.skipped}.`);
       setCsv(null);
       setFile(null);
       loadImports();
@@ -131,6 +134,9 @@ export function ImportPanel({ projectId }: { projectId: string }) {
               </optgroup>
               <optgroup label="Zamówienia">
                 {PRESETS.filter((p) => p.kind === "orders").map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </optgroup>
+              <optgroup label="Maile">
+                {PRESETS.filter((p) => p.kind === "emails").map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
               </optgroup>
             </select>
           </label>
@@ -203,7 +209,7 @@ export function ImportPanel({ projectId }: { projectId: string }) {
           {missing.length > 0 && <p className="error">Dopasuj wymagane pola: {missing.map((f) => f.label).join(", ")}.</p>}
 
           <h3 style={{ marginTop: 14 }}>
-            Podgląd po przetworzeniu: {normalized.rows.length} {kind === "ads" ? "wierszy" : "zamówień"}, pominięto {normalized.skipped}
+            Podgląd po przetworzeniu: {normalized.rows.length} {kind === "ads" ? "wierszy" : kind === "emails" ? "wysyłek" : "zamówień"}, pominięto {normalized.skipped}
           </h3>
           <div className="tbl-wrap">
             {kind === "ads" ? (
@@ -221,6 +227,24 @@ export function ImportPanel({ projectId }: { projectId: string }) {
                       <td className="num">{fmt(r.impressions)}</td>
                       <td className="num">{fmt(r.clicks)}</td>
                       <td className="num">{fmt(r.purchases)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : kind === "emails" ? (
+              <table className="tbl">
+                <thead>
+                  <tr><th>Data</th><th>Kampania</th><th className="num">Wysłane</th><th className="num">Otwarcia</th><th className="num">Klik.</th><th className="num">Wypisania</th></tr>
+                </thead>
+                <tbody>
+                  {(normalized.rows as ReturnType<typeof normalizeEmails>["rows"]).slice(0, 8).map((r, i) => (
+                    <tr key={i}>
+                      <td>{r.sent_at}</td>
+                      <td>{r.name || "—"}</td>
+                      <td className="num">{fmt(r.sent)}</td>
+                      <td className="num">{fmt(r.opens)}</td>
+                      <td className="num">{fmt(r.clicks)}</td>
+                      <td className="num">{fmt(r.unsubscribes)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -268,7 +292,7 @@ export function ImportPanel({ projectId }: { projectId: string }) {
               {imports.map((i) => (
                 <tr key={i.id}>
                   <td>{new Date(i.created_at).toLocaleString("pl-PL")}</td>
-                  <td>{i.kind === "ads" ? "Reklamy" : "Zamówienia"}</td>
+                  <td>{i.kind === "ads" ? "Reklamy" : i.kind === "emails" ? "Maile" : "Zamówienia"}</td>
                   <td>{i.source}</td>
                   <td>{i.filename}</td>
                   <td className="num">{fmt(i.rows)}</td>

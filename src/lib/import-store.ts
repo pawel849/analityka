@@ -1,6 +1,6 @@
 // Zapis wierszy reklam i zamówień – wspólny dla importu CSV i synchronizacji przez API.
 import { q } from "./db";
-import type { AdRow } from "./importing";
+import type { AdRow, EmailRow } from "./importing";
 
 export interface OrderIn {
   order_ref: string;
@@ -9,6 +9,9 @@ export interface OrderIn {
   gross: number;
   products: { name: string; price: number | null }[];
   coupon?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
 }
 
 const AD_COLS = [
@@ -47,17 +50,42 @@ export async function upsertOrders(projectId: string, importId: string, source: 
     for (const r of rows.slice(i, i + 500)) unique.set(String(r.order_ref), r);
     const values: unknown[] = [];
     const tuples = [...unique.values()].map((r, j) => {
-      const base = j * 9;
+      const base = j * 12;
       values.push(
         projectId, importId, source.slice(0, 100), String(r.order_ref).slice(0, 100), r.ts, String(r.customer ?? "").slice(0, 64),
         Number(r.gross) || 0, JSON.stringify(r.products ?? []), String(r.coupon ?? "").slice(0, 200),
+        String(r.utm_source ?? "").slice(0, 200), String(r.utm_medium ?? "").slice(0, 200), String(r.utm_campaign ?? "").slice(0, 200),
       );
-      return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8}::jsonb,$${base + 9})`;
+      return `(${Array.from({ length: 12 }, (_, k) => `$${base + k + 1}${k === 7 ? "::jsonb" : ""}`).join(",")})`;
+    });
+    // Puste UTM w nowym wierszu nie kasują wcześniej zapisanego źródła (np. import CSV bez kolumn UTM).
+    await q(
+      `INSERT INTO orders (project_id, import_id, source, order_ref, ts, customer, gross, products, coupon, utm_source, utm_medium, utm_campaign) VALUES ${tuples.join(",")}
+       ON CONFLICT (project_id, source, order_ref) DO UPDATE SET ts = EXCLUDED.ts, customer = EXCLUDED.customer,
+       gross = EXCLUDED.gross, products = EXCLUDED.products, coupon = EXCLUDED.coupon, import_id = EXCLUDED.import_id,
+       utm_source = COALESCE(NULLIF(EXCLUDED.utm_source, ''), orders.utm_source),
+       utm_medium = COALESCE(NULLIF(EXCLUDED.utm_medium, ''), orders.utm_medium),
+       utm_campaign = COALESCE(NULLIF(EXCLUDED.utm_campaign, ''), orders.utm_campaign)`,
+      values,
+    );
+  }
+}
+
+/** Nadpisuje kampanie o tej samej dacie i nazwie. */
+export async function upsertEmails(projectId: string, importId: string, rows: EmailRow[]) {
+  for (let i = 0; i < rows.length; i += 500) {
+    const unique = new Map<string, EmailRow>();
+    for (const r of rows.slice(i, i + 500)) unique.set(`${r.sent_at}\u0001${r.name}`, r);
+    const values: unknown[] = [];
+    const tuples = [...unique.values()].map((r, j) => {
+      const base = j * 8;
+      values.push(projectId, importId, r.sent_at, String(r.name ?? "").slice(0, 300), Number(r.sent) || 0, Number(r.opens) || 0, Number(r.clicks) || 0, Number(r.unsubscribes) || 0);
+      return `(${Array.from({ length: 8 }, (_, k) => `$${base + k + 1}`).join(",")})`;
     });
     await q(
-      `INSERT INTO orders (project_id, import_id, source, order_ref, ts, customer, gross, products, coupon) VALUES ${tuples.join(",")}
-       ON CONFLICT (project_id, source, order_ref) DO UPDATE SET ts = EXCLUDED.ts, customer = EXCLUDED.customer,
-       gross = EXCLUDED.gross, products = EXCLUDED.products, coupon = EXCLUDED.coupon, import_id = EXCLUDED.import_id`,
+      `INSERT INTO email_campaigns (project_id, import_id, sent_at, name, sent, opens, clicks, unsubscribes) VALUES ${tuples.join(",")}
+       ON CONFLICT (project_id, sent_at, name) DO UPDATE SET sent = EXCLUDED.sent, opens = EXCLUDED.opens, clicks = EXCLUDED.clicks,
+       unsubscribes = EXCLUDED.unsubscribes, import_id = EXCLUDED.import_id`,
       values,
     );
   }

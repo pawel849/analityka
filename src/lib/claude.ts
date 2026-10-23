@@ -2,6 +2,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { EngineResult } from "./loop-data";
 import { LEVER_NAMES } from "./loop-def";
+import { allLevers, categories } from "./money-map";
 
 export class ClaudeError extends Error {}
 
@@ -37,7 +38,12 @@ export function sessionFacts(eng: EngineResult, focus: string | null) {
     profit_mies_z_modelu_zl: eng.ranking.profitNow == null ? null : Math.round(eng.ranking.profitNow),
     metryki_teraz: eng.ranking.base,
     metryki_poprzednie_30_dni: eng.metricsPrev,
-    dzwignie: eng.ranking.levers.map((l) => ({
+    kategorie_zl_mies: categories(eng).map((c) => ({ kategoria: c.name, zl_mies: c.value == null ? null : Math.round(c.value), brak_danych: c.missing })),
+    maile: eng.email
+      ? { okno: eng.email.window, metryki_teraz: eng.email.ranking.base, zysk_mies_z_maili_zl: eng.email.ranking.profitNow == null ? null : Math.round(eng.email.ranking.profitNow), utm_maili: eng.email.utm }
+      : null,
+    dzwignie: allLevers(eng).map((l) => ({
+      kategoria: l.category,
       metryka: `${LEVER_NAMES[l.key].name} (${LEVER_NAMES[l.key].short})`,
       teraz: l.current,
       benchmark: l.benchmark,

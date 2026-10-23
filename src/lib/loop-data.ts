@@ -6,6 +6,7 @@ import { fold } from "./csv";
 import { netOf } from "./settings";
 import { bestWindows, levers, metricsOf, sumDays, unitValues, worstStage, type DayAgg, type Econ, type MetricKey, type Totals } from "./levers";
 import { loadAds, loadOrders, loadSettings, type AdRecord } from "./project-data";
+import { bestEmailWindows, BEST_EMAIL_DAYS, emailLevers, isEmailOrder, sumEmail, type EmailDay, type EmailKey, type EmailTotals } from "./email-levers";
 import type { ProjectSettings } from "./settings";
 
 const DAY = 86400_000;
@@ -268,6 +269,55 @@ function econOf(c: Ctx, win: Money, ltv: number | null): Econ {
   };
 }
 
+/** Dni z wysyłkami maili (import CSV) i zamówieniami z UTM maila (w zakresie produktów sesji). */
+async function emailDays(projectId: string, c: Ctx, from: string, to: string): Promise<EmailDay[]> {
+  const m = new Map<string, EmailDay>();
+  for (let t = d(from); t <= d(to); t += DAY) {
+    const k = iso(t);
+    m.set(k, { day: k, sends: 0, sent: 0, opens: 0, clicks: 0, orders: 0, net: 0 });
+  }
+  const [camps, orders] = await Promise.all([
+    q<{ day: string; sent: number; opens: number; clicks: number }>(
+      `SELECT to_char(sent_at, 'YYYY-MM-DD') AS day, sent, opens, clicks FROM email_campaigns WHERE project_id = $1 AND sent_at BETWEEN $2::date AND $3::date`,
+      [projectId, from, to],
+    ),
+    q<{ ts: string; gross: number; products: unknown; utm_source: string; utm_medium: string }>(
+      `SELECT ts, gross, products, utm_source, utm_medium FROM orders
+       WHERE project_id = $1 AND ts >= $2::date AND ts < ($3::date + 1) AND (utm_source <> '' OR utm_medium <> '')`,
+      [projectId, from, to],
+    ),
+  ]);
+  for (const r of camps) {
+    const x = m.get(r.day);
+    if (!x) continue;
+    x.sends++;
+    x.sent += Number(r.sent) || 0;
+    x.opens += Number(r.opens) || 0;
+    x.clicks += Number(r.clicks) || 0;
+  }
+  const prods = new Set(c.scope.products.map((p) => fold(p)));
+  for (const o of orders) {
+    if (!isEmailOrder(o.utm_source, o.utm_medium, c.s.session.emailUtm)) continue;
+    if (prods.size) {
+      const list = (typeof o.products === "string" ? JSON.parse(o.products) : o.products) as { name?: string }[];
+      if (!list?.some((p) => prods.has(fold(String(p.name ?? "").trim())))) continue;
+    }
+    const x = m.get(iso(new Date(o.ts).getTime()));
+    if (!x) continue;
+    x.orders++;
+    x.net += netOf(Number(o.gross) || 0, c.s.vat);
+  }
+  return [...m.values()];
+}
+
+export interface EmailEngine {
+  window: EmailTotals;
+  prev: EmailTotals;
+  ranking: ReturnType<typeof emailLevers>;
+  benchWindows: Partial<Record<EmailKey, { from: string; to: string }>>;
+  utm: string;
+}
+
 export interface EngineResult {
   window: Totals;
   prev: Totals;
@@ -282,6 +332,8 @@ export interface EngineResult {
   scope: { campaigns: string[]; products: string[] };
   events: { day: string; title: string }[];
   gaps: string[];
+  /** Maile (brak w sesjach sprzed dodania maili). */
+  email?: EmailEngine;
 }
 
 /** Ranking dźwigni: okno bieżące = ostatnie 30 pełnych dni; benchmark = najlepsze 7 dni z 60 (albo cele z ustawień). */
@@ -314,6 +366,20 @@ export async function engine(projectId: string, range: Range = defaultRange()): 
     }
   }
   const ranking = levers({ current: window, bench, econ, th });
+  // maile: okno sesji, poprzedni okres i najlepsze 14 dni z ostatnich 90
+  const eFrom = [addDays(end, -89), addDays(range.from, -len)].sort()[0];
+  const eDays = await emailDays(projectId, c, eFrom, end);
+  const eWindow = sumEmail(eDays, range.from, end);
+  const eBench: Parameters<typeof emailLevers>[0]["bench"] = {};
+  const eBenchWindows: EmailEngine["benchWindows"] = {};
+  for (const [k, b] of Object.entries(bestEmailWindows(eDays, addDays(end, -89), end, th, addDays))) {
+    eBench[k as EmailKey] = { value: b.value, source: `najlepsze ${BEST_EMAIL_DAYS} dni: ${b.from} – ${b.to}`, totals: b.totals };
+    eBenchWindows[k as EmailKey] = { from: b.from, to: b.to };
+  }
+  const email: EmailEngine = {
+    window: eWindow, prev: sumEmail(eDays, addDays(range.from, -len), addDays(range.from, -1)),
+    ranking: emailLevers({ current: eWindow, bench: eBench, econ, th }), benchWindows: eBenchWindows, utm: c.s.session.emailUtm,
+  };
   const sources = await dataSources(projectId);
   const events = await q<{ day: string; title: string }>(
     "SELECT to_char(day, 'YYYY-MM-DD') AS day, title FROM timeline_events WHERE project_id = $1 AND day >= $2::date ORDER BY day",
@@ -322,9 +388,12 @@ export async function engine(projectId: string, range: Range = defaultRange()): 
   const gaps = dataGaps(c, sources, end);
   if (ltv.value == null) gaps.push("Brak danych: LTV 30 (żaden klient nie ma jeszcze pełnych 30 dni) – wartość zakupu = sam AOV.");
   if (window.impressions <= 0) gaps.push("Brak danych: wyświetlenia i kliknięcia reklam w zakresie – CPM i CTR nie do policzenia.");
+  const eAll = sumEmail(eDays, eFrom, end);
+  if (eAll.sends > 0 && eWindow.sends === 0) gaps.push("Brak danych: wysyłki maili w okresie sesji – zaimportuj raport kampanii.");
+  if (eWindow.sends > 0 && eWindow.orders === 0) gaps.push(`Brak danych: zamówienia z UTM maila (szukam „${c.s.session.emailUtm}” w utm_source/utm_medium).`);
   return {
     window, prev, metricsPrev: metricsOf(prev), ranking, units: unitValues(ranking.base, econ), econ, ltv, benchWindows,
-    benchmarkMode: c.s.session.benchmark, th, scope: c.scope, events, gaps,
+    benchmarkMode: c.s.session.benchmark, th, scope: c.scope, events, gaps, email,
   };
 }
 
@@ -332,7 +401,8 @@ export async function engine(projectId: string, range: Range = defaultRange()): 
 export async function measure(projectId: string, from: string, to: string) {
   const c = await ctx(projectId, from);
   const days = dailyAgg(c, from, to);
-  return { totals: sumDays(days, from, to), money: money(c, from, to), th: { minClicks: c.s.session.minClicks, minOrders: c.s.session.minOrders } };
+  const email = sumEmail(await emailDays(projectId, c, from, to), from, to);
+  return { totals: sumDays(days, from, to), email, money: money(c, from, to), th: { minClicks: c.s.session.minClicks, minOrders: c.s.session.minOrders } };
 }
 
 /** Prawdziwe wartości do porównania z predykcją: profit ostatnich 7 pełnych dni i etap, który się pogorszył. */

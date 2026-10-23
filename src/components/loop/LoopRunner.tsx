@@ -5,21 +5,22 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, Calendar, CalendarDays, CalendarRange, Check, CircleAlert, CircleCheck, Eye, FlaskConical, Flag, Gift, Globe, Loader2,
-  Megaphone, MousePointerClick, MoreHorizontal, Package, Pause, Pencil, Square, Target, CalendarClock, ArrowUpRight, ArrowDownRight, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
+  Layers, Mail, Megaphone, MousePointerClick, MoreHorizontal, Package, Pause, Pencil, Square, Target, CalendarClock, ArrowUpRight, ArrowDownRight, RotateCw, ShoppingCart, Sparkles, Video, Wallet, X,
 } from "lucide-react";
 import { api } from "../forms";
-import { hypothesisValue, METRICS, modelProfit, type MetricKey } from "@/lib/levers";
-import { ELEMENTS, LEVER_NAMES, NO_CHANGE, STEPS } from "@/lib/loop-def";
+import { hypothesisValue, modelProfit, type MetricKey } from "@/lib/levers";
+import { emailHypothesisValue, emailMetricsOf, emailProfit, type EmailKey } from "@/lib/email-levers";
+import { allLevers, categoryValue } from "@/lib/money-map";
+import { CAT, catByKey, catOfLever, CATEGORIES, ELEMENTS, isCat, LEVER_NAMES, NO_CHANGE, STEPS } from "@/lib/loop-def";
 import type { LoopState, ReportData } from "@/lib/loop";
 import type { EngineResult } from "@/lib/loop-data";
 import { DecisionCard, DecisionTasks, CopyBrief, Deadline, Verdict } from "./Decisions";
 import { daysTo } from "./ui";
-import { LeverBars, LeverDetail, PredictionVs, ReportView, stageName } from "./ReportView";
+import { bestLabel, CAT_ICON, CategoryBoard, LEVER_ICON, PredictionVs, ReportView, stageName } from "./ReportView";
 import {
-  DataGaps, dayLabel, fm, formatAmount, GoalChart, MoneyInput, PaceBars, plus, ProfitBars, range, RichText, zl, zlSigned, type GoalGap,
+  DataGaps, dayLabel, fm, formatAmount, isRateKey, GoalChart, MoneyInput, PaceBars, plus, ProfitBars, range, RichText, zl, zlSigned, type GoalGap,
 } from "./ui";
 
-const LEVER_ICON: Record<string, typeof Eye> = { cpm: Eye, ctr: MousePointerClick, cr: ShoppingCart, aov: Wallet };
 
 /* ---------- główny komponent ---------- */
 
@@ -530,9 +531,8 @@ function StepMoney({ loopId, st, reload }: StepProps) {
   const eng = snapshotOf(st);
   const guess = st.prediction?.lever_guess ?? null;
   const [pick, setPick] = useState("");
-  const [open, setOpen] = useState<string | null>(null);
   const [err, setErr] = useState("");
-  const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? null) as MetricKey | null;
+  const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? null) as string | null;
   const reveal = async (k: string) => {
     setPick(k);
     setErr("");
@@ -543,47 +543,58 @@ function StepMoney({ loopId, st, reload }: StepProps) {
       setErr((x as Error).message);
     }
   };
+  const tiles = (small: boolean) =>
+    CATEGORIES.map((c) => {
+      const I = CAT_ICON[c.key];
+      const k = `${CAT}${c.key}`;
+      return small
+        ? <button key={c.key} className={`tile sm ${guess === k ? "on" : ""}`} onClick={() => reveal(k)}><I size={16} /> {c.name}</button>
+        : (
+          <button key={c.key} className={`guess-tile ${pick === k ? "on" : ""}`} onClick={() => reveal(k)}>
+            <I size={34} />
+            <b>{c.name}</b>
+            <small>{c.levers.map((l) => LEVER_NAMES[l].short).join(" · ")}</small>
+          </button>
+        );
+    });
   if (!guess || !eng)
     return (
       <div className="ss-stack">
         <div className="card-s">
           <h3 className="ss-ask">Gdzie Twoim zdaniem leży najwięcej pieniędzy?</h3>
-          <div className="guess">
-            {METRICS.map((m) => {
-              const I = LEVER_ICON[m.key];
-              return (
-                <button key={m.key} className={`guess-tile ${pick === m.key ? "on" : ""}`} onClick={() => reveal(m.key)}>
-                  <I size={34} />
-                  <b>{LEVER_NAMES[m.key].name}</b>
-                  <small>{LEVER_NAMES[m.key].short}</small>
-                </button>
-              );
-            })}
-          </div>
+          <div className="guess">{tiles(false)}</div>
           {err && <p className="error">{err}</p>}
         </div>
       </div>
     );
-  // łącznie: wszystkie metryki z benchmarkiem naraz (efekty się mnożą, więc to nie jest prosta suma pasków)
-  const over = Object.fromEntries(eng.ranking.levers.filter((l) => l.benchmark != null && !l.missing && (l.value ?? 0) > 0).map((l) => [l.key, l.benchmark as number]));
-  const all = Object.keys(over).length ? modelProfit(eng.ranking.budget, eng.ranking.base, eng.econ, over) : null;
-  const total = all != null && eng.ranking.profitNow != null ? all - eng.ranking.profitNow : null;
-  // rozkład: dokładamy dźwignie po kolei (kolejność rankingu) – kroki sumują się dokładnie do łącznej kwoty
+  // łącznie: reklamy (CPM→CTR→CR→koszyk) i maile – każda dźwignia z kwotą do najlepszego okresu; kroki sumują się dokładnie do łącznej kwoty
   const steps: { key: string; alone: number; step: number }[] = [];
+  let total: number | null = null;
   {
+    const ads = eng.ranking.levers.filter((l) => l.benchmark != null && !l.missing && (l.value ?? 0) > 0);
     let applied: Partial<Record<MetricKey, number>> = {};
     let prevP = eng.ranking.profitNow ?? 0;
-    for (const l of eng.ranking.levers) {
-      if (!(l.key in over)) continue;
-      applied = { ...applied, [l.key]: over[l.key] };
+    for (const l of ads) {
+      applied = { ...applied, [l.key]: l.benchmark! };
       const p = modelProfit(eng.ranking.budget, eng.ranking.base, eng.econ, applied) ?? prevP;
       steps.push({ key: l.key, alone: l.value ?? 0, step: p - prevP });
       prevP = p;
     }
+    const em = eng.email;
+    if (em) {
+      const els = em.ranking.levers.filter((l) => l.benchmark != null && !l.missing && (l.value ?? 0) > 0);
+      let eApplied: Partial<Record<EmailKey, number>> = {};
+      let ePrev = em.ranking.profitNow ?? 0;
+      for (const l of els) {
+        eApplied = { ...eApplied, [l.key]: l.benchmark! };
+        const p = emailProfit(em.ranking.base, eng.econ, eApplied) ?? ePrev;
+        steps.push({ key: l.key, alone: l.value ?? 0, step: p - ePrev });
+        ePrev = p;
+      }
+    }
+    total = steps.length ? steps.reduce((a, x) => a + x.step, 0) : null;
   }
-  const anyLow = eng.ranking.levers.some((l) => l.key in over && l.lowConfidence);
-  // mnożniki przychodu przy stałym budżecie: CPM niżej = więcej wyświetleń; reszta wyżej = więcej
-  const mults = eng.ranking.levers.filter((l) => l.key in over && l.current).map((l) => ({ key: l.key, f: l.key === "cpm" ? (l.current as number) / over[l.key]! : over[l.key]! / (l.current as number) }));
+  const anyLow = allLevers(eng).some((l) => steps.some((x) => x.key === l.key) && l.lowConfidence);
   const setFocus = async (k: string) => {
     await api(`/api/loops/${loopId}/questions`, "POST", { focus: k });
     await reload();
@@ -593,17 +604,8 @@ function StepMoney({ loopId, st, reload }: StepProps) {
       <div className="tot">
         <div className="tot-head">
           <Sparkles size={22} />
-          <div><em>Gdyby wszystko poniżej wróciło do najlepszych tygodni</em><b>{total == null ? "brak danych" : `${zlSigned(total)} / mies.`}</b>{anyLow && <small>mało danych – liczba orientacyjna</small>}</div>
+          <div><em>Gdyby wszystko wróciło do najlepszych okresów</em><b>{total == null ? "brak danych" : `${zlSigned(total)} / mies.`}</b>{anyLow && <small>mało danych – liczba orientacyjna</small>}</div>
         </div>
-        {mults.length > 1 && (
-          <div className="mul">
-            <span className="mul-t">Poprawy się mnożą</span>
-            {mults.map((m, i) => (
-              <span key={m.key} className="mul-x">{i > 0 && <X size={14} />}<span className="mul-c">{(() => { const I = LEVER_ICON[m.key]; return <I size={15} />; })()} {LEVER_NAMES[m.key].short} <b>×{m.f.toLocaleString("pl-PL", { maximumFractionDigits: 2 })}</b></span></span>
-            ))}
-            <span className="mul-eq">= <b>×{mults.reduce((a, m) => a * m.f, 1).toLocaleString("pl-PL", { maximumFractionDigits: 2 })}</b> przychodu</span>
-          </div>
-        )}
         {steps.length > 0 && total != null && total > 0 && (
           <div className="wf">
             {steps.map((x) => (
@@ -618,15 +620,9 @@ function StepMoney({ loopId, st, reload }: StepProps) {
         )}
       </div>
       <div className="card-s">
-        <h3 className="ss-h3">Ile więcej profitu miesięcznie, gdyby każda rzecz wróciła do najlepszego tygodnia</h3>
-        <div className="guess-mini"><span>Twój typ:</span>{METRICS.map((m) => { const I = LEVER_ICON[m.key]; return <button key={m.key} className={`tile sm ${guess === m.key ? "on" : ""}`} onClick={() => reveal(m.key)}><I size={16} /> {LEVER_NAMES[m.key].short}</button>; })}</div>
-        <LeverBars levers={eng.ranking.levers} focus={focus} open={open} guess={guess} onPick={(k) => setOpen(open === k ? null : k)}
-          detail={(k) => (
-            <>
-              <LeverDetail eng={eng} k={k as MetricKey} />
-              {focus !== k && <button className="btn" onClick={() => setFocus(k)}><Flag size={14} /> Tę dźwignię pogłębiamy</button>}
-            </>
-          )} />
+        <div className="guess-mini"><span>Twój typ:</span>{tiles(true)}</div>
+        <CategoryBoard eng={eng} guess={guess} focus={focus}
+          renderDetail={(k) => focus !== k ? <button className="btn" onClick={() => setFocus(k)}><Flag size={14} /> Tę dźwignię pogłębiamy</button> : null} />
       </div>
       {eng.gaps.length > 0 && <DataGaps gaps={eng.gaps} />}
     </div>
@@ -635,17 +631,17 @@ function StepMoney({ loopId, st, reload }: StepProps) {
 
 /* ---------- 6. Pytania ---------- */
 
-function FocusHero({ eng, focus }: { eng: EngineResult | null; focus: MetricKey | null }) {
-  const L = eng?.ranking.levers.find((l) => l.key === focus);
+function FocusHero({ eng, focus }: { eng: EngineResult | null; focus: string | null }) {
+  const L = eng && focus ? allLevers(eng).find((l) => l.key === focus) : null;
   if (!L || !focus) return null;
-  const I = LEVER_ICON[focus];
+  const I = LEVER_ICON[focus] ?? Sparkles;
   return (
     <div className="fh2">
       <div className="fh2-name"><I size={26} /><div><em>Pogłębiamy</em><b>{LEVER_NAMES[focus].name}</b><small>{LEVER_NAMES[focus].short}</small></div></div>
       <div className="fh2-ab">
         <div className="fh2-v now"><em>teraz</em><b>{fm(focus, L.current)}</b></div>
         <ArrowRight size={22} />
-        <div className="fh2-v best"><em>najlepszy tydzień</em><b>{fm(focus, L.benchmark)}</b></div>
+        <div className="fh2-v best"><em>{bestLabel(focus)}</em><b>{fm(focus, L.benchmark)}</b></div>
       </div>
       <div className="fh2-zl"><em>na stole</em><b>{L.lowConfidence ? range(L.range) : zlSigned(L.value)}</b><small>miesięcznie</small></div>
     </div>
@@ -653,7 +649,7 @@ function FocusHero({ eng, focus }: { eng: EngineResult | null; focus: MetricKey 
 }
 
 function StepQuestions({ loopId, st, val, set }: StepProps) {
-  const [qs, setQs] = useState<{ questions: string[]; focus: MetricKey | null; source: string | null; error: string | null } | null>(null);
+  const [qs, setQs] = useState<{ questions: string[]; focus: string | null; source: string | null; error: string | null } | null>(null);
   const [err, setErr] = useState("");
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -699,7 +695,7 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const eng = snapshotOf(st);
-  const focus = (st.active?.data.pytania?.focus ?? null) as MetricKey | null;
+  const focus = (st.active?.data.pytania?.focus ?? null) as string | null;
   const run = useCallback(async () => {
     setBusy(true);
     setErr("");
@@ -719,8 +715,8 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
     await api(`/api/loops/${loopId}`, "PATCH", { step: STEPS.findIndex((x) => x.key === "analiza"), patch: { skipped: on, skipReason: on ? err : "" }, advance: false });
     await reload();
   };
-  const L = eng && focus ? eng.ranking.levers.find((l) => l.key === focus) : null;
-  const prev = eng && focus ? eng.metricsPrev[focus] : null;
+  const L = eng && focus ? allLevers(eng).find((l) => l.key === focus) : null;
+  const prev = eng && focus ? (focus.startsWith("e_") ? (eng.email ? emailMetricsOf(eng.email.prev)[focus as EmailKey] : null) : eng.metricsPrev[focus as MetricKey]) : null;
   const vals = L ? [prev, L.current, L.benchmark] : [];
 
   const max = Math.max(0, ...vals.map((v) => v ?? 0)) || 1;
@@ -731,7 +727,7 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
         <div className="card-s">
           <h3 className="ss-h3">{LEVER_NAMES[focus].name} ({LEVER_NAMES[focus].short}): jak było, jak jest, do czego dążymy</h3>
           <div className="ld2-bars">
-            {([["Poprzedni okres", prev, "prev"], ["Teraz", L.current, L.current != null && L.benchmark != null && (focus === "cpm" ? L.current <= L.benchmark : L.current >= L.benchmark) ? "good" : "bad"], ["Najlepszy tydzień", L.benchmark, "best"]] as const).map(([l, v, cls]) => (
+            {([["Poprzedni okres", prev, "prev"], ["Teraz", L.current, L.current != null && L.benchmark != null && (focus === "cpm" ? L.current <= L.benchmark : L.current >= L.benchmark) ? "good" : "bad"], [bestLabel(focus)[0].toUpperCase() + bestLabel(focus).slice(1), L.benchmark, "best"]] as const).map(([l, v, cls]) => (
               <div key={l} className={`ld2-bar ${cls}`}><span>{l}</span><div><i style={{ width: `${((v ?? 0) / max) * 100}%` }} /></div><b>{fm(focus, v)}</b></div>
             ))}
           </div>
@@ -762,30 +758,41 @@ function StepAnalysis({ loopId, st, reload }: StepProps) {
 
 /* ---------- 8. Decyzja ---------- */
 
-const ELEMENT_ICON: Record<string, typeof Megaphone> = { reklama: Megaphone, strona: Globe, VSL: Video, checkout: ShoppingCart, oferta: Gift, inne: MoreHorizontal };
+const ELEMENT_ICON: Record<string, typeof Megaphone> = { reklama: Megaphone, mail: Mail, strona: Globe, VSL: Video, checkout: ShoppingCart, oferta: Gift, inne: MoreHorizontal };
 
 /** Formularz decyzji – zapisuje się przy „Dalej” (pola trafiają do szkicu kroku). */
 function DecisionForm({ projectId, st, g, edit, onCancel, setForm }: { projectId: string; st: LoopState; g: GoalGap | null; edit?: LoopState["decisions"][number]; onCancel?: () => void; setForm: (v: unknown) => void }) {
   const eng = snapshotOf(st);
-  const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? "cr") as MetricKey;
-  const L = eng?.ranking.levers.find((l) => l.key === focus);
+  const focus = (st.active?.data.pytania?.focus ?? st.active?.data.kwota?.focus ?? "cr") as string;
+  const L = eng ? allLevers(eng).find((l) => l.key === focus) : null;
   const autoWhy = [
     g && g.gap > 0 ? `Brakuje ${zl(g.gap)} do celu.` : "",
     L ? `${LEVER_NAMES[focus].name}: ${L.lowConfidence ? range(L.range) : zlSigned(L.value)} miesięcznie na stole.` : "",
   ].filter(Boolean).join(" ");
   const [kind, setKind] = useState<"zmiana" | typeof NO_CHANGE>(edit?.kind === NO_CHANGE ? NO_CHANGE : "zmiana");
   const [f, setF] = useState(edit
-    ? { what: edit.kind === NO_CHANGE ? "" : edit.what, who: edit.who, why: edit.why, element: edit.element || "reklama", metric: (edit.metric ?? focus) as string, check: edit.check_date, ad: edit.ad_test_id ?? "" }
-    : { what: "", who: "", why: autoWhy, element: "reklama", metric: focus as string, check: plus(14), ad: "" });
-  const [to, setTo] = useState<number | null>(edit?.to_value != null ? Math.round(edit.to_value * (edit.metric === "ctr" || edit.metric === "cr" ? 100 : 1) * 100) / 100 : null);
-  const isRate = f.metric === "ctr" || f.metric === "cr";
+    ? { what: edit.kind === NO_CHANGE ? "" : edit.what, who: edit.who, why: edit.why, element: edit.element || catOfLever(focus)?.element || "reklama", metric: (edit.metric ?? focus) as string, check: edit.check_date, ad: edit.ad_test_id ?? "" }
+    : { what: "", who: "", why: autoWhy, element: catOfLever(focus)?.element ?? "reklama", metric: focus, check: plus(14), ad: "" });
+  const [to, setTo] = useState<number | null>(edit?.to_value != null ? Math.round(edit.to_value * (isRateKey(edit.metric) ? 100 : 1) * 100) / 100 : null);
+  const wholeCat = isCat(f.metric);
+  const cat = wholeCat ? catByKey(f.metric)! : catOfLever(f.metric);
+  const emailKey = f.metric.startsWith("e_");
+  const isRate = isRateKey(f.metric);
   const toNum = to == null ? NaN : to / (isRate ? 100 : 1);
-  const A = eng?.ranking.base[f.metric as MetricKey] ?? null;
-  const expected = eng && Number.isFinite(toNum) ? hypothesisValue(eng.ranking.budget, eng.ranking.base, eng.econ, f.metric as MetricKey, toNum) : null;
+  const A = !eng || wholeCat ? null : emailKey ? eng.email?.ranking.base[f.metric as EmailKey] ?? null : eng.ranking.base[f.metric as MetricKey] ?? null;
+  const expected = !eng ? null
+    : wholeCat ? categoryValue(eng, cat!.key)
+    : !Number.isFinite(toNum) ? null
+    : emailKey ? (eng.email ? emailHypothesisValue(eng.email.ranking.base, eng.econ, { [f.metric]: toNum }) : null)
+    : hypothesisValue(eng.ranking.budget, eng.ranking.base, eng.econ, f.metric as MetricKey, toNum);
+  const pickTarget = (m: string) => {
+    setF({ ...f, metric: m, element: (isCat(m) ? catByKey(m) : catOfLever(m))?.element ?? f.element });
+    setTo(null);
+  };
   useEffect(() => {
     setForm(kind === NO_CHANGE
       ? { kind, why: f.why, who: f.who, check_date: f.check }
-      : { kind, what: f.what, who: f.who, why: f.why, element: f.element, metric: f.metric, to_value: Number.isFinite(toNum) ? toNum : null, check_date: f.check, ad_test_id: f.ad || null });
+      : { kind, what: f.what, who: f.who, why: f.why, element: f.element, metric: f.metric, to_value: !wholeCat && Number.isFinite(toNum) ? toNum : null, check_date: f.check, ad_test_id: f.ad || null });
   }, [kind, f, toNum]); // eslint-disable-line react-hooks/exhaustive-deps
   const n = daysTo(f.check);
   return (
@@ -813,16 +820,29 @@ function DecisionForm({ projectId, st, g, edit, onCancel, setForm }: { projectId
             <h3>Hipoteza</h3>
             <p className="hyp-if">Jeśli <b>{f.what || "…"}</b>, to</p>
             <div className="hyp-metrics">
-              {METRICS.map((m) => {
-                const I = LEVER_ICON[m.key];
-                return <button key={m.key} className={`tile sm ${f.metric === m.key ? "on" : ""}`} onClick={() => { setF({ ...f, metric: m.key }); setTo(null); }}><I size={18} /> {LEVER_NAMES[m.key].short}</button>;
+              {CATEGORIES.map((c) => {
+                const I = CAT_ICON[c.key];
+                return <button key={c.key} className={`tile sm ${cat?.key === c.key ? "on" : ""}`} onClick={() => pickTarget(`${CAT}${c.key}`)}><I size={18} /> {c.name}</button>;
               })}
             </div>
-            <div className="hyp-ab">
-              <div className="hyp-a"><em>teraz</em><b>{fm(f.metric, A)}</b></div>
-              <ArrowRight size={28} />
-              <div className="hyp-b"><em>po zmianie</em><MoneyInput big value={to} onChange={setTo} unit={isRate ? "%" : "zł"} ariaLabel="Wartość po zmianie" /></div>
-            </div>
+            {cat && (
+              <div className="hyp-metrics sub">
+                <button className={`tile sm ${wholeCat ? "on" : ""}`} onClick={() => pickTarget(`${CAT}${cat.key}`)}><Layers size={16} /> cała kategoria</button>
+                {cat.levers.map((k) => {
+                  const I = LEVER_ICON[k];
+                  return <button key={k} className={`tile sm ${f.metric === k ? "on" : ""}`} onClick={() => pickTarget(k)}><I size={16} /> {LEVER_NAMES[k].name}</button>;
+                })}
+              </div>
+            )}
+            {wholeCat ? (
+              <p className="hyp-cat">wszystkie wskaźniki: <b>{cat!.name}</b> → najlepszy okres</p>
+            ) : (
+              <div className="hyp-ab">
+                <div className="hyp-a"><em>teraz</em><b>{fm(f.metric, A)}</b></div>
+                <ArrowRight size={28} />
+                <div className="hyp-b"><em>po zmianie</em><MoneyInput big value={to} onChange={setTo} unit={isRate ? "%" : f.metric === "e_list" ? "os." : f.metric === "e_freq" ? "/mies." : "zł"} ariaLabel="Wartość po zmianie" /></div>
+              </div>
+            )}
             <div className={`hyp-val ${(expected ?? 0) < 0 ? "neg" : ""}`}>
               <em>Wartość oczekiwana</em>
               <b>{expected == null ? "—" : zlSigned(expected)}</b>

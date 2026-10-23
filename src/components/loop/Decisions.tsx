@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, CalendarClock, Check, CircleAlert, Copy, CopyCheck, Trash2, Trophy, User, X } from "lucide-react";
 import { api } from "../forms";
-import { LEVER_NAMES, NO_CHANGE, VERDICTS } from "@/lib/loop-def";
+import { catByKey, isCat, LEVER_NAMES, NO_CHANGE, VERDICTS } from "@/lib/loop-def";
 import type { Decision } from "@/lib/loop";
 import { daysTo, fm, plus, range, zl, zlSigned } from "./ui";
 
@@ -53,6 +53,7 @@ export function BigDeadline({ date, done }: { date: string; done?: boolean }) {
 /** Hipoteza jako centrum: A → B. */
 export function HypothesisLine({ d }: { d: Decision }) {
   if (!d.metric) return null;
+  if (isCat(d.metric)) return <div className="hl"><span className="hl-m">{catByKey(d.metric)!.name} <small>cała kategoria → najlepszy okres</small></span></div>;
   const L = LEVER_NAMES[d.metric];
   return (
     <div className="hl">
@@ -151,7 +152,8 @@ export function Verdict({ d, onDone }: { d: Decision; onDone: () => Promise<void
       setErr((x as Error).message);
     }
   };
-  const L = d.metric ? LEVER_NAMES[d.metric] : null;
+  const L = d.metric && !isCat(d.metric) ? LEVER_NAMES[d.metric] : null;
+  const C = isCat(d.metric) ? catByKey(d.metric!)! : null;
   const span = r && d.from_value != null && d.to_value != null && r.actual != null ? [d.from_value, d.to_value, r.actual] : null;
   const lo = span ? Math.min(...span) : 0;
   const hi = span ? Math.max(...span) : 1;
@@ -174,6 +176,12 @@ export function Verdict({ d, onDone }: { d: Decision; onDone: () => Promise<void
                 <b className={(r.impact ?? 0) < 0 ? "neg" : "pos"}>{r.lowConfidence ? range(r.range) : zlSigned(r.impact)}</b>
                 <small>miesięcznie{r.lowConfidence ? " · mało danych, dlatego zakres" : ""}</small>
               </div>
+            </div>
+          ) : C ? (
+            <div className="vr-impact">
+              <em>Realny wpływ: {C.name}</em>
+              <b className={(r.impact ?? 0) < 0 ? "neg" : "pos"}>{r.impact == null ? "brak danych" : zlSigned(r.impact)}</b>
+              <small>miesięcznie{r.lowConfidence ? " · mało danych" : ""}</small>
             </div>
           ) : L ? (
             <p className="lp-stop"><CircleAlert size={16} /> Brak danych z okresu sprawdzenia.</p>

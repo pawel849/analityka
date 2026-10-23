@@ -1,9 +1,10 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { ChevronDown, CircleCheck, ExternalLink, Map as MapIcon, Workflow, Eye, Flag, MessageCircleQuestion, MousePointerClick, ShoppingCart, Sparkles, Target, Trophy, Wallet } from "lucide-react";
-import { LEVER_NAMES } from "@/lib/loop-def";
+import { ChevronDown, CircleCheck, ExternalLink, Map as MapIcon, Workflow, Eye, Flag, Gift, Globe, Mail, MailOpen, Megaphone, MessageCircleQuestion, MousePointerClick, Send, ShoppingCart, Sparkles, Target, Trophy, Users, Wallet } from "lucide-react";
+import { CAT, LEVER_NAMES, type CatKey } from "@/lib/loop-def";
 import { improve, type MetricKey } from "@/lib/levers";
+import { allLevers, categories, type AnyLever } from "@/lib/money-map";
 import type { ReportData } from "@/lib/loop";
 import { DecisionCard, Deadline } from "./Decisions";
 import { DataGaps, dayLabel, fm, GoalChart, PaceBars, pct, ProfitBars, range, RichText, zl, zlSigned, type GoalGap } from "./ui";
@@ -52,8 +53,54 @@ export function PredictionVs({ p }: { p: NonNullable<ReportData["prediction"]> }
   );
 }
 
+export const LEVER_ICON: Record<string, typeof Eye> = {
+  cpm: Eye, ctr: MousePointerClick, cr: ShoppingCart, aov: Wallet, e_list: Users, e_freq: Send, e_open: MailOpen, e_ctor: MousePointerClick, e_cr: ShoppingCart,
+};
+export const CAT_ICON: Record<CatKey, typeof Eye> = { ads: Megaphone, email: Mail, page: Globe, offer: Gift };
+type Eng = NonNullable<ReportData["engine"]>;
+/** „Najlepszy okres” dla dźwigni: reklamy – 7 dni, maile – 14 dni. */
+export const bestLabel = (k: string) => (k.startsWith("e_") ? "najlepsze 14 dni" : "najlepszy tydzień");
+
+/** Kategorie jako kafle (kwota w zł/mies. albo brak danych) – klik pokazuje dźwignie tej kategorii. */
+export function CategoryBoard({ eng, guess, focus, renderDetail }: { eng: Eng; guess?: string | null; focus?: string | null; renderDetail?: (k: string) => React.ReactNode }) {
+  const cats = categories(eng);
+  const top = cats[0]?.value != null ? cats[0].key : null;
+  const topLeverKey = allLevers(eng).find((l) => l.value != null)?.key ?? null;
+  const [sel, setSel] = useState<CatKey>(cats.find((c) => c.levers.some((l) => l.key === focus))?.key ?? top ?? cats[0].key);
+  const [open, setOpen] = useState<string | null>(null);
+  const c = cats.find((x) => x.key === sel)!;
+  return (
+    <div className="cb">
+      <div className="cb-tiles">
+        {cats.map((x) => {
+          const I = CAT_ICON[x.key];
+          return (
+            <button key={x.key} className={`cb-tile ${sel === x.key ? "on" : ""} ${x.value == null ? "nodata" : ""}`} onClick={() => { setSel(x.key); setOpen(null); }}>
+              <span className="cb-ic"><I size={22} /></span>
+              <b>{x.name}</b>
+              {x.value == null ? <em className="gap-tag">brak danych</em> : <span className="cb-v">{zlSigned(x.value)}<small>/mies.</small></span>}
+              <span className="cb-tags">
+                {guess === `${CAT}${x.key}` && <em className="lb-tag you">Twój typ</em>}
+                {top === x.key && <em className="lb-tag top">Dane: nr 1</em>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="cb-body">
+        {c.levers.filter((l) => l.value == null && l.missing).map((l) => (
+          <p key={l.key} className="cb-miss"><span className="gap-tag">brak danych</span> <b>{LEVER_NAMES[l.key].name}</b> {l.missing}</p>
+        ))}
+        {!c.levers.length && <p className="cb-miss"><span className="gap-tag">brak danych</span> {c.key === "email" ? "zaimportuj raport kampanii mailowych (Dane → Import)" : "brak danych"}</p>}
+        <LeverBars levers={c.levers} focus={focus} guess={guess} topKey={topLeverKey} open={open} onPick={(k) => setOpen(open === k ? null : k)}
+          detail={(k) => <>{<LeverDetail eng={eng} k={k} />}{renderDetail?.(k)}</>} />
+      </div>
+    </div>
+  );
+}
+
 /** Dźwignie jako paski w zł/mies. */
-export function LeverBars({ levers, focus, onPick, open, guess, detail }: { levers: NonNullable<ReportData["engine"]>["ranking"]["levers"]; focus?: string | null; onPick?: (k: string) => void; open?: string | null; guess?: string | null; detail?: (k: string) => React.ReactNode }) {
+export function LeverBars({ levers, focus, onPick, open, guess, detail, topKey }: { levers: Pick<AnyLever, "key" | "value" | "range" | "lowConfidence">[]; focus?: string | null; onPick?: (k: string) => void; open?: string | null; guess?: string | null; detail?: (k: string) => React.ReactNode; topKey?: string | null }) {
   const max = Math.max(1, ...levers.map((l) => (l.lowConfidence && l.range ? l.range[1] : l.value ?? 0)));
   return (
     <div className="lb">
@@ -62,9 +109,9 @@ export function LeverBars({ levers, focus, onPick, open, guess, detail }: { leve
         const Tag = onPick ? "button" : "div";
         return (
           <Fragment key={l.key}>
-          <Tag className={`lb-row ${focus === l.key ? "focus" : ""} ${open === l.key ? "open" : ""} ${guess === l.key ? "guess" : ""} ${i === 0 && l.value != null ? "top" : ""}`} {...(onPick ? { onClick: () => onPick(l.key) } : {})}>
+          <Tag className={`lb-row ${focus === l.key ? "focus" : ""} ${open === l.key ? "open" : ""} ${guess === l.key ? "guess" : ""}`} {...(onPick ? { onClick: () => onPick(l.key) } : {})}>
             <span className="lb-n">{i + 1}</span>
-            <span className="lb-name">{LEVER_NAMES[l.key].name}<small>{LEVER_NAMES[l.key].short}{guess === l.key && <em className="lb-tag you">Twój typ</em>}{i === 0 && l.value != null && <em className="lb-tag top">Dane: nr 1</em>}</small></span>
+            <span className="lb-name">{LEVER_NAMES[l.key].name}<small>{LEVER_NAMES[l.key].short}{guess === l.key && <em className="lb-tag you">Twój typ</em>}{(topKey === undefined ? i === 0 && l.value != null : topKey === l.key) && <em className="lb-tag top">Dane: nr 1</em>}</small></span>
             <span className="lb-track">
               {l.value == null ? <em className="gap-tag">brak danych</em> : (
                 <>
@@ -87,29 +134,32 @@ export function LeverBars({ levers, focus, onPick, open, guess, detail }: { leve
 
 const better = (k: string, a: number, b: number) => (k === "cpm" ? a <= b : a >= b);
 
-/** Szczegóły dźwigni: ile warta jednostka, teraz vs najlepszy tydzień (kolorami), zysk z powrotu i z +10%. */
-export function LeverDetail({ eng, k }: { eng: NonNullable<ReportData["engine"]>; k: MetricKey }) {
-  const L = eng.ranking.levers.find((l) => l.key === k)!;
+/** Szczegóły dźwigni: ile warta jednostka, teraz vs najlepszy okres (kolorami), zysk z powrotu i z +10%. */
+export function LeverDetail({ eng, k }: { eng: Eng; k: string }) {
+  const L = allLevers(eng).find((l) => l.key === k);
+  if (!L) return null;
   const N = LEVER_NAMES[k];
-  const unit = k === "cpm" ? { label: "1000 wyświetleń", v: eng.units.perMille } : k === "ctr" ? { label: "1 kliknięcie", v: eng.units.perClick } : { label: "1 zamówienie", v: eng.units.perOrder };
-  const plus10 = L.current != null ? improve(k, L.current, 0.1) : null;
+  const email = k.startsWith("e_");
+  const best = bestLabel(k);
+  const unit = email ? null : k === "cpm" ? { label: "1000 wyświetleń", v: eng.units.perMille } : k === "ctr" ? { label: "1 kliknięcie", v: eng.units.perClick } : { label: "1 zamówienie", v: eng.units.perOrder };
+  const plus10 = L.current != null ? (email ? L.current * 1.1 : improve(k as MetricKey, L.current, 0.1)) : null;
   const max = Math.max(L.current ?? 0, L.benchmark ?? 0) || 1;
   const ok = L.current != null && L.benchmark != null && better(k, L.current, L.benchmark);
   const diff = L.current != null && L.benchmark ? Math.abs(L.current / L.benchmark - 1) : null;
   return (
     <div className="ld2">
       <div className="ld2-cmp">
-        <h4>{N.name} ({N.short}): teraz vs najlepszy tydzień</h4>
+        <h4>{N.name} ({N.short}): teraz vs {best}</h4>
         <div className="ld2-bars">
           <div className={`ld2-bar ${ok ? "good" : "bad"}`}><span>Teraz</span><div><i style={{ width: `${((L.current ?? 0) / max) * 100}%` }} /></div><b>{fm(k, L.current)}</b></div>
-          <div className="ld2-bar best"><span>Najlepszy tydzień</span><div><i style={{ width: `${((L.benchmark ?? 0) / max) * 100}%` }} /></div><b>{fm(k, L.benchmark)}</b></div>
+          <div className="ld2-bar best"><span>{best[0].toUpperCase() + best.slice(1)}</span><div><i style={{ width: `${((L.benchmark ?? 0) / max) * 100}%` }} /></div><b>{fm(k, L.benchmark)}</b></div>
         </div>
-        {diff != null && <p className={ok ? "pos" : "neg"}>{ok ? "Teraz jest tak dobrze jak w najlepszym tygodniu albo lepiej." : `Teraz jest o ${Math.round(diff * 100)}% gorzej niż w najlepszym tygodniu${k === "cpm" ? " (przy CPM niżej = lepiej)" : ""}.`}</p>}
+        {diff != null && <p className={ok ? "pos" : "neg"}>{ok ? "Teraz jest tak dobrze jak w najlepszym okresie albo lepiej." : `Teraz jest o ${Math.round(diff * 100)}% gorzej niż w najlepszym okresie${k === "cpm" ? " (przy CPM niżej = lepiej)" : ""}.`}</p>}
       </div>
       <div className="ld2-cards">
-        <div className="ld-card unit"><h4>Ile jest warte {unit.label}</h4><b>{zl(unit.v)}</b><small>profitu na czysto</small></div>
+        {unit && <div className="ld-card unit"><h4>Ile jest warte {unit.label}</h4><b>{zl(unit.v)}</b><small>profitu na czysto</small></div>}
         <div className="ld-card hero">
-          <h4>Gdyby {N.short} wrócił do najlepszego tygodnia</h4>
+          <h4>Gdyby {N.short} wrócił do poziomu z okresu: {best}</h4>
           {L.missing ? <p>brak danych: {L.missing}</p> : L.lowConfidence ? <><b>{range(L.range)}</b><small>miesięcznie · mało danych, dlatego zakres</small></> : <><b>{zlSigned(L.value)}</b><small>więcej profitu miesięcznie</small></>}
         </div>
         <div className="ld-card"><h4>Mały krok: {N.short} lepszy o 10%</h4><p>{fm(k, L.current)} → {fm(k, plus10)}</p><b className="pos">{zlSigned(L.per10)} / mies.</b></div>
@@ -212,7 +262,7 @@ export function ReportView({ r, title, maps }: { r: ReportData; title?: React.Re
             <span>1 kliknięcie = <b>{zl(eng.units.perClick)}</b></span>
             <span>1000 wyświetleń = <b>{zl(eng.units.perMille)}</b></span>
           </div>
-          <LeverBars levers={eng.ranking.levers} focus={r.focus} guess={r.prediction?.lever_guess} open={open} onPick={(k) => setOpen(open === k ? null : k)} detail={(k) => <LeverDetail eng={eng} k={k as MetricKey} />} />
+          <CategoryBoard eng={eng} focus={r.focus} guess={r.prediction?.lever_guess} />
         </Section>
       )}
 

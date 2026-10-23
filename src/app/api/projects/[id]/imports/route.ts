@@ -1,7 +1,7 @@
 import { body, guarded, json, notFound, type Params } from "@/lib/api";
 import { newId, one, q } from "@/lib/db";
-import type { AdRow } from "@/lib/importing";
-import { upsertAdRows, upsertOrders, type OrderIn } from "@/lib/import-store";
+import type { AdRow, EmailRow } from "@/lib/importing";
+import { upsertAdRows, upsertEmails, upsertOrders, type OrderIn } from "@/lib/import-store";
 
 export const GET = guarded(async (_req, { params }: Params<"id">) => {
   const { id } = await params;
@@ -14,9 +14,9 @@ export const GET = guarded(async (_req, { params }: Params<"id">) => {
  */
 export const POST = guarded(async (req, { params }: Params<"id">) => {
   const { id } = await params;
-  const b = await body<{ import_id?: string; kind?: "ads" | "orders"; source?: string; filename?: string; rows?: unknown[] }>(req);
+  const b = await body<{ import_id?: string; kind?: "ads" | "orders" | "emails"; source?: string; filename?: string; rows?: unknown[] }>(req);
   const rows = Array.isArray(b.rows) ? b.rows.slice(0, 2000) : [];
-  if (b.kind !== "ads" && b.kind !== "orders") return json({ error: "Nieznany rodzaj importu" }, 400);
+  if (b.kind !== "ads" && b.kind !== "orders" && b.kind !== "emails") return json({ error: "Nieznany rodzaj importu" }, 400);
   let importId = b.import_id;
   if (!importId) {
     importId = newId();
@@ -30,6 +30,7 @@ export const POST = guarded(async (req, { params }: Params<"id">) => {
   if (!rows.length) return json({ import_id: importId, inserted: 0 });
 
   if (b.kind === "ads") await upsertAdRows(id, importId, rows as AdRow[]);
+  else if (b.kind === "emails") await upsertEmails(id, importId, rows as EmailRow[]);
   else await upsertOrders(id, importId, (b.source ?? "").slice(0, 100), rows as OrderIn[]);
   await one("UPDATE imports SET rows = rows + $2 WHERE id = $1 RETURNING id", [importId, rows.length]);
   return json({ import_id: importId, inserted: rows.length });

@@ -159,6 +159,9 @@ export function SettingsPanel({ projectId }: { projectId: string }) {
             <label className="field">Min. zamówień w oknie<input inputMode="numeric" value={s.session.minOrders} onChange={(e) => up({ session: { ...s.session, minOrders: Number(e.target.value) || 0 } })} /></label>
           </div>
           <p className="hint">Poniżej progu: „niska pewność” i zakres zamiast jednej liczby.</p>
+          <label className="field">UTM maili (źródło lub medium zawiera; oddziel „|”)
+            <input value={s.session.emailUtm} onChange={(e) => up({ session: { ...s.session, emailUtm: e.target.value } })} placeholder="mail|newsletter|mailerlite" />
+          </label>
           <label className="field">Benchmark dźwigni</label>
           <div className="seg">
             <button className={s.session.benchmark === "best7" ? "on" : ""} onClick={() => up({ session: { ...s.session, benchmark: "best7" } })}>najlepsze 7 dni z 60</button>

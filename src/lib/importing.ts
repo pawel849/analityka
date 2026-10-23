@@ -2,7 +2,7 @@
 // Nazwy kolumn w gotowych ustawieniach to przypuszczenia – zawsze sprawdzane w podglądzie przed importem.
 import { fold, parseDate, parseNumber } from "./csv.ts";
 
-export type ImportKind = "ads" | "orders";
+export type ImportKind = "ads" | "orders" | "emails";
 
 export interface FieldDef {
   key: string;
@@ -44,6 +44,19 @@ export const ORDER_FIELDS: FieldDef[] = [
   { key: "products", label: "Produkt(y)", type: "text", hints: ["produkty", "products", "nazwa produktu", "product name", "item name", "produkt", "items"] },
   { key: "status", label: "Status", type: "text", hints: ["status"] },
   { key: "coupon", label: "Kupon", type: "text", hints: ["kupon", "coupon"] },
+  { key: "utm_source", label: "Źródło (utm_source)", type: "text", hints: ["utm_source", "utm source", "zrodlo", "source", "origin", "pochodzenie"] },
+  { key: "utm_medium", label: "Medium (utm_medium)", type: "text", hints: ["utm_medium", "utm medium", "medium"] },
+  { key: "utm_campaign", label: "Kampania (utm_campaign)", type: "text", hints: ["utm_campaign", "utm campaign"] },
+];
+
+/** Kampanie mailowe: wiersz = jedna wysyłka. */
+export const EMAIL_FIELDS: FieldDef[] = [
+  { key: "sent_at", label: "Data wysyłki", required: true, type: "date", hints: ["data wysylki", "sent at", "send date", "date sent", "wyslano", "sent on", "data", "date"] },
+  { key: "name", label: "Nazwa kampanii / temat", type: "text", hints: ["nazwa kampanii", "campaign name", "nazwa", "name", "temat", "subject"] },
+  { key: "sent", label: "Wysłane (odbiorcy)", required: true, type: "number", hints: ["odbiorcy", "recipients", "wyslane", "sent", "delivered", "dostarczone"] },
+  { key: "opens", label: "Otwarcia (unikalne)", type: "number", hints: ["unikalne otwarcia", "unique opens", "otwarcia", "opens", "opened"] },
+  { key: "clicks", label: "Kliknięcia (unikalne)", type: "number", hints: ["unikalne klikniecia", "unique clicks", "klikniecia", "clicks", "clicked"] },
+  { key: "unsubscribes", label: "Wypisania", type: "number", hints: ["wypisania", "wypisani", "unsubscribes", "unsubscribed"] },
 ];
 
 export interface Preset {
@@ -63,10 +76,12 @@ export const PRESETS: Preset[] = [
   { key: "woocommerce", kind: "orders", label: "WooCommerce (eksport zamówień)", note: "Jeśli eksport ma wiersz na produkt, zamówienia z tym samym numerem zostaną połączone.", paidStatuses: "completed,processing,zrealizowane,w trakcie realizacji" },
   { key: "publigo", kind: "orders", label: "Publigo (historia płatności)", note: "Wybierz tylko opłacone zamówienia w polu statusów.", paidStatuses: "oplacone,oplacona,paid,completed" },
   { key: "orders_other", kind: "orders", label: "Inny sklep / system płatności", note: "Dowolny CSV z numerem, datą i kwotą zamówienia.", productSeparator: "," },
+  { key: "mailerlite", kind: "emails", label: "MailerLite (raport kampanii)", note: "Wiersz = jedna wysyłka: data, odbiorcy, otwarcia, kliknięcia. Sprawdź dopasowanie kolumn w podglądzie." },
+  { key: "emails_other", kind: "emails", label: "Inne narzędzie do maili", note: "Dowolny CSV z datą wysyłki i liczbą odbiorców." },
 ];
 
 export function fieldsFor(kind: ImportKind): FieldDef[] {
-  return kind === "ads" ? AD_FIELDS : ORDER_FIELDS;
+  return kind === "ads" ? AD_FIELDS : kind === "emails" ? EMAIL_FIELDS : ORDER_FIELDS;
 }
 
 /** Automatyczne mapowanie: pole → indeks kolumny (pierwsza wskazówka, która pasuje, wygrywa; kolumna użyta raz). */
@@ -119,6 +134,48 @@ export interface OrderRow {
   gross: number;
   products: { name: string; price: number | null }[];
   coupon: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+}
+
+export interface EmailRow {
+  sent_at: string;
+  name: string;
+  sent: number;
+  opens: number;
+  clicks: number;
+  unsubscribes: number;
+}
+
+/** Odsetki z eksportu („35%”) zamieniamy na liczby osób, gdy znamy liczbę wysłanych. */
+function countOrRate(v: string, sent: number): number {
+  const n = parseNumber(v) ?? 0;
+  return /%/.test(v) && sent > 0 ? Math.round((n / 100) * sent) : n;
+}
+
+/** Wiersze kampanii: brak daty lub zero wysłanych = pominięte. */
+export function normalizeEmails(rows: string[][], map: Record<string, number>): { rows: EmailRow[]; skipped: number } {
+  const get = (r: string[], k: string) => (map[k] != null ? r[map[k]] ?? "" : "");
+  const out: EmailRow[] = [];
+  let skipped = 0;
+  for (const r of rows) {
+    const d = parseDate(get(r, "sent_at"));
+    const sent = parseNumber(get(r, "sent")) ?? 0;
+    if (!d || sent <= 0) {
+      skipped++;
+      continue;
+    }
+    out.push({
+      sent_at: d.slice(0, 10),
+      name: get(r, "name").trim().slice(0, 300),
+      sent,
+      opens: countOrRate(get(r, "opens"), sent),
+      clicks: countOrRate(get(r, "clicks"), sent),
+      unsubscribes: countOrRate(get(r, "unsubscribes"), sent),
+    });
+  }
+  return { rows: out, skipped };
 }
 
 const AD_NUMERIC = ["spend", "impressions", "reach", "clicks", "video_3s", "thruplay", "landing_views", "registrations", "add_to_cart", "checkouts", "purchases", "purchase_value"] as const;
@@ -203,6 +260,9 @@ export function normalizeOrders(rows: string[][], map: Record<string, number>, o
         gross: parseNumber(get(r, "gross")) ?? 0,
         products: [],
         coupon: get(r, "coupon").trim(),
+        utm_source: get(r, "utm_source").trim().slice(0, 200),
+        utm_medium: get(r, "utm_medium").trim().slice(0, 200),
+        utm_campaign: get(r, "utm_campaign").trim().slice(0, 200),
         itemSum: 0,
         hasItemPrice: false,
       };

@@ -3,8 +3,10 @@
 import { newId, one, q } from "./db";
 import { loadSettings } from "./project-data";
 import { addDays, defaultRange, engine, gap, measure, predictionActuals, reality, today, type EngineResult, type GoalRow, type Range } from "./loop-data";
-import { hypothesisValue, METRICS, verdictImpact, type Econ, type MetricKey, type Metrics } from "./levers";
-import { LEVER_NAMES, MEASURE_TASK, NO_CHANGE, phraseOk, STEPS, VERDICTS } from "./loop-def";
+import { enoughFor, hypothesisValue, METRICS, metricsOf, modelProfit, verdictImpact, type Econ, type MetricKey, type Metrics } from "./levers";
+import { EMAIL_METRICS, emailHypothesisValue, emailVerdictImpact, type EmailKey, type EmailMetrics } from "./email-levers";
+import { allLevers, categoryValue, topLever } from "./money-map";
+import { CAT, catByKey, catOfLever, fmtMetric, isCat, isEmailLever, LEVER_NAMES, MEASURE_TASK, NO_CHANGE, phraseOk, STEPS, targetName, VERDICTS, type CatKey } from "./loop-def";
 import { ClaudeError, claudeAnalysis, claudeQuestions } from "./claude";
 
 export * from "./loop-def";
@@ -54,7 +56,7 @@ export async function saveGoal(projectId: string, b: { period: string; date_from
 
 /* ---------- Decyzje ---------- */
 
-export interface Baseline { budget: number; base: Metrics; econ: Econ; th: { minClicks: number; minOrders: number } }
+export interface Baseline { budget: number; base: Metrics; econ: Econ; th: { minClicks: number; minOrders: number }; email?: EmailMetrics }
 export interface Decision {
   id: string;
   loop_id: string | null;
@@ -63,7 +65,8 @@ export interface Decision {
   who: string;
   why: string;
   element: string;
-  metric: MetricKey | null;
+  /** dźwignia (cpm, e_open…) albo cała kategoria (cat:email…) */
+  metric: string | null;
   from_value: number | null;
   to_value: number | null;
   hypothesis: string;
@@ -306,8 +309,7 @@ export async function refreshAfterScope(projectId: string) {
   }
   if (data.kwota?.snapshot) {
     const eng = await engine(projectId, range);
-    const top = eng.ranking.levers.find((l) => l.value != null)?.key ?? null;
-    if (p) await q("UPDATE predictions SET lever_actual = $2 WHERE loop_id = $1", [open.id, top]);
+    if (p) await q("UPDATE predictions SET lever_actual = $2 WHERE loop_id = $1", [open.id, actualOf(topLever(eng), p.lever_guess)]);
     await q("UPDATE loops SET data = $2 WHERE id = $1", [open.id, JSON.stringify({ ...data, kwota: { ...data.kwota, snapshot: eng } })]);
   }
 }
@@ -328,10 +330,16 @@ export async function savePrediction(lid: string, profitGuess: number, stageGues
   if (old?.lever_guess) await q("UPDATE predictions SET lever_guess = $2, lever_actual = $3 WHERE loop_id = $1", [lid, old.lever_guess, old.lever_actual]);
 }
 
+/** Trafienie typu: typ kategorii porównujemy z kategorią dźwigni nr 1, typ dźwigni – z dźwignią nr 1. */
+function actualOf(top: { key: string } | null, guess: string | null): string | null {
+  if (!top) return null;
+  return guess && isCat(guess) ? `${CAT}${catOfLever(top.key)!.key}` : top.key;
+}
+
 /** Zgadywanie dźwigni → dopiero potem ranking. Ranking zamrażany w sesji (te same liczby do decyzji). */
 export async function guessLever(lid: string, guess: string) {
   const { projectId, data } = await loopProject(lid);
-  if (!METRICS.some((m) => m.key === guess)) throw new Error("Wybierz dźwignię");
+  if (!isCat(guess) && !LEVER_NAMES[guess]) throw new Error("Wybierz, gdzie leżą pieniądze");
   const p = await predictionOf(lid);
   if (!p) throw new Error("Najpierw predykcja");
   // zmiana typu – ranking zostaje ten sam
@@ -340,26 +348,25 @@ export async function guessLever(lid: string, guess: string) {
     return;
   }
   const eng = await engine(projectId, rangeOfData(data));
-  const top = eng.ranking.levers.find((l) => l.value != null)?.key ?? null;
-  await q("UPDATE predictions SET lever_guess = $2, lever_actual = $3 WHERE loop_id = $1", [lid, guess, top]);
-  // pogłębiamy dźwignię nr 1; gdy żadna nie ma danych – tę, którą wskazałeś
-  const kwota = { ...(data.kwota ?? {}), snapshot: eng, focus: top ?? guess };
+  const top = topLever(eng);
+  await q("UPDATE predictions SET lever_guess = $2, lever_actual = $3 WHERE loop_id = $1", [lid, guess, actualOf(top, guess)]);
+  // pogłębiamy dźwignię nr 1; gdy żadna nie ma danych – pierwszą ze wskazanej kategorii
+  const kwota = { ...(data.kwota ?? {}), snapshot: eng, focus: top?.key ?? (isCat(guess) ? catByKey(guess)!.levers[0] : guess) };
   await q("UPDATE loops SET data = $2 WHERE id = $1", [lid, JSON.stringify({ ...data, kwota })]);
 }
 
-const fmtM = (key: MetricKey, v: number | null | undefined) =>
-  v == null ? "brak danych" : key === "ctr" || key === "cr" ? `${(v * 100).toLocaleString("pl-PL", { maximumFractionDigits: 2 })}%` : `${v.toLocaleString("pl-PL", { maximumFractionDigits: 2 })} zł`;
+const fmtM = fmtMetric;
 const zl = (v: number | null | undefined) => (v == null ? "brak danych" : `${v < 0 ? "−" : ""}${String(Math.abs(Math.round(v))).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} zł`);
 const moved = (a: number | null, b: number | null, what: string) =>
   a == null || b == null || !b ? "" : Math.abs(a / b - 1) < 0.03 ? `${what} prawie się nie zmienił.` : `${what} ${a > b ? "wzrósł" : "spadł"} o ${Math.abs(Math.round((a / b - 1) * 100))}% względem poprzednich 30 dni.`;
 
 /** Pytania zapasowe (gdy Claude niedostępny) – z danych, ludzkim językiem. */
-export function socratic(eng: EngineResult, focus: MetricKey): string[] {
-  const L = eng.ranking.levers.find((l) => l.key === focus)!;
+export function socratic(eng: EngineResult, focus: string): string[] {
+  const L = allLevers(eng).find((l) => l.key === focus)!;
   const base = eng.ranking.base;
   const P = eng.metricsPrev;
   const name = LEVER_NAMES[focus].short;
-  const goal = L.benchmark != null ? ` W najlepszym tygodniu było ${fmtM(focus, L.benchmark)} – do tego dążymy.` : "";
+  const goal = L.benchmark != null ? ` W najlepszym okresie było ${fmtM(focus, L.benchmark)} – do tego dążymy.` : "";
   const now = `Twój ${name} wynosi teraz ${fmtM(focus, L.current)}.${goal}`;
   const u = eng.units;
   const qs: string[] = [];
@@ -375,6 +382,11 @@ export function socratic(eng: EngineResult, focus: MetricKey): string[] {
     qs.push(`${now} ${moved(base.ctr, P.ctr, "Odsetek kliknięć w reklamę (CTR)")} Co zmieniło się po kliknięciu – na stronie, w cenie, ofercie albo płatności?`);
     qs.push(`Jedno zamówienie to ${zl(u.perOrder)} profitu. Czy ludzie z reklam trafiają na tę samą stronę i ofertę co w najlepszym tygodniu?`);
   }
+  if (isEmailLever(focus)) {
+    const e = eng.email!;
+    qs.push(`${now} Co było w mailach z najlepszego okresu (temat, oferta, dzień wysyłki), czego teraz nie ma?`);
+    qs.push(`Z maili w tym okresie było ${e.window.orders} zamówień z ${Math.round(e.window.clicks).toLocaleString("pl-PL")} kliknięć. Które maile sprzedają, a które tylko dostają otwarcia?`);
+  }
   if (focus === "aov") {
     qs.push(`Średnia wartość zamówienia (AOV) to teraz ${fmtM("aov", L.current)}.${goal} Co zmieniło się w koszyku: dodatki, cena, rabaty?`);
     qs.push(eng.ltv.value != null
@@ -389,7 +401,7 @@ export async function ensureQuestions(lid: string) {
   const { data } = await loopProject(lid);
   const eng = data.kwota?.snapshot as EngineResult | undefined;
   if (!eng) throw new Error("Najpierw krok „Gdzie leżą pieniądze”");
-  const focus = (data.pytania?.focus ?? data.kwota?.focus) as MetricKey | null;
+  const focus = (data.pytania?.focus ?? data.kwota?.focus) as string | null;
   if (!focus) return { questions: [] as string[], focus: null, source: null as string | null, error: null as string | null };
   if (Array.isArray(data.pytania?.questions) && data.pytania.focus === focus)
     return { questions: data.pytania.questions as string[], focus, source: (data.pytania.source as string) ?? null, error: (data.pytania.error as string) ?? null };
@@ -423,13 +435,13 @@ export async function runAnalysis(lid: string) {
 /** Zmiana dźwigni do pogłębienia (np. nr 2 zamiast nr 1) – nowe pytania. */
 export async function setFocus(lid: string, focus: string) {
   const { data } = await loopProject(lid);
-  if (!METRICS.some((m) => m.key === focus)) throw new Error("Zła dźwignia");
+  if (!LEVER_NAMES[focus]) throw new Error("Zła dźwignia");
   await q("UPDATE loops SET data = $2 WHERE id = $1", [lid, JSON.stringify({ ...data, pytania: { focus } })]);
   return ensureQuestions(lid);
 }
 
 export function baselineOf(eng: EngineResult): Baseline {
-  return { budget: eng.ranking.budget, base: eng.ranking.base, econ: eng.econ, th: eng.th };
+  return { budget: eng.ranking.budget, base: eng.ranking.base, econ: eng.econ, th: eng.th, email: eng.email?.ranking.base };
 }
 
 export async function createDecision(lid: string, b: {
@@ -455,17 +467,37 @@ export async function createDecision(lid: string, b: {
     );
   } else {
     const what = String(b.what ?? "").trim();
-    const m = METRICS.find((x) => x.key === b.metric);
+    const key = String(b.metric ?? "");
+    const cat = isCat(key) ? catByKey(key)! : null;
+    const ad = METRICS.find((x) => x.key === key);
+    const em = EMAIL_METRICS.find((x) => x.key === key);
     const to = Number(b.to_value);
-    const miss = [!what && "Co (jedna konkretna zmiana)", !who && "Kto", !why && "Dlaczego", !m && "Metryka hipotezy", !Number.isFinite(to) && "Wartość docelowa metryki (B)"].filter(Boolean);
+    const miss = [
+      !what && "Co (jedna konkretna zmiana)", !who && "Kto", !why && "Dlaczego", !cat && !ad && !em && "Czego dotyczy (kategoria albo dźwignia)",
+      !cat && !Number.isFinite(to) && "Wartość docelowa metryki (B)",
+    ].filter(Boolean);
     if (miss.length) throw new Error(`Uzupełnij: ${miss.join(", ")}.`);
-    const from = base.base[m!.key];
-    const expected = hypothesisValue(base.budget, base.base, base.econ, m!.key, to);
-    const hyp = `Jeśli ${what}, to ${m!.label} z ${fmtM(m!.key, from)} do ${fmtM(m!.key, to)}.`;
+    let from: number | null = null;
+    let expected: number | null;
+    let hyp: string;
+    if (cat) {
+      expected = categoryValue(eng, cat.key);
+      hyp = `Jeśli ${what}, to kategoria „${cat.name}” da ${expected == null ? "więcej (brak danych do kwoty)" : `${zl(expected)}/mies. więcej`} – wszystkie wskaźniki kategorii do najlepszego okresu.`;
+    } else if (em) {
+      if (!base.email) throw new Error("Brak danych maili w tej sesji – przejdź jeszcze raz krok „Gdzie leżą pieniądze”.");
+      from = base.email[em.key];
+      expected = emailHypothesisValue(base.email, base.econ, { [em.key]: to });
+      hyp = `Jeśli ${what}, to ${em.label} z ${fmtM(em.key, from)} do ${fmtM(em.key, to)}.`;
+    } else {
+      from = base.base[ad!.key];
+      expected = hypothesisValue(base.budget, base.base, base.econ, ad!.key, to);
+      hyp = `Jeśli ${what}, to ${ad!.label} z ${fmtM(ad!.key, from)} do ${fmtM(ad!.key, to)}.`;
+    }
+    const element = String(b.element ?? "").slice(0, 40) || (cat ?? catOfLever(key))?.element || "";
     await q(
       `INSERT INTO decisions (id, project_id, loop_id, kind, what, who, why, element, metric, from_value, to_value, hypothesis, expected_month, baseline, start_date, check_date, ad_test_id)
        VALUES ($1,$2,$3,'zmiana',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [id, projectId, lid, what.slice(0, 500), who, why.slice(0, 2000), String(b.element ?? "").slice(0, 40), m!.key, from, to, hyp, expected, JSON.stringify(base), t, check, b.ad_test_id || null],
+      [id, projectId, lid, what.slice(0, 500), who, why.slice(0, 2000), element, key, from, cat ? null : to, hyp, expected, JSON.stringify(base), t, check, b.ad_test_id || null],
     );
     await q("INSERT INTO tasks (id, project_id, title, due, decision_id, required, who) VALUES ($1,$2,$3,$4,$5,true,$6)", [
       newId(), projectId, `${MEASURE_TASK}: ${what}`.slice(0, 300), addDays(t, 1), id, who,
@@ -518,6 +550,25 @@ export function brief(d: Pick<Decision, "kind" | "what" | "who" | "why" | "hypot
   return lines.join("\n");
 }
 
+/** Rozstrzygnięcie dźwigni (reklamy/maile) albo całej kategorii: wpływ w zł/mies. względem stanu z dnia decyzji. */
+function verdictOf(b: Baseline, metric: string, totals: Awaited<ReturnType<typeof measure>>["totals"], email: Awaited<ReturnType<typeof measure>>["email"]) {
+  const keys: string[] = isCat(metric) ? [...catByKey(metric)!.levers] : [metric];
+  if (keys.some(isEmailLever)) {
+    if (!b.email) return { actual: null, impact: null, range: null as [number, number] | null, lowConfidence: true };
+    return emailVerdictImpact(b.email, b.econ, keys as EmailKey[], email, b.th);
+  }
+  if (keys.length === 1) return verdictImpact(b.budget, b.base, b.econ, keys[0] as MetricKey, totals, b.th);
+  const m = metricsOf(totals);
+  const over: Partial<Record<MetricKey, number>> = {};
+  for (const k of keys as MetricKey[]) {
+    if (m[k] == null) return { actual: null, impact: null, range: null as [number, number] | null, lowConfidence: true };
+    over[k] = m[k]!;
+  }
+  const now = modelProfit(b.budget, b.base, b.econ);
+  const then = modelProfit(b.budget, b.base, b.econ, over);
+  return { actual: null, impact: now == null || then == null ? null : then - now, range: null as [number, number] | null, lowConfidence: (keys as MetricKey[]).some((k) => !enoughFor(k, totals, b.th)) };
+}
+
 /** Wynik decyzji w oknie od wdrożenia do dnia sprawdzenia (bez dnia dzisiejszego – niepełny). */
 export async function decisionResult(did: string) {
   const d = await one<{ project_id: string }>("SELECT project_id FROM decisions WHERE id = $1", [did]);
@@ -534,13 +585,16 @@ export async function decisionResult(did: string) {
     return { projectId, decision: x, from, to: end, actual: null, impact: null, range: null, lowConfidence: false, profit: now.money.profit, profitBefore: before.money.profit, suggestion: null };
   }
   const b = x.baseline;
-  const v = verdictImpact(b.budget, b.base, b.econ, x.metric, now.totals, b.th);
+  const v = verdictOf(b, x.metric, now.totals, now.email);
   const A = x.from_value;
   const B = x.to_value;
   const moved = v.actual != null && A != null && B != null && B !== A ? (v.actual - A) / (B - A) : null;
-  const suggestion = v.lowConfidence ? "za mało danych" : moved == null ? null : moved >= 0.5 ? "tak" : "nie";
+  // cała kategoria: „tak”, gdy zł z kategorii wzrosły
+  const suggestion = v.lowConfidence ? "za mało danych" : isCat(x.metric) ? (v.impact == null ? null : v.impact > 0 ? "tak" : "nie") : moved == null ? null : moved >= 0.5 ? "tak" : "nie";
   return { projectId, decision: x, from, to: end, actual: v.actual, impact: v.impact, range: v.range, lowConfidence: v.lowConfidence, profit: now.money.profit, profitBefore: before.money.profit, suggestion };
 }
+
+const stageOf = (k: string) => (isCat(k) ? catByKey(k)!.name : [...METRICS, ...EMAIL_METRICS].find((m) => m.key === k)?.stage ?? k);
 
 /** „Miałeś rację?” – zapis rozstrzygnięcia, wniosku, wpisu na osi czasu i (dla trafionej zmiany z zyskiem) zwycięskiego elementu. */
 export async function saveVerdict(did: string, verdict: string, learning: string) {
@@ -558,12 +612,12 @@ export async function saveVerdict(did: string, verdict: string, learning: string
     [did, verdict, learning.trim().slice(0, 1000), r.actual, r.impact, r.range?.[0] ?? null, r.range?.[1] ?? null, r.lowConfidence, active?.id ?? null],
   );
   await q("INSERT INTO learnings (id, project_id, loop_id, stage, element, text, profit_delta) VALUES ($1,$2,$3,$4,$5,$6,$7)", [
-    newId(), pid, active?.id ?? x.loop_id, x.metric ? METRICS.find((m) => m.key === x.metric)!.stage : "", x.element, learning.trim().slice(0, 1000), r.impact,
+    newId(), pid, active?.id ?? x.loop_id, x.metric ? stageOf(x.metric) : "", x.element, learning.trim().slice(0, 1000), r.impact,
   ]);
   if (verdict === "tak" && x.kind !== NO_CHANGE && (r.impact ?? 0) > 0) {
     await q(
       `INSERT INTO winning_elements (id, project_id, stage, element, change_to, idea_source, decision_id, profit_month) VALUES ($1,$2,$3,$4,$5,'sesja analityczna',$6,$7)`,
-      [newId(), pid, x.element || "inne", x.metric ? METRICS.find((m) => m.key === x.metric)!.label : "", x.what, did, r.impact],
+      [newId(), pid, x.element || "inne", x.metric ? targetName(x.metric) : "", x.what, did, r.impact],
     );
   }
   const impact = r.impact == null ? "" : ` · wpływ ${r.impact >= 0 ? "+" : "−"}${Math.abs(Math.round(r.impact)).toLocaleString("pl-PL")} zł/mies.${r.lowConfidence ? " (niska pewność)" : ""}`;
@@ -657,7 +711,7 @@ export async function previewReport(lid: string) {
 async function finish(lid: string, projectId: string, data: LoopRow["data"]) {
   const report = await buildReport(lid, projectId, data);
   const dec = report.decision;
-  const top = report.engine?.ranking.levers.find((l) => l.value != null);
+  const top = report.engine ? topLever(report.engine) : null;
   const lines = [
     report.goal ? `Cel: ${Math.round(report.goal.profit_target)} zł profitu (${report.goal.date_from} – ${report.goal.date_to})` : "",
     top ? `Największa dźwignia: ${LEVER_NAMES[top.key].name} – ${Math.round(top.value!)} zł/mies.${top.lowConfidence ? " (niska pewność)" : ""}` : "",
@@ -678,7 +732,7 @@ export async function listReports(projectId: string) {
   );
   return rows.map((r) => {
     const rep = j<ReportData>(r.report, {} as ReportData);
-    const top = rep.engine?.ranking.levers.find((l) => l.value != null);
+    const top = rep.engine ? topLever(rep.engine) : null;
     return {
       id: r.id, date: r.finished_at, title: rep.title ?? null,
       profit: rep.gap?.achieved ?? null, target: rep.goal?.profit_target ?? null,
