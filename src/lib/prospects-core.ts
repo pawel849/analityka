@@ -10,11 +10,11 @@ export const DEFAULT_EXCLUDE = [
   // fitness / dieta
   "fitness", "trening", "dieta", "odchudz", "dietetyk",
   // guru marketingu / IG / AI / marka osobista
-  "marki osobistej", "marka osobista", "sprzedaż online", "sprzedaz online", "instagrama", "na instagramie zarab", "sztuczn", " ai ", "chatgpt", "reklam na facebooku", "lejk",
+  "marki osobistej", "marka osobista", "sprzedaż online", "sprzedaz online", "instagrama", "na instagramie zarab", "sztuczn", "ai", "chatgpt", "reklam na facebooku", "lejk",
   // MLM, bukmacherka, kupony, dramy
-  "mlm", "bukmach", "kupon", "kurs min", "reelshort", "dramawave", " drama",
+  "mlm", "bukmach", "kupon", "kurs min", "reelshort", "dramawave", "drama",
   // instytucje / spółki / dotacje
-  "sp. z o.o", "sp. z o. o", "stowarzyszenie", "fundacja", "dofinansow", "kfs", "bur ", "nauczyciel",
+  "sp. z o.o", "sp. z o. o", "stowarzyszenie", "fundacja", "dofinansow", "kfs", "bur", "nauczyciel",
 ];
 
 /** Domeny, które nie są stroną prospekta (linki zbiorcze, social, skracacze). */
@@ -31,9 +31,18 @@ export type PageGroup = {
   sample_bodies: string[];
 };
 
+/** Frazy do 4 znaków (osk, kfs, bur, mlm, ai) dopasowujemy jako całe słowo – „osk” nie może wycinać „włoskiego”. */
+function termMatches(hay: string, t: string): boolean {
+  const term = t.trim();
+  if (!term) return false;
+  if (term.length > 4 || /\s/.test(term)) return hay.includes(term);
+  const esc = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${esc}(?=$|[^\\p{L}\\p{N}])`, "iu").test(hay);
+}
+
 export function matchesExclusion(p: PageGroup, terms: string[]): string | null {
   const hay = ` ${p.page_name} ${p.domains.join(" ")} ${p.sample_bodies.join(" ")} `.toLowerCase();
-  for (const t of terms) if (t && hay.includes(t)) return t;
+  for (const t of terms) if (termMatches(hay, t.toLowerCase())) return t;
   return null;
 }
 

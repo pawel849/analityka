@@ -56,10 +56,23 @@ export async function appendRows(spreadsheetId: string, sheet: string, rows: (st
   return { updatedRange: json.updates?.updatedRange ?? "", updatedRows: json.updates?.updatedRows ?? rows.length };
 }
 
-/** Odczyt zakresu – do sprawdzenia duplikatów po nazwie/domenie przed dopisaniem. */
-export async function readRange(spreadsheetId: string, range: string): Promise<string[][]> {
+/** Nadpisuje zakres (RAW). */
+export async function updateRange(spreadsheetId: string, range: string, rows: (string | number | null)[][]): Promise<number> {
   const token = await accessToken();
-  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`, { headers: { authorization: `Bearer ${token}` } });
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ majorDimension: "ROWS", values: rows.map((r) => r.map((v) => (v == null ? "" : v))) }),
+  });
+  const json = (await res.json()) as { updatedCells?: number; error?: { message?: string; status?: string } };
+  if (!res.ok) throw new Error(`Sheets API: ${json.error?.status ?? res.status} ${json.error?.message ?? ""}`.trim());
+  return json.updatedCells ?? 0;
+}
+
+/** Odczyt zakresu – do sprawdzenia duplikatów po nazwie/domenie przed dopisaniem. */
+export async function readRange(spreadsheetId: string, range: string, render: "FORMATTED_VALUE" | "FORMULA" = "FORMATTED_VALUE"): Promise<string[][]> {
+  const token = await accessToken();
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=${render}`, { headers: { authorization: `Bearer ${token}` } });
   const json = (await res.json()) as { values?: string[][]; error?: { message?: string; status?: string } };
   if (!res.ok) throw new Error(`Sheets API: ${json.error?.status ?? res.status} ${json.error?.message ?? ""}`.trim());
   return json.values ?? [];

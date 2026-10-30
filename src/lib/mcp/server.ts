@@ -22,7 +22,7 @@ import { upsertAdRows, upsertOrders } from "../import-store";
 import { groupByPage, searchAdsLibrary } from "../meta-ads-library";
 import { qualifyDomains } from "../qualify-pages";
 import { PROSPECT_STATUSES, findProspects, listProspects, markProspects } from "../prospects";
-import { appendToCrm } from "../crm";
+import { appendToCrm, repairPhoneCells } from "../crm";
 import { hashEmailSync } from "../sync/woo";
 import type { AdRow } from "../importing";
 import { DECISIONS, ELEMENTS, META_URL_PARAMS, budgetPerVariant, mergeTestSettings, variantLink } from "../ad-tests";
@@ -949,6 +949,17 @@ export function buildMcpServer(origin: string): McpServer {
         : null;
       return ok({ ...res, marked });
     }),
+  );
+
+  server.registerTool(
+    "repair_crm_phones",
+    {
+      title: "Napraw #ERROR! w telefonach CRM",
+      description: "Komórki telefonu, które Sheets zamienił na formułę (np. „+48 601…” → #ERROR!), odczytuje jako formułę i zapisuje z powrotem jako tekst. Zwraca listę poprawek.",
+      inputSchema: {},
+      annotations: { readOnlyHint: false, openWorldHint: true },
+    },
+    safe(async () => ok(await repairPhoneCells())),
   );
 
   return server;

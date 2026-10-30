@@ -8,7 +8,13 @@ test("wykluczenia: matura, fitness, spółka, AI – odpadają; zwykły kurs zos
   assert.equal(matchesExclusion(pg({ page_name: "Ścisłownia – matura z matmy" }), DEFAULT_EXCLUDE), "matur");
   assert.equal(matchesExclusion(pg({ sample_bodies: ["Trening na siłowni dla kobiet"] }), DEFAULT_EXCLUDE), "trening");
   assert.equal(matchesExclusion(pg({ domains: ["akademia-x.pl"], sample_bodies: ["Akademia X sp. z o.o. zaprasza"] }), DEFAULT_EXCLUDE), "sp. z o.o");
-  assert.equal(matchesExclusion(pg({ sample_bodies: ["Zarabiaj z AI w biznesie"] }), DEFAULT_EXCLUDE), " ai ");
+  assert.equal(matchesExclusion(pg({ sample_bodies: ["Zarabiaj z AI w biznesie"] }), DEFAULT_EXCLUDE), "ai");
+  assert.equal(matchesExclusion(pg({ sample_bodies: ["Zarabiaj z AI."] }), DEFAULT_EXCLUDE), "ai");
+  // krótkie frazy tylko jako całe słowo
+  assert.equal(matchesExclusion(pg({ page_name: "Szkoła włoskiego Belle Parole" }), DEFAULT_EXCLUDE), null);
+  assert.equal(matchesExclusion(pg({ page_name: "OSK Artur" }), DEFAULT_EXCLUDE), "osk");
+  assert.equal(matchesExclusion(pg({ page_name: "Kursy Laika" }), DEFAULT_EXCLUDE), null);
+  assert.equal(matchesExclusion(pg({ page_name: "Burgery u Burka" }), DEFAULT_EXCLUDE), null);
   assert.equal(matchesExclusion(pg({ page_name: "Rysuję SCADA", sample_bodies: ["Kurs programowania sterowników – dożywotni dostęp"] }), DEFAULT_EXCLUDE), null);
   // „obserwuj mnie na Instagramie” nie wyklucza – wyklucza nauka Instagrama
   assert.equal(matchesExclusion(pg({ sample_bodies: ["Więcej na moim Instagramie"] }), DEFAULT_EXCLUDE), null);
