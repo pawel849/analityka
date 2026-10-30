@@ -20,6 +20,7 @@ import { economicsReport } from "../economics-report";
 import { runSync } from "../sync/run";
 import { upsertAdRows, upsertOrders } from "../import-store";
 import { groupByPage, searchAdsLibrary } from "../meta-ads-library";
+import { qualifyDomains } from "../qualify-pages";
 import { hashEmailSync } from "../sync/woo";
 import type { AdRow } from "../importing";
 import { DECISIONS, ELEMENTS, META_URL_PARAMS, budgetPerVariant, mergeTestSettings, variantLink } from "../ad-tests";
@@ -825,13 +826,37 @@ export function buildMcpServer(origin: string): McpServer {
         limit: z.number().int().min(1).max(100).optional().describe("Ile reklam pobrać (1–100, domyślnie 50)"),
         after: z.string().optional().describe("Kursor paginacji z poprzedniego wyniku"),
         raw: z.boolean().optional().describe("true = zwróć też pojedyncze reklamy, nie tylko grupy po stronie"),
+        exclude_terms: z.array(z.string()).optional().describe("Odrzuć strony, których nazwa, domena lub tekst reklamy zawiera którąkolwiek z fraz (bez wielkości liter), np. ['matura','ósmoklasist','OSK','fitness']"),
+        min_reach: z.number().int().optional().describe("Odrzuć strony o łącznym zasięgu UE poniżej tej liczby"),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     safe(async (a) => {
       const r = await searchAdsLibrary({ search_terms: a.search_terms, page_ids: a.page_ids, countries: a.countries, active_only: a.active_only, limit: a.limit, after: a.after });
-      return ok({ ads_fetched: r.count, next: r.next, pages: groupByPage(r.ads), ...(a.raw ? { ads: r.ads } : {}) });
+      const ex = (a.exclude_terms ?? []).map((t) => t.toLowerCase()).filter(Boolean);
+      let pages = groupByPage(r.ads);
+      const before = pages.length;
+      if (ex.length) {
+        pages = pages.filter((p) => {
+          const hay = `${p.page_name} ${p.domains.join(" ")} ${p.sample_bodies.join(" ")}`.toLowerCase();
+          return !ex.some((t) => hay.includes(t));
+        });
+      }
+      if (a.min_reach) pages = pages.filter((p) => p.eu_reach >= (a.min_reach ?? 0));
+      return ok({ ads_fetched: r.count, next: r.next, pages_total: before, pages_after_filter: pages.length, pages, ...(a.raw ? { ads: r.ads } : {}) });
     }),
+  );
+
+  server.registerTool(
+    "qualify_pages",
+    {
+      title: "Kwalifikacja stron prospektów",
+      description:
+        "Dla listy domen (do 30) równolegle pobiera stronę główną + podstrony kontakt/polityka/regulamin/o-mnie i wyciąga: maile, telefony, Instagram/Facebook/YouTube, ceny w zł, sygnały wielkości (kursanci, absolwenci, opinie), podpowiedzi kto stoi za marką (RODO, stopka, „nazywam się”), markery spółki/instytucji, czy jest newsletter. Zwraca JSON do oceny ICP bez wchodzenia na strony.",
+      inputSchema: { domains: z.array(z.string().min(3)).min(1).max(30).describe("Domeny lub adresy, np. ['mindfulnesskursy.pl','https://zustoniemus.pl']") },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    safe(async ({ domains }) => ok(await qualifyDomains(domains))),
   );
 
   return server;
