@@ -8,7 +8,7 @@ const MAX_SUBPAGES = 4;
 const SUBPAGE_HINTS = ["kontakt", "contact", "polityka", "privacy", "regulamin", "terms", "o-mnie", "o-nas", "about"];
 
 const JUNK_EMAIL = /(sentry|wixpress|example\.com|schema\.org|w3\.org|yourdomain|domain\.com|\.png$|\.jpg$|\.webp$|noreply|no-reply)/i;
-const COMPANY_MARKERS = /(sp\.\s?z\s?o\.?\s?o|spółka|s\.a\.\b|fundacja|stowarzyszenie|ośrodek szkolenia|instytut|centrum szkole|akademia (medyczna|biznesu)|llc\b|ltd\b)/i;
+const COMPANY_MARKERS = /(sp\.\s?z\s?o\.?\s?o|spółka|s\.a\.\b|fundacja|stowarzyszenie|ośrodek szkolenia|instytut|centrum szkole|akademia (medyczna|biznesu)|llc\b|ltd\b)/gi;
 
 export type PageQualification = {
   domain: string;
