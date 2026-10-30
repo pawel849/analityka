@@ -39,8 +39,11 @@ export async function repairPhoneCells() {
   for (let i = 0; i < Math.max(shown.length, formulas.length); i++) {
     const v = shown[i]?.[0] ?? "";
     const f = formulas[i]?.[0] ?? "";
-    if (!/^#(ERROR|NAME|VALUE|REF)!?/.test(v) || !f.startsWith("=")) continue;
-    const text = f.slice(1).replace(/^\+?/, "+").replace(/\s+/g, " ").trim();
+    if (!/^#(ERROR|NAME|VALUE|REF|N\/A)!?/.test(v) || !f.trim()) continue;
+    // Formuła może mieć postać „=+48 601…”, „+48 601…” albo „=48601…” – zostawiamy same cyfry i formatujemy.
+    const digits = f.replace(/\D/g, "");
+    const local = digits.length === 11 && digits.startsWith("48") ? digits.slice(2) : digits.length === 9 ? digits : null;
+    const text = local ? `+48 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}` : f.replace(/^=/, "").replace(/\s+/g, " ").trim();
     fixes.push({ row: i + 3, from: f, to: text });
   }
   for (const x of fixes) await updateRange(CRM_SHEET_ID, `${CRM_SHEET_NAME}!E${x.row}`, [[x.to]]);
