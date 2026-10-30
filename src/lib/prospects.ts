@@ -62,7 +62,7 @@ async function upsertSeen(cands: Candidate[], source: string) {
          verdict_why = COALESCE(EXCLUDED.verdict_why, prospects.verdict_why),
          data = EXCLUDED.data,
          updated_at = now()`,
-      [key, c.page_id || null, c.domain, c.page_name, source, c.verdict ?? null, c.why ?? null, JSON.stringify(c)],
+      [key, c.page_id || null, c.domain, c.page_name, source, c.verdict ?? null, c.why ?? null, JSON.stringify(c).replace(/\\u0000/g, "")],
     );
   }));
 }

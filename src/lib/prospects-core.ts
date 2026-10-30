@@ -10,7 +10,7 @@ export const DEFAULT_EXCLUDE = [
   // fitness / dieta
   "fitness", "trening", "dieta", "odchudz", "dietetyk",
   // guru marketingu / IG / AI / marka osobista
-  "marki osobistej", "marka osobista", "sprzedaż online", "sprzedaz online", "instagrama", "na instagramie zarab", "sztuczn", "ai", "chatgpt", "reklam na facebooku", "lejk",
+  "marki osobistej", "marka osobista", "sprzedaż online", "sprzedaz online", "instagrama", "na instagramie zarab", "sztuczna inteligencj", "sztucznej inteligencj", "sztuczną inteligencj", "ai", "chatgpt", "reklam na facebooku", "lejk",
   // MLM, bukmacherka, kupony, dramy
   "mlm", "bukmach", "kupon", "kurs min", "reelshort", "dramawave", "drama",
   // instytucje / spółki / dotacje
