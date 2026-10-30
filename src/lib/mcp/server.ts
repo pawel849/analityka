@@ -19,6 +19,7 @@ import { mergeSettings } from "../settings";
 import { economicsReport } from "../economics-report";
 import { runSync } from "../sync/run";
 import { upsertAdRows, upsertOrders } from "../import-store";
+import { groupByPage, searchAdsLibrary } from "../meta-ads-library";
 import { hashEmailSync } from "../sync/woo";
 import type { AdRow } from "../importing";
 import { DECISIONS, ELEMENTS, META_URL_PARAMS, budgetPerVariant, mergeTestSettings, variantLink } from "../ad-tests";
@@ -806,6 +807,30 @@ export function buildMcpServer(origin: string): McpServer {
     safe(async ({ project_id }) => {
       const { tests } = await loadTests(project_id);
       return ok(tests.flatMap((t) => t.watch.map((w) => ({ test: t.angle, ...w }))));
+    }),
+  );
+
+  /* ---------- Meta Ad Library (prospecting) ---------- */
+  server.registerTool(
+    "search_ads_library",
+    {
+      title: "Biblioteka reklam Meta",
+      description:
+        "Szuka aktywnych reklam w Meta Ad Library (UE, domyślnie Polska) po słowach kluczowych albo page_id. Zwraca reklamy pogrupowane po stronie: liczba reklam, daty, zasięg, domeny z linków, próbki tekstów. Do prospectingu twórców kursów. Paginacja: podaj `after` z poprzedniego wyniku.",
+      inputSchema: {
+        search_terms: z.string().optional().describe("Słowa kluczowe, np. „kurs online”, „szkolenie”, „warsztaty”"),
+        page_ids: z.array(z.string()).optional().describe("Konkretne strony (page_id) – zamiast search_terms"),
+        countries: z.array(z.string()).optional().describe("Kody krajów, domyślnie ['PL']"),
+        active_only: z.boolean().optional().describe("Domyślnie true – tylko aktywne reklamy"),
+        limit: z.number().int().min(1).max(100).optional().describe("Ile reklam pobrać (1–100, domyślnie 50)"),
+        after: z.string().optional().describe("Kursor paginacji z poprzedniego wyniku"),
+        raw: z.boolean().optional().describe("true = zwróć też pojedyncze reklamy, nie tylko grupy po stronie"),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    safe(async (a) => {
+      const r = await searchAdsLibrary({ search_terms: a.search_terms, page_ids: a.page_ids, countries: a.countries, active_only: a.active_only, limit: a.limit, after: a.after });
+      return ok({ ads_fetched: r.count, next: r.next, pages: groupByPage(r.ads), ...(a.raw ? { ads: r.ads } : {}) });
     }),
   );
 
