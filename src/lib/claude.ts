@@ -6,13 +6,15 @@ import { allLevers, categories } from "./money-map";
 
 export class ClaudeError extends Error {}
 
-export async function askClaude(system: string, user: string, effort: "low" | "medium" = "medium"): Promise<string> {
+export type AskOptions = { model?: string; max_tokens?: number; timeout_ms?: number };
+
+export async function askClaude(system: string, user: string, effort: "low" | "medium" = "medium", opts: AskOptions = {}): Promise<string> {
   if (!process.env.ANTHROPIC_API_KEY) throw new ClaudeError("Brak klucza ANTHROPIC_API_KEY na serwerze.");
-  const client = new Anthropic();
+  const client = new Anthropic(opts.timeout_ms ? { timeout: opts.timeout_ms, maxRetries: 0 } : {});
   try {
     const res = await client.beta.messages.create({
-      model: "claude-opus-5-5",
-      max_tokens: 4000,
+      model: opts.model ?? "claude-opus-5-5",
+      max_tokens: opts.max_tokens ?? 4000,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       output_config: { effort },

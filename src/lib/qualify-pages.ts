@@ -8,7 +8,10 @@ const MAX_SUBPAGES = 4;
 const SUBPAGE_HINTS = ["kontakt", "contact", "polityka", "privacy", "regulamin", "terms", "o-mnie", "o-nas", "about"];
 
 const JUNK_EMAIL = /(sentry|wixpress|example\.com|schema\.org|w3\.org|yourdomain|domain\.com|\.png$|\.jpg$|\.webp$|noreply|no-reply)/i;
-const COMPANY_MARKERS = /(sp\.\s?z\s?o\.?\s?o|spółka|s\.a\.\b|fundacja|stowarzyszenie|ośrodek szkolenia|instytut|centrum szkole|akademia (medyczna|biznesu)|llc\b|ltd\b)/gi;
+const COMPANY_MARKERS = /(sp\.\s?z\s?o\.?\s?o|spółka|s\.a\.\b|fundacja|stowarzyszenie|ośrodek szkolenia|instytut|centrum szkole|akademia (medyczna|biznesu)|llc\b|ltd\b|limited\b)/gi;
+// Dostawcy, których nazwy prawne pojawiają się w politykach prywatności – nie świadczą o formie prawnej prospekta.
+const VENDOR_CONTEXT = /(meta|facebook|google|youtube|vimeo|stripe|paypal|hotjar|mailerlite|mailchimp|getresponse|activecampaign|klaviyo|tiktok|microsoft|apple|amazon|cloudflare|wix|shopify|ireland|platforms|analytics|pixel|cookies?)/i;
+const BINARY_EXT = /\.(css|js|json|png|jpe?g|gif|svg|webp|ico|pdf|xml|woff2?|ttf|mp4|zip)(\?|$)/i;
 
 export type PageQualification = {
   domain: string;
@@ -41,7 +44,7 @@ async function getHtml(url: string): Promise<{ html: string; finalUrl: string } 
     const res = await fetch(url, { signal: a.signal, redirect: "follow", headers: { "user-agent": UA, accept: "text/html,*/*;q=0.8", "accept-language": "pl-PL,pl;q=0.9" } });
     if (!res.ok) return null;
     const ct = res.headers.get("content-type") ?? "";
-    if (!/html|xml|text/i.test(ct)) return null;
+    if (!/html/i.test(ct)) return null;
     const html = (await res.text()).slice(0, 600_000);
     return { html, finalUrl: res.url || url };
   } catch {
@@ -88,19 +91,21 @@ function extractPhones(html: string, text: string): string[] {
   const tel = [...html.matchAll(/tel:([+\d\s().-]{7,20})/gi)].map((m) => m[1]);
   const raw = text.match(/(?:\+48[\s-]?)?(?:\(?\d{2,3}\)?[\s-]?)\d{3}[\s-]?\d{2,3}[\s-]?\d{2,3}\b/g) ?? [];
   const norm = (p: string) => p.replace(/[^\d+]/g, "");
-  const out = uniq([...tel, ...raw].map(norm)).filter((p) => {
-    const d = p.replace(/\D/g, "");
-    if (d.length < 9 || d.length > 11) return false;
-    if (/^(\d)\1{8}/.test(d)) return false;
-    // odrzuć NIP/REGON/kody pocztowe wyglądające jak numery
-    return !(d.length === 10 && !d.startsWith("48") && !/^[4-9]/.test(d));
-  });
-  return out.slice(0, 4);
+  const out = uniq(
+    [...tel, ...raw].map(norm).map((p) => {
+      const d = p.replace(/\D/g, "");
+      // Polski numer: 9 cyfr (komórka 4–8, stacjonarny 1–9 bez 0) albo 48 + 9 cyfr. 10 cyfr = NIP/REGON/konto → odrzuć.
+      if (d.length === 9 && /^[1-9]/.test(d)) return d;
+      if (d.length === 11 && /^48[1-9]/.test(d)) return d.slice(2);
+      return null;
+    }).filter((d): d is string => !!d && !/^(\d)\1{8}$/.test(d) && !/^(12|34|45|56|67|78|89)3456789$/.test(d)),
+  );
+  return out.map((d) => `+48 ${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`).slice(0, 4);
 }
 
 function extractSocial(html: string, re: RegExp): string[] {
   return uniq([...html.matchAll(re)].map((m) => m[0].replace(/^https?:\/\/(www\.)?/, "").replace(/[/?#].*$/, (s) => s.split(/[?#]/)[0]).replace(/\/$/, "")))
-    .filter((u) => !/\/(p|reel|reels|share|sharer|plugins|tr|dialog|policies|help|explore|stories)\b/i.test(u) && !/instagram\.com\/?$/.test(u) && !/facebook\.com\/?$/.test(u))
+    .filter((u) => !/\/(p|reel|reels|share|sharer|plugins|tr|dialog|policies|policy|privacy|legal|ads|adpreferences|groups|events|hashtag|help|explore|stories|accounts|about|business|login|settings|pages|watch|marketplace|gaming)\b/i.test(u) && !/instagram\.com\/?$/.test(u) && !/facebook\.com\/?$/.test(u))
     .slice(0, 4);
 }
 
@@ -130,6 +135,19 @@ function extractPersons(text: string): string[] {
   return uniq(hits).slice(0, 6);
 }
 
+function extractCompanyMarkers(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(COMPANY_MARKERS)) {
+    const mk = m[0].toLowerCase();
+    if (/^(llc|ltd|limited)$/.test(mk)) {
+      const before = text.slice(Math.max(0, (m.index ?? 0) - 60), m.index ?? 0);
+      if (VENDOR_CONTEXT.test(before)) continue; // „Meta Platforms Ireland Limited” itp.
+    }
+    out.push(mk);
+  }
+  return uniq(out).slice(0, 4);
+}
+
 function pickSubpages(html: string, base: URL): string[] {
   const links = [...html.matchAll(/href=["']([^"'#]+)["']/gi)].map((m) => m[1]);
   const out: string[] = [];
@@ -138,6 +156,7 @@ function pickSubpages(html: string, base: URL): string[] {
       const u = new URL(h, base);
       if (u.hostname.replace(/^www\./, "") !== base.hostname.replace(/^www\./, "")) continue;
       const p = u.pathname.toLowerCase();
+      if (BINARY_EXT.test(p)) continue;
       if (SUBPAGE_HINTS.some((k) => p.includes(k)) && !out.includes(u.href)) out.push(u.href);
     } catch {
       /* zły href */
@@ -162,6 +181,7 @@ export async function qualifyDomain(input: string): Promise<PageQualification> {
 
   let home = await getHtml(`https://${domain}/`);
   if (!home) home = await getHtml(`https://www.${domain}/`);
+  if (!home) home = await getHtml(`http://${domain}/`);
   if (!home) return { ...empty, error: "Strona główna nieosiągalna (timeout/blokada/404)" };
 
   const base = new URL(home.finalUrl);
@@ -188,7 +208,7 @@ export async function qualifyDomain(input: string): Promise<PageQualification> {
     prices_pln: extractPrices(homeText),
     size_signals: extractSizeSignals(text),
     person_hints: extractPersons(text),
-    company_markers: uniq([...text.matchAll(COMPANY_MARKERS)].map((m) => m[0].toLowerCase())).slice(0, 4),
+    company_markers: extractCompanyMarkers(text),
     newsletter: /newsletter|zapisz się na list|zapisz się do list|dołącz do listy/i.test(text),
     fetched: pages.map((p) => p.finalUrl),
   };

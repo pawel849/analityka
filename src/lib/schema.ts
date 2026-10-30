@@ -382,5 +382,22 @@ CREATE TABLE IF NOT EXISTS email_campaigns (
 CREATE INDEX IF NOT EXISTS email_campaigns_project ON email_campaigns(project_id, sent_at);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS utm_source TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS utm_medium TEXT NOT NULL DEFAULT '';
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS utm_campaign TEXT NOT NULL DEFAULT ''
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS utm_campaign TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS prospects (
+  key TEXT PRIMARY KEY,
+  page_id TEXT,
+  domain TEXT,
+  page_name TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'seen',
+  reason TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  verdict TEXT,
+  verdict_why TEXT,
+  data JSONB,
+  return_after TIMESTAMPTZ,
+  first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS prospects_domain ON prospects(domain);
+CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status)
 `;

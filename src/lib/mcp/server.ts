@@ -21,6 +21,7 @@ import { runSync } from "../sync/run";
 import { upsertAdRows, upsertOrders } from "../import-store";
 import { groupByPage, searchAdsLibrary } from "../meta-ads-library";
 import { qualifyDomains } from "../qualify-pages";
+import { PROSPECT_STATUSES, findProspects, listProspects, markProspects } from "../prospects";
 import { hashEmailSync } from "../sync/woo";
 import type { AdRow } from "../importing";
 import { DECISIONS, ELEMENTS, META_URL_PARAMS, budgetPerVariant, mergeTestSettings, variantLink } from "../ad-tests";
@@ -859,6 +860,65 @@ export function buildMcpServer(origin: string): McpServer {
     safe(async ({ domains }) => ok(await qualifyDomains(domains))),
   );
 
+  server.registerTool(
+    "find_prospects",
+    {
+      title: "Prospecting w jednym kroku",
+      description:
+        "Cały pipeline prospectingu: Meta Ad Library dla kilku fraz naraz → słownik wykluczeń ICP (domyślny, można rozszerzyć) → pominięcie stron już widzianych/kontaktowanych (tabela prospects) → równoległa kwalifikacja stron (mail, telefon, IG, ceny, liczniki, kto stoi za marką) → sortowanie przez model do koszyków pasuje / wątpliwe / nie z jednym zdaniem uzasadnienia. Model tylko sortuje – wszystkie koszyki wracają, decyzję podejmuje człowiek. Wszyscy zwróceni kandydaci dostają status „seen” (nie wrócą w kolejnym wywołaniu bez include_seen). Po decyzji oznacz wybranych przez mark_prospects.",
+      inputSchema: {
+        terms: z.array(z.string().min(2)).min(1).max(6).describe("Frazy do Ad Library, np. ['dożywotni dostęp','kurs online','zapisz się na warsztat']"),
+        countries: z.array(z.string()).optional().describe("Domyślnie ['PL']"),
+        limit_per_term: z.number().int().min(10).max(100).optional().describe("Reklam na frazę (domyślnie 100)"),
+        extra_exclude: z.array(z.string()).optional().describe("Dodatkowe frazy wykluczające (dokładane do słownika domyślnego)"),
+        exclude_terms: z.array(z.string()).optional().describe("ZAMIAST słownika domyślnego – użyj tylko gdy chcesz go wyłączyć"),
+        min_reach: z.number().int().optional().describe("Minimalny łączny zasięg UE strony"),
+        max_qualify: z.number().int().min(1).max(30).optional().describe("Ile stron (po filtrach) zakwalifikować, domyślnie 25"),
+        score: z.boolean().optional().describe("Domyślnie true – sortowanie przez model; false = tylko dane"),
+        include_seen: z.boolean().optional().describe("true = pokaż też strony ze statusem „seen” (odrzucone milcząco wcześniej)"),
+        source: z.string().optional().describe("Etykieta partii, np. 'partia 3 – 31.10'"),
+      },
+      annotations: { readOnlyHint: false, openWorldHint: true },
+    },
+    safe(async (a) => ok(await findProspects(a))),
+  );
+
+  server.registerTool(
+    "mark_prospects",
+    {
+      title: "Oznacz prospektów",
+      description:
+        "Ustawia status prospekta po page_id lub domenie: queued (wybrany do outreachu), contacted (wysłano pierwszy kontakt), replied (odpisał), rejected (nie pasuje – nie wróci), pool (miękka odmowa – wróci po return_after), seen. Użyj też do zasilenia bazy domenami kontaktowanymi wcześniej (np. z Gmaila), żeby dedupe działał od razu.",
+      inputSchema: {
+        items: z.array(z.object({
+          page_id: z.string().optional(),
+          domain: z.string().optional(),
+          page_name: z.string().optional(),
+          status: z.enum(PROSPECT_STATUSES),
+          reason: z.string().optional().describe("Krótko dlaczego, np. 'fitness', 'wysłano hook 31.10'"),
+          return_after: z.string().optional().describe("Data RRRR-MM-DD, po której prospekt wraca do puli (dla status=pool)"),
+        })).min(1).max(300),
+        source: z.string().optional().describe("Skąd oznaczenie, np. 'gmail sent 2025–2026', 'partia 3'"),
+      },
+      annotations: { readOnlyHint: false },
+    },
+    safe(async ({ items, source }) => ok(await markProspects(items, source ?? "mark_prospects"))),
+  );
+
+  server.registerTool(
+    "list_prospects",
+    {
+      title: "Lista prospektów w bazie",
+      description: "Statystyki statusów i wpisy z tabeli prospects (filtr po statusie, szukanie po nazwie/domenie).",
+      inputSchema: {
+        status: z.enum(PROSPECT_STATUSES).optional(),
+        search: z.string().optional(),
+        limit: z.number().int().min(1).max(500).optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    safe(async (a) => ok(await listProspects(a))),
+  );
+
   return server;
 }
-
