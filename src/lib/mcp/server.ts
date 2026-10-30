@@ -22,6 +22,7 @@ import { upsertAdRows, upsertOrders } from "../import-store";
 import { groupByPage, searchAdsLibrary } from "../meta-ads-library";
 import { qualifyDomains } from "../qualify-pages";
 import { PROSPECT_STATUSES, findProspects, listProspects, markProspects } from "../prospects";
+import { appendToCrm } from "../crm";
 import { hashEmailSync } from "../sync/woo";
 import type { AdRow } from "../importing";
 import { DECISIONS, ELEMENTS, META_URL_PARAMS, budgetPerVariant, mergeTestSettings, variantLink } from "../ad-tests";
@@ -918,6 +919,36 @@ export function buildMcpServer(origin: string): McpServer {
       annotations: { readOnlyHint: true },
     },
     safe(async (a) => ok(await listProspects(a))),
+  );
+
+  server.registerTool(
+    "append_to_crm",
+    {
+      title: "Dopisz prospektów do CRM (Google Sheets)",
+      description:
+        "Dopisuje wiersze do arkusza CRM Pawła (Arkusz1, kolumny Imię/Branża/email/telefon/IG/Screenshoty/Porada #1–#3) kontem usługi. Pomija wiersze, których mail albo nazwa już są w arkuszu. Opcjonalnie oznacza podane page_id jako „queued” w tabeli prospects. Używaj dopiero po decyzji człowieka, kto wchodzi.",
+      inputSchema: {
+        rows: z.array(z.object({
+          imie: z.string().min(2).describe("„Imię Nazwisko (Marka)”"),
+          branza: z.string().min(2).describe("1–2 zdania: kto to, produkt, sygnały (reklamy od, liczniki); dopisz źródło, np. „[AdLib partia 3]”"),
+          email: z.string().optional(),
+          telefon: z.string().optional(),
+          ig: z.string().optional(),
+          screenshoty: z.string().optional(),
+          porady: z.array(z.string()).max(3).optional(),
+        })).min(1).max(50),
+        mark_queued_page_ids: z.array(z.string()).optional().describe("page_id prospektów do oznaczenia jako queued w bazie"),
+        source: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false, openWorldHint: true },
+    },
+    safe(async ({ rows, mark_queued_page_ids, source }) => {
+      const res = await appendToCrm(rows);
+      const marked = mark_queued_page_ids?.length
+        ? await markProspects(mark_queued_page_ids.map((page_id) => ({ page_id, status: "queued" as const, reason: "dopisany do CRM" })), source ?? "append_to_crm")
+        : null;
+      return ok({ ...res, marked });
+    }),
   );
 
   return server;
