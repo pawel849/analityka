@@ -84,6 +84,12 @@ export type Candidate = {
   };
   verdict?: Verdict;
   why?: string;
+  /** Historia reklam (aktywne + zakończone) – uzupełniana dla finalistów. */
+  ads_history?: { total_ads: number; active_ads: number; first_ever: string | null; months_advertising: number | null };
+  /** Drugie czytanie (model na tekście strony) – tylko finaliści. */
+  review?: { verdict: Verdict; produkt_cyfrowy: string; twarz: string; skala: string; jezyk: string; why: string };
+  /** Skąd domena / IG, jeśli dociągnięte przez Custom Search. */
+  found_via?: string;
 };
 
 export function toCandidate(p: PageGroup, domain: string | null, site: PageQualification | undefined): Candidate {
@@ -124,6 +130,52 @@ export function parseVerdicts(text: string): Map<string, { verdict: Verdict; why
     const v = String(o.verdict ?? "").toLowerCase().replace("ą", "a");
     const verdict: Verdict | null = v.startsWith("pas") ? "pasuje" : v.startsWith("wat") || v.startsWith("wąt") ? "watpliwe" : v.startsWith("nie") ? "nie" : null;
     if (id && verdict) out.set(id, { verdict, why: String(o.why ?? "").slice(0, 200) });
+  }
+  return out;
+}
+
+export type DecisionExample = { page_name: string; domain: string | null; status: string; reason: string; why: string | null };
+
+/** Blok z decyzjami Pawła do promptu – model ma się uczyć, gdzie leży jego granica. */
+export function decisionsBlock(accepted: DecisionExample[], rejected: DecisionExample[]): string {
+  const line = (d: DecisionExample) => `- ${d.page_name}${d.domain ? ` (${d.domain})` : ""}${d.reason ? ` — ${d.reason}` : d.why ? ` — ${d.why}` : ""}`;
+  if (!accepted.length && !rejected.length) return "";
+  return `\n\nDECYZJE PAWŁA Z OSTATNICH PARTII (to jest wzorzec, nie kryteria w ogólności):\nWZIĄŁ:\n${accepted.map(line).join("\n") || "- (brak)"}\nODRZUCIŁ:\n${rejected.map(line).join("\n") || "- (brak)"}\nGdy kandydat przypomina któryś z powyższych, oceniaj tak jak Paweł.`;
+}
+
+/** Etap 2 – model czyta tekst strony finalisty. */
+export const REVIEW_SYSTEM = `Oceniasz FINALISTÓW prospectingu copywritera direct response (Paweł) dla polskich twórców infoproduktów. Dostajesz: dane z reklamy, historię reklam w Meta (od kiedy, ile aktywnych), wyciągnięte sygnały i SUROWY TEKST strony głównej.
+Dla każdego odpowiedz krótko (po polsku, max 12 słów na pole), WYŁĄCZNIE na podstawie danych:
+- produkt_cyfrowy: jaki konkretnie produkt cyfrowy sprzedaje (kurs/warsztat/mentoring/e-book + cena, jeśli widać), albo "brak/niejasne", albo "usługa 1:1 / towar / aplikacja"
+- twarz: imię i nazwisko twórcy, jeśli strona je pokazuje jako markę; albo "firma/instytucja bez twarzy"
+- skala: liczniki (kursanci, opinie, lista), launch, newsletter; albo "brak sygnałów"
+- jezyk: język strony ("polski", "ukraiński", "angielski", …)
+- verdict: "pasuje" | "watpliwe" | "nie"
+- why: jedno zdanie
+Kryteria jak w etapie 1: PASUJE = własny produkt cyfrowy + marka osobista z twarzą + sygnały sprzedaży; NIE = fitness/dieta (PL), guru marketingu/sprzedaży/Instagrama/marki osobistej/AI, MLM, matura/ósmoklasista, instytucje/ośrodki/spółki bez twarzy, towar, strona nie po polsku. Historia reklam: wiele miesięcy ciągłych reklam = mocny sygnał realnej sprzedaży; pierwsza reklama w tym tygodniu = słaby. Gdy brak pewności: "watpliwe".
+Odpowiadasz WYŁĄCZNIE tablicą JSON: [{"page_id":"...","produkt_cyfrowy":"...","twarz":"...","skala":"...","jezyk":"...","verdict":"...","why":"..."}].`;
+
+export type Review = NonNullable<Candidate["review"]>;
+
+export function parseReviews(text: string): Map<string, Review> {
+  const out = new Map<string, Review>();
+  const body = text.replace(/^[\s\S]*?(\[)/, "$1").replace(/\][\s\S]*$/, "]");
+  let arr: unknown;
+  try {
+    arr = JSON.parse(body);
+  } catch {
+    return out;
+  }
+  if (!Array.isArray(arr)) return out;
+  const str = (v: unknown) => String(v ?? "").slice(0, 160);
+  for (const it of arr) {
+    if (!it || typeof it !== "object") continue;
+    const o = it as Record<string, unknown>;
+    const id = String(o.page_id ?? "");
+    const v = String(o.verdict ?? "").toLowerCase().replace("ą", "a");
+    const verdict: Verdict | null = v.startsWith("pas") ? "pasuje" : v.startsWith("wat") || v.startsWith("wąt") ? "watpliwe" : v.startsWith("nie") ? "nie" : null;
+    if (!id || !verdict) continue;
+    out.set(id, { verdict, produkt_cyfrowy: str(o.produkt_cyfrowy), twarz: str(o.twarz), skala: str(o.skala), jezyk: str(o.jezyk), why: str(o.why) });
   }
   return out;
 }

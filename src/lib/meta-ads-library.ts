@@ -99,3 +99,33 @@ export function groupByPage(ads: AdRecord[]) {
     .map((g) => ({ ...g, domains: [...g.domains].filter(Boolean) }))
     .sort((x, y) => y.ads - x.ads);
 }
+
+export type PageHistory = { page_id: string; total_ads: number; active_ads: number; first_ever: string | null; last_start: string | null; months_advertising: number | null };
+
+/** Historia reklam (aktywne + zakończone) dla kilku stron naraz – od kiedy i jak ciągle ktoś się reklamuje. */
+export async function pagesHistory(pageIds: string[], countries?: string[]): Promise<Map<string, PageHistory>> {
+  const out = new Map<string, PageHistory>();
+  const ids = [...new Set(pageIds.filter(Boolean))].slice(0, 20);
+  if (!ids.length) return out;
+  // Meta ogranicza listę page_ids w jednym zapytaniu – dzielimy po 5.
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 5) chunks.push(ids.slice(i, i + 5));
+  const results = await Promise.allSettled(chunks.map((c) => searchAdsLibrary({ page_ids: c, active_only: false, limit: 100, countries })));
+  const today = new Date().toISOString().slice(0, 10);
+  for (const r of results) {
+    if (r.status !== "fulfilled") continue;
+    for (const a of r.value.ads) {
+      const h = out.get(a.page_id) ?? { page_id: a.page_id, total_ads: 0, active_ads: 0, first_ever: null, last_start: null, months_advertising: null };
+      h.total_ads += 1;
+      if (!a.stop || a.stop.slice(0, 10) >= today) h.active_ads += 1;
+      const d = a.start?.slice(0, 10) ?? null;
+      if (d && (!h.first_ever || d < h.first_ever)) h.first_ever = d;
+      if (d && (!h.last_start || d > h.last_start)) h.last_start = d;
+      out.set(a.page_id, h);
+    }
+  }
+  for (const h of out.values()) {
+    if (h.first_ever) h.months_advertising = Math.max(0, Math.round((Date.now() - new Date(h.first_ever).getTime()) / (30 * 864e5)));
+  }
+  return out;
+}

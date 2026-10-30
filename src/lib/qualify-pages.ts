@@ -30,6 +30,8 @@ export type PageQualification = {
   company_markers: string[];
   newsletter: boolean;
   fetched: string[];
+  /** Oczyszczony tekst strony głównej (do ~6000 znaków) – do drugiego czytania przez model. */
+  text_excerpt: string;
 };
 
 function abortable(ms: number) {
@@ -175,7 +177,7 @@ export async function qualifyDomain(input: string): Promise<PageQualification> {
   const domain = input.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "").toLowerCase();
   const empty: PageQualification = {
     domain, ok: false, title: null, description: null, emails: [], phones: [], instagram: [], facebook: [], youtube: [],
-    prices_pln: [], size_signals: [], person_hints: [], company_markers: [], newsletter: false, fetched: [],
+    prices_pln: [], size_signals: [], person_hints: [], company_markers: [], newsletter: false, fetched: [], text_excerpt: "",
   };
   if (!domain || !domain.includes(".")) return { ...empty, error: "Nieprawidłowa domena" };
 
@@ -211,6 +213,7 @@ export async function qualifyDomain(input: string): Promise<PageQualification> {
     company_markers: extractCompanyMarkers(text),
     newsletter: /newsletter|zapisz się na list|zapisz się do list|dołącz do listy/i.test(text),
     fetched: pages.map((p) => p.finalUrl),
+    text_excerpt: homeText.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, 6000),
   };
 }
 

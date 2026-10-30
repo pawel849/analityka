@@ -34,3 +34,19 @@ test("parseVerdicts toleruje płotki i polskie znaki", () => {
   assert.equal(v.get("c")?.verdict, "nie");
   assert.equal(parseVerdicts("nie wiem").size, 0);
 });
+
+import { decisionsBlock, parseReviews } from "../src/lib/prospects-core.ts";
+
+test("parseReviews – etap 2", () => {
+  const r = parseReviews('[{"page_id":"x","produkt_cyfrowy":"kurs 497 zł","twarz":"Anna Nowak","skala":"2000 kursantek","jezyk":"polski","verdict":"pasuje","why":"ok"}]');
+  assert.equal(r.get("x")?.verdict, "pasuje");
+  assert.equal(r.get("x")?.jezyk, "polski");
+  assert.equal(parseReviews("{}").size, 0);
+});
+
+test("decisionsBlock – pusty gdy brak decyzji, inaczej obie listy", () => {
+  assert.equal(decisionsBlock([], []), "");
+  const b = decisionsBlock([{ page_name: "A", domain: "a.pl", status: "queued", reason: "CRM", why: null }], [{ page_name: "B", domain: null, status: "rejected", reason: "fitness", why: null }]);
+  assert.ok(b.includes("WZIĄŁ:\n- A (a.pl) — CRM"));
+  assert.ok(b.includes("ODRZUCIŁ:\n- B — fitness"));
+});

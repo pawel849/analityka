@@ -25,4 +25,5 @@ test("qualifyDomain parsery", async () => {
   assert.ok(r.person_hints.includes("Anna Kowalska"));
   assert.equal(r.newsletter, true);
   assert.ok(!r.fetched.some((f) => f.endsWith(".css")));
+  assert.ok(r.text_excerpt.includes("Nazywam się Anna Kowalska"));
 });

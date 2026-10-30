@@ -21,7 +21,7 @@ import { runSync } from "../sync/run";
 import { upsertAdRows, upsertOrders } from "../import-store";
 import { groupByPage, searchAdsLibrary } from "../meta-ads-library";
 import { qualifyDomains } from "../qualify-pages";
-import { PROSPECT_STATUSES, findProspects, listProspects, markProspects } from "../prospects";
+import { PROSPECT_STATUSES, findProspects, listProspects, markProspects, termStats } from "../prospects";
 import { appendToCrm, repairPhoneCells } from "../crm";
 import { hashEmailSync } from "../sync/woo";
 import type { AdRow } from "../importing";
@@ -866,7 +866,7 @@ export function buildMcpServer(origin: string): McpServer {
     {
       title: "Prospecting w jednym kroku",
       description:
-        "Cały pipeline prospectingu: Meta Ad Library dla kilku fraz naraz → słownik wykluczeń ICP (domyślny, można rozszerzyć) → pominięcie stron już widzianych/kontaktowanych (tabela prospects) → równoległa kwalifikacja stron (mail, telefon, IG, ceny, liczniki, kto stoi za marką) → sortowanie przez model do koszyków pasuje / wątpliwe / nie z jednym zdaniem uzasadnienia. Model tylko sortuje – wszystkie koszyki wracają, decyzję podejmuje człowiek. Wszyscy zwróceni kandydaci dostają status „seen” (nie wrócą w kolejnym wywołaniu bez include_seen). Po decyzji oznacz wybranych przez mark_prospects.",
+        "Cały pipeline prospectingu: Meta Ad Library dla kilku fraz naraz → słownik wykluczeń ICP → pominięcie stron już widzianych/kontaktowanych (tabela prospects) → (opcjonalnie Custom Search dla stron bez domeny) → równoległa kwalifikacja stron → etap 1: model sortuje do pasuje/wątpliwe/nie, z ostatnimi decyzjami Pawła w prompcie → etap 2 dla finalistów: historia reklam Meta (od kiedy, ile aktywnych) + model czyta tekst strony i odpowiada: produkt cyfrowy / twarz / skala / język. Model sortuje, nie decyduje – wszystkie koszyki wracają. Zwróceni dostają status „seen”. Każda fraza ląduje w rejestrze (term_stats). Po decyzji: mark_prospects / append_to_crm.",
       inputSchema: {
         terms: z.array(z.string().min(2)).min(1).max(6).describe("Frazy do Ad Library, np. ['dożywotni dostęp','kurs online','zapisz się na warsztat']"),
         countries: z.array(z.string()).optional().describe("Domyślnie ['PL']"),
@@ -876,6 +876,7 @@ export function buildMcpServer(origin: string): McpServer {
         min_reach: z.number().int().optional().describe("Minimalny łączny zasięg UE strony"),
         max_qualify: z.number().int().min(1).max(30).optional().describe("Ile stron (po filtrach) zakwalifikować, domyślnie 25"),
         score: z.boolean().optional().describe("Domyślnie true – sortowanie przez model; false = tylko dane"),
+        review: z.boolean().optional().describe("Domyślnie true – etap 2: historia reklam Meta + model czyta tekst stron finalistów (pasuje/wątpliwe, max 12)"),
         include_seen: z.boolean().optional().describe("true = pokaż też strony ze statusem „seen” (odrzucone milcząco wcześniej)"),
         source: z.string().optional().describe("Etykieta partii, np. 'partia 3 – 31.10'"),
       },
@@ -960,6 +961,17 @@ export function buildMcpServer(origin: string): McpServer {
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
     safe(async () => ok(await repairPhoneCells())),
+  );
+
+  server.registerTool(
+    "term_stats",
+    {
+      title: "Rejestr fraz prospectingu",
+      description: "Skuteczność fraz użytych w find_prospects: ile reklam, stron, nowych stron, zakwalifikowanych i „pasuje” dała każda fraza (łącznie ze wszystkich uruchomień). Do wyboru fraz na kolejną partię.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    safe(async () => ok(await termStats())),
   );
 
   return server;

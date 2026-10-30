@@ -399,5 +399,18 @@ CREATE TABLE IF NOT EXISTS prospects (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS prospects_domain ON prospects(domain);
-CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status)
+CREATE INDEX IF NOT EXISTS prospects_status ON prospects(status);
+CREATE TABLE IF NOT EXISTS prospect_terms (
+  id BIGSERIAL PRIMARY KEY,
+  term TEXT NOT NULL,
+  run_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  source TEXT NOT NULL DEFAULT '',
+  ads INTEGER NOT NULL DEFAULT 0,
+  pages INTEGER NOT NULL DEFAULT 0,
+  pages_new INTEGER NOT NULL DEFAULT 0,
+  qualified INTEGER NOT NULL DEFAULT 0,
+  pasuje INTEGER NOT NULL DEFAULT 0,
+  watpliwe INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS prospect_terms_term ON prospect_terms(term)
 `;
